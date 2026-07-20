@@ -1,0 +1,9 @@
+kaggle.json
+.kaggle/
+*.token
+.env
+__pycache__/
+*.pyc
+.venv/
+*.zip
+scratch/
