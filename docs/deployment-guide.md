@@ -190,20 +190,32 @@ uv pip install kaggle          # plus anything else our plugin imports at module
 service reads at every boot (`persistent_settings.py:38-39, 150-153` — schema is just
 `{"plugin_dirs": [...]}`):
 
+> ⚠️ **BOM trap (hit for real, 2026-07-20).** Do **not** use PowerShell 5.1's
+> `Out-File -Encoding utf8` — it writes a UTF-8 **BOM**, and the host reads the file with
+> plain `read_text(encoding="utf-8")` + `json.loads` (`persistent_settings.py:138`), which
+> rejects it: `json.decoder.JSONDecodeError: Unexpected UTF-8 BOM`. The failure is
+> **silent** — the service logs `Could not parse ... starting with empty persistent
+> settings` (`persistent_settings.py:140-142`) and boots with zero plugin dirs. Write
+> BOM-less:
+
 ```powershell
-@'
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.3lc-compute" | Out-Null
+$json = @'
 {
   "plugin_dirs": [
     "C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\3lc-compute-plugin-kaggle\\src"
   ]
 }
-'@ | Out-File -Encoding utf8 "$env:USERPROFILE\.3lc-compute\settings.json"
+'@
+[IO.File]::WriteAllText("$env:USERPROFILE\.3lc-compute\settings.json", $json,
+  (New-Object System.Text.UTF8Encoding($false)))
+
+# Sanity-check that the HOST can parse it before restarting:
+& "C:\Users\Owner\Desktop\3LC Kaggle Competitions\3lc-hub\.venv\Scripts\python.exe" `
+  -c "from tlc_compute.persistent_settings import PersistentSettingsStore; print(PersistentSettingsStore().get_plugin_dirs())"
 ```
 
-(`~\.3lc-compute\` does not exist yet on this machine — create it. `Out-File` handles
-that only for the file, so `New-Item -ItemType Directory "$env:USERPROFILE\.3lc-compute"`
-first.) Alternatives that do the same thing: the Hub Settings page, or — with a borrowed
-JWT —
+Alternatives that do the same thing: the Hub Settings page, or — with a borrowed JWT —
 
 ```powershell
 curl -X POST http://localhost:5020/api/admin/plugins/dirs `
@@ -239,15 +251,23 @@ settings file.) Leave the Object Service window (`:5015`) alone — plugins neve
 
 **Step 3 — verify registration state.**
 
-- No token: watch the compute window logs for
-  `Registered plugin: kaggle v0.1.0 (package: tlc_plugin_kaggle)` (`registry.py:67`) and
-  `Loaded 1 plugin(s) from external dir ...` (`external_loader.py:265`). Import failures
-  log `External plugin '...' failed to import` with the exception (`external_loader.py:230`).
+- No token: watch the compute service's stderr log. The definitive line (verified live)
+  is `Plugin <id> runtime initialized` (`app.py:127`), printed after the built-ins during
+  startup; `Registered plugin: ... (package: ...)` (`registry.py:67`) fires at import
+  time. Import failures log `External plugin '...' failed to import` with the exception
+  (`external_loader.py:230`). Tip: if you start the service detached instead of in a
+  console, capture the logs —
+  `Start-Process .\.venv\Scripts\3lc-compute.exe -WorkingDirectory $hub -RedirectStandardOutput "$hub\compute-service.out.log" -RedirectStandardError "$hub\compute-service.err.log" -WindowStyle Hidden`
+  (banner goes to stdout, all plugin logging to stderr).
 - With a JWT: ✅ **yes, there is a GET endpoint** —
   `GET :5020/api/admin/plugins/dirs` returns
   `{"directories": [...], "plugins_by_dir": {...}, "origins": {...}}`
   (`routes/plugins.py:318-340`), and `GET :5020/api/plugins/kaggle/manifest` returns our
-  manifest (`routes/plugins.py:72-89`).
+  manifest (`routes/plugins.py:72-89`). Caveat, observed live: once a plugin mounts its
+  **own** controller at `/api/plugins/<id>` the wildcard `/manifest` (and `/ui`) routes
+  are shadowed and 404 — e.g. `GET /api/plugins/yolo/manifest` → 404. That's the
+  shadowing behavior `base.py:326-341` warns about; use `GET /api/plugins/` for
+  enumeration instead.
 
 **Step 4 — see it in the Hub.** Open the Hub page; the entry appears under the `section`
 you declared (AI TOOLS). If it doesn't: hard-refresh, then check
@@ -372,6 +392,16 @@ class HelloPlugin(ComputePlugin):
     section = "AI Tools"
     priority = 1  # bottom of the AI TOOLS group
 
+    # Dev-only: exempt this plugin's own endpoints (and its reload) from the
+    # JWT middleware so the smoke test is verifiable with plain curl. This is
+    # a real host feature (base.py:159-173) but patterns are only collected at
+    # app creation (app.py:179-187), so the plugin must be present at startup.
+    # Remove for anything beyond smoke testing.
+    auth_exempt_paths = [
+        r"^/api/plugins/hello/",
+        r"^/api/admin/plugins/hello/reload$",
+    ]
+
     _ui_cache: str | None = None
 
     def get_ui_fragment(self) -> str:
@@ -417,21 +447,34 @@ even here. `compute()` is served by the host's generic wildcard route
 `GET /api/plugins/hello/compute` (`routes/plugins.py:111-131`) — the smoke plugin needs
 **no custom controller**, which is exactly why it *can* be hot-added without a restart.
 
-**Run it:**
+**Run it** (this exact sequence was executed and verified end-to-end on this machine,
+2026-07-20; the smoke root used was `...\plugin-smoketest\hello-world\`):
 
 ```powershell
-# 1. Register the root (add "...\3lc-compute-plugin-kaggle\smoke" to plugin_dirs in
-#    %USERPROFILE%\.3lc-compute\settings.json as in §4 step 1, or POST /dirs with a JWT).
-# 2. Restart the compute window (or, since this plugin has no custom routes, the
-#    authenticated POST /api/admin/plugins/dirs alone hot-loads it).
-# 3. Watch for:  Registered plugin: hello v0.1.0 (package: tlc_plugin_hello)
-# 4. Hub sidebar → AI TOOLS → "Hello Smoke Test". Click the button; expect {"hello":"world",...}.
-# 5. Reload check: edit the <h2> text in ui.html, then
-curl -X POST -H "Authorization: Bearer <JWT>" http://localhost:5020/api/admin/plugins/hello/reload
-# 6. Refresh the plugin page — the new text renders. Pipeline proven.
+# 1. Register the root: add it to plugin_dirs in %USERPROFILE%\.3lc-compute\settings.json
+#    per §4 step 1 — BOM-less write, then the host-side parse sanity check.
+# 2. Restart the compute service. (POST /api/admin/plugins/dirs would hot-load a
+#    routeless plugin, but auth_exempt_paths only take effect when the plugin is
+#    present at app creation — so for the tokenless smoke test, restart.)
+# 3. Verify discovery in the stderr log — verified line:
+#      INFO ... tlc_compute.app - app - Plugin hello runtime initialized
+# 4. Verify serving (tokenless thanks to auth_exempt_paths) — all verified 200:
+curl http://localhost:5020/api/plugins/hello/manifest   # {"id":"hello","name":"Hello Smoke Test",...,"section":"AI Tools","compatible":true,...}
+curl http://localhost:5020/api/plugins/hello/ui         # the fragment HTML
+curl "http://localhost:5020/api/plugins/hello/compute?probe=1"  # {"hello":"world","echo":{"url":"","kwargs":null}}
+# 5. Iteration loop — edit the <h2> text in ui.html, then (verified: 200 in ~2.1 s,
+#    {"reloaded":true,"plugin_id":"hello","old_version":"0.1.0","new_version":"0.1.0",
+#     "modules_purged":1,"package":"tlc_plugin_hello"}):
+curl -X POST http://localhost:5020/api/admin/plugins/hello/reload
+curl http://localhost:5020/api/plugins/hello/ui         # serves the changed text immediately
+# 6. Hub sidebar → AI TOOLS → "Hello Smoke Test" (bottom of the group, priority=1).
+#    Click the button; expect {"hello":"world",...}.
 # 7. Tear down: remove the smoke path from settings.json (or DELETE
-#    /api/admin/plugins/dirs?directory=...) and restart.
+#    /api/admin/plugins/dirs?directory=... with a JWT) and restart.
 ```
+
+Without the `auth_exempt_paths` dev block, steps 4-5 require a JWT borrowed from Hub
+DevTools (§4) — the guide's original curl-with-JWT variant. Everything else is identical.
 
 ---
 
