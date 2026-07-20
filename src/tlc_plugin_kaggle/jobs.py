@@ -176,6 +176,17 @@ def cancel_job(job_id: str) -> dict[str, Any] | None:
     return None
 
 
+def _normalize_record(job: dict[str, Any]) -> dict[str, Any]:
+    """Display-time correction for records persisted before the session-2
+    cancel-status fix: their terminal flush clobbered the cancelled flag, but
+    the job's own result still says cancelled. Idempotent; also applied
+    on-disk once by scripts/migrate_job_records (session 4)."""
+    if job.get("status") == "completed" and (job.get("result") or {}).get("cancelled"):
+        job["status"] = "cancelled"
+        job["cancelled"] = True
+    return job
+
+
 def get_job(job_id: str) -> dict[str, Any] | None:
     with _lock:
         job = _jobs.get(job_id)
@@ -185,12 +196,12 @@ def get_job(job_id: str) -> dict[str, Any] | None:
             out["checks"] = [dict(c) for c in job["checks"]]
             out["progress"] = dict(job["progress"])
             out["facts"] = dict(job["facts"])
-            return out
+            return _normalize_record(out)
     # Fall back to disk (pre-reload/pre-restart jobs).
     path = _job_path(job_id)
     if path.is_file():
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            return _normalize_record(json.loads(path.read_text(encoding="utf-8")))
         except Exception:
             return None
     return None
@@ -215,7 +226,7 @@ def list_jobs(kind: str | None = None) -> list[dict[str, Any]]:
     for job in sorted(seen.values(), key=lambda j: j.get("created_at", 0), reverse=True):
         slim = {k: v for k, v in job.items() if k not in ("log", "checks")}
         if kind is None or slim.get("kind") == kind:
-            out.append(slim)
+            out.append(_normalize_record(dict(slim)))
     return out
 
 

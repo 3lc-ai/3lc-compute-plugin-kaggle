@@ -188,3 +188,36 @@ class KaggleController(Controller):
             params.setdefault("run_name", run_name)
         job_id = jobs.start_job("predict_submit", params, predictor.run_predict_submit)
         return Response(content={"job_id": job_id}, status_code=200)
+
+    @get("/kaggle/status", sync_to_thread=True)
+    def kaggle_status(self, slug: str = "") -> dict[str, Any]:
+        """Live Kaggle section of the Status card (sync, manual Refresh)."""
+        from tlc_plugin_kaggle import predictor
+
+        return predictor.kaggle_live_status(slug)
+
+    @get("/pipeline", sync_to_thread=True)
+    def pipeline_state(self, project: str = "exdark-competition") -> dict[str, Any]:
+        """Where the participant is in the Import -> Train -> Submit loop.
+
+        Import counts as done when an import job completed OR the three
+        canonical tables exist (covers imports made before job persistence).
+        """
+        import tlc
+
+        from tlc_plugin_kaggle import jobs
+
+        all_jobs = jobs.list_jobs()
+        import_done = any(j.get("kind") == "import" and j.get("status") == "completed" for j in all_jobs)
+        if not import_done:
+            import_done = all(
+                tlc.Url.create_table_url("initial", f"exdark_{s}", project).exists()
+                for s in ("train", "val", "test")
+            )
+        train_done = any(
+            j.get("kind") == "train" and (j.get("facts") or {}).get("weights") for j in all_jobs
+        )
+        submit_done = any(
+            j.get("kind") == "predict_submit" and j.get("status") == "completed" for j in all_jobs
+        )
+        return {"import": import_done, "train": train_done, "submit": submit_done}

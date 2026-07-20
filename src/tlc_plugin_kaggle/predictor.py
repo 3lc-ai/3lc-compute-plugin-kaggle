@@ -29,6 +29,13 @@ NUM_CLASSES = 12
 SUBMISSION_COLUMNS = ["id", "image_id", "prediction_string"]
 DEFAULT_SAVE_ROOT = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle-plugin"
 
+# Host-machine convenience only: when the competition metric and solution file
+# exist locally (the organizer machine), each submission is also scored
+# locally and the mAP shown next to the CSV. Participant machines don't have
+# these files, so the whole step silently no-ops there.
+LOCAL_METRIC_PY = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\competition_exdark\metric\metric_exdark.py"
+LOCAL_SOLUTION_CSV = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\competition_exdark\kaggle_upload\solution.csv"
+
 CREDENTIALS_HELP = (
     "Kaggle credentials not found. Create an API token on kaggle.com "
     "(Account -> API -> Create New Token) and save it as "
@@ -195,6 +202,34 @@ def validate_submission_df(df: Any, expected_rows: int = EXPECTED_TEST_ROWS) -> 
     return checks
 
 
+def try_local_score(csv_path: str, ctx: Any) -> float | None:
+    """Score the CSV with the real competition metric when it exists on disk.
+
+    Returns None (silently) when metric/solution files are absent — the
+    normal case on participant machines. Errors while the files ARE present
+    get one log line and still return None: local scoring is a convenience
+    and must never fail the job.
+    """
+    try:
+        metric_py = Path(LOCAL_METRIC_PY)
+        solution_csv = Path(LOCAL_SOLUTION_CSV)
+        if not (metric_py.is_file() and solution_csv.is_file()):
+            return None
+        import importlib.util
+
+        import pandas as pd
+
+        spec = importlib.util.spec_from_file_location("metric_exdark", metric_py)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        score = float(module.score(pd.read_csv(solution_csv), pd.read_csv(csv_path), "id"))
+        ctx.log(f"Local metric score (mAP@0.5): {score:.6f}")
+        return score
+    except Exception as exc:
+        ctx.log(f"Local scoring skipped ({type(exc).__name__}: {exc})")
+        return None
+
+
 # ── Step 5: Kaggle submit ────────────────────────────────────────────────
 
 
@@ -222,6 +257,83 @@ def submit_to_kaggle(csv_path: str, message: str, slug: str, ctx: Any) -> dict[s
         return {"status": "submitted", "response": str(response), "ref": str(ref)}
     except Exception as exc:
         return {"status": "failed", "reason": f"Kaggle rejected the submission: {exc}"}
+
+
+def kaggle_live_status(slug: str) -> dict[str, Any]:
+    """Live Kaggle state for the Status card. Sync, no job; every API call is
+    individually fenced so partial data still renders. Graceful states:
+    connected=False (no kaggle.json) and configured=False (no slug)."""
+    if not (Path.home() / ".kaggle" / "kaggle.json").is_file():
+        return {
+            "connected": False,
+            "reason": "Connect your Kaggle account: create an API token on kaggle.com "
+            "(Account -> API -> Create New Token) and save it as ~/.kaggle/kaggle.json.",
+        }
+    slug = (slug or "").strip()
+    if not slug or slug == "[SLUG]":
+        return {
+            "connected": True,
+            "configured": False,
+            "reason": "Set the competition slug (card 3) once the competition is live.",
+        }
+    out: dict[str, Any] = {"connected": True, "configured": True, "slug": slug}
+    try:
+        from kaggle.api.kaggle_api_extended import KaggleApi  # import-time auth: keep in here
+
+        api = KaggleApi()
+        api.authenticate()
+    except Exception as exc:
+        return {"connected": False, "reason": f"Kaggle authentication failed: {exc}"}
+
+    try:
+        subs = api.competition_submissions(slug)
+        rows = []
+        best = None
+        for s in subs[:10]:
+            public = getattr(s, "public_score", None) or getattr(s, "publicScore", None)
+            try:
+                public_f = float(public)
+            except (TypeError, ValueError):
+                public_f = None
+            if public_f is not None:
+                best = public_f if best is None else max(best, public_f)
+            rows.append(
+                {
+                    "date": str(getattr(s, "date", "") or ""),
+                    "message": str(getattr(s, "description", "") or ""),
+                    "status": str(getattr(s, "status", "") or ""),
+                    "public_score": public,
+                }
+            )
+        out["submissions"] = rows
+        out["best_public_score"] = best
+    except Exception as exc:
+        out["submissions_error"] = str(exc)
+
+    try:
+        import json as _json
+
+        username = ""
+        try:
+            creds = _json.loads((Path.home() / ".kaggle" / "kaggle.json").read_text(encoding="utf-8"))
+            username = str(creds.get("username", ""))
+        except Exception:
+            pass
+        board = api.competition_leaderboard_view(slug)
+        top = []
+        rank = None
+        for i, entry in enumerate(board[:50], start=1):
+            team = str(getattr(entry, "team_name", "") or getattr(entry, "teamName", "") or "")
+            score = getattr(entry, "score", None)
+            if i <= 5:
+                top.append({"rank": i, "team": team, "score": str(score)})
+            if username and team.lower() == username.lower():
+                rank = {"rank": i, "team": team, "score": str(score)}
+        out["leaderboard_top"] = top
+        out["my_rank"] = rank  # best-effort: only when team name == username
+    except Exception as exc:
+        out["leaderboard_error"] = str(exc)
+    return out
 
 
 # ── The job ──────────────────────────────────────────────────────────────
@@ -275,6 +387,10 @@ def run_predict_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     ctx.set_field("csv_path", str(csv_path))
     ctx.log(f"submission.csv written: {csv_path}")
 
+    local_score = try_local_score(str(csv_path), ctx)
+    if local_score is not None:
+        ctx.set_field("local_score", local_score)
+
     message = str(params.get("message") or f"{run_name} via 3LC plugin")
     slug = str(params.get("competition_slug", "")).strip()
     if bool(params.get("csv_only", False)):
@@ -293,5 +409,6 @@ def run_predict_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
         "rows": len(df),
         "total_boxes": n_boxes,
         "conf": conf,
+        "local_score": local_score,
         "submission": submission,
     }
