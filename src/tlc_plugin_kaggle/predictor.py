@@ -38,11 +38,27 @@ LOCAL_SOLUTION_CSV = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\competitio
 
 CREDENTIALS_HELP = (
     "Kaggle credentials not found. Create an API token on kaggle.com "
-    "(Account -> API -> Create New Token) and save it as "
-    "~/.kaggle/kaggle.json (Windows: C:\\Users\\<you>\\.kaggle\\kaggle.json). "
-    "The generated submission.csv is saved locally — you can also upload it "
-    "manually on the competition's Submit page."
+    "(Settings -> API -> Create New Token) and save it as "
+    "~/.kaggle/access_token (new KGAT_... tokens; Windows: "
+    "C:\\Users\\<you>\\.kaggle\\access_token, plain text, no BOM) — or set the "
+    "KAGGLE_API_TOKEN environment variable. Legacy ~/.kaggle/kaggle.json "
+    "also works. The generated submission.csv is saved locally — you can "
+    "always upload it manually on the competition's Submit page."
 )
+
+
+def kaggle_credentials_present() -> bool:
+    """Any of the auth sources the kaggle client reads (new KGAT access
+    token, env var, or legacy kaggle.json)."""
+    import os
+
+    kaggle_dir = Path.home() / ".kaggle"
+    return (
+        (kaggle_dir / "access_token").is_file()
+        or (kaggle_dir / "kaggle.json").is_file()
+        or bool(os.environ.get("KAGGLE_API_TOKEN"))
+        or bool(os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY"))
+    )
 
 
 # ── Step 1: inference ────────────────────────────────────────────────────
@@ -240,7 +256,7 @@ def submit_to_kaggle(csv_path: str, message: str, slug: str, ctx: Any) -> dict[s
             "status": "skipped",
             "reason": "No competition slug configured — set it on the card once the competition is live.",
         }
-    if not (Path.home() / ".kaggle" / "kaggle.json").is_file():
+    if not kaggle_credentials_present():
         return {"status": "skipped", "reason": CREDENTIALS_HELP}
     try:
         # kaggle 2.x authenticates at import time — keep the import in here.
@@ -263,11 +279,12 @@ def kaggle_live_status(slug: str) -> dict[str, Any]:
     """Live Kaggle state for the Status card. Sync, no job; every API call is
     individually fenced so partial data still renders. Graceful states:
     connected=False (no kaggle.json) and configured=False (no slug)."""
-    if not (Path.home() / ".kaggle" / "kaggle.json").is_file():
+    if not kaggle_credentials_present():
         return {
             "connected": False,
             "reason": "Connect your Kaggle account: create an API token on kaggle.com "
-            "(Account -> API -> Create New Token) and save it as ~/.kaggle/kaggle.json.",
+            "(Settings -> API -> Create New Token) and save it as ~/.kaggle/access_token "
+            "(or set KAGGLE_API_TOKEN; legacy ~/.kaggle/kaggle.json also works).",
         }
     slug = (slug or "").strip()
     if not slug or slug == "[SLUG]":
