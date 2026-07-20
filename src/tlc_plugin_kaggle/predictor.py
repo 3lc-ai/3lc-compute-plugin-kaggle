@@ -38,10 +38,14 @@ LOCAL_SOLUTION_CSV = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\competitio
 
 CREDENTIALS_HELP = (
     "Kaggle credentials not found. Create an API token on kaggle.com "
-    "(Settings -> API -> Create New Token) and save it as "
-    "~/.kaggle/access_token (new KGAT_... tokens; Windows: "
-    "C:\\Users\\<you>\\.kaggle\\access_token, plain text, no BOM) — or set the "
-    "KAGGLE_API_TOKEN environment variable. Legacy ~/.kaggle/kaggle.json "
+    "(Settings -> API -> Create New Token; new tokens look like KGAT_...) "
+    "and save it to ~/.kaggle/access_token. On Windows PowerShell "
+    "(the kaggle.com dialog shows bash commands that will NOT work here): "
+    'mkdir "$env:USERPROFILE\\.kaggle" -Force; '
+    'Set-Content -Path "$env:USERPROFILE\\.kaggle\\access_token" '
+    '-Value "KGAT_<your token>" -NoNewline -Encoding ascii '
+    "— plain text, no BOM, no trailing newline. Alternatively set the "
+    "KAGGLE_API_TOKEN environment variable; legacy ~/.kaggle/kaggle.json "
     "also works. The generated submission.csv is saved locally — you can "
     "always upload it manually on the competition's Submit page."
 )
@@ -283,8 +287,11 @@ def kaggle_live_status(slug: str) -> dict[str, Any]:
         return {
             "connected": False,
             "reason": "Connect your Kaggle account: create an API token on kaggle.com "
-            "(Settings -> API -> Create New Token) and save it as ~/.kaggle/access_token "
-            "(or set KAGGLE_API_TOKEN; legacy ~/.kaggle/kaggle.json also works).",
+            "(Settings -> API -> Create New Token) and save it to ~/.kaggle/access_token. "
+            "Windows PowerShell: "
+            'Set-Content -Path "$env:USERPROFILE\\.kaggle\\access_token" '
+            '-Value "KGAT_<your token>" -NoNewline -Encoding ascii. '
+            "(Or set KAGGLE_API_TOKEN; legacy ~/.kaggle/kaggle.json also works.)",
         }
     slug = (slug or "").strip()
     if not slug or slug == "[SLUG]":
