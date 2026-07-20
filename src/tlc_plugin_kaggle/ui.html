@@ -1,0 +1,155 @@
+<div class="plugin-page-narrow" style="padding: 24px; max-width: 900px;">
+  <div class="plugin-hero" style="margin-bottom: 20px;">
+    <h1 style="margin: 0 0 4px 0;">🏁 Kaggle Competition</h1>
+    <p style="margin: 0; opacity: .8;">
+      Import the dataset, train the fixed baseline, predict and submit.
+      <strong>Competition constraints: YOLOv11n from scratch · 640 px · 12 classes.</strong>
+    </p>
+  </div>
+
+  <!-- ── 1. Import ─────────────────────────────────────────────────── -->
+  <div class="card" style="padding: 16px; margin-bottom: 16px;">
+    <h2 style="margin-top: 0;"><span class="plugin-section-number">1</span> Import</h2>
+    <p style="opacity: .8; margin-top: 0;">
+      Point at the starter kit's <code>dataset.yaml</code>. Format: YOLO · Task: detection (fixed).
+      Creates <code>exdark_train</code> / <code>exdark_val</code> / <code>exdark_test</code> tables
+      and validates them against the competition dataset.
+    </p>
+    <div class="plugin-form-grid" style="display: grid; gap: 10px; max-width: 640px;">
+      <label>Dataset YAML path (required)
+        <input id="kg-yaml" type="text" style="width: 100%;"
+               placeholder="C:\path\to\starter_kit\dataset.yaml">
+      </label>
+      <label>Project name
+        <input id="kg-project" type="text" style="width: 100%;" value="exdark-competition">
+      </label>
+      <label>Table name
+        <input id="kg-table" type="text" style="width: 100%;" value="initial">
+      </label>
+    </div>
+    <div class="plugin-action-bar" style="margin-top: 12px;">
+      <button id="kg-import-btn" class="btn btn-primary">Import &amp; Validate</button>
+      <span id="kg-import-state" style="margin-left: 10px; opacity: .8;"></span>
+    </div>
+    <div id="kg-checks" style="margin-top: 12px;"></div>
+    <div id="kg-result" style="margin-top: 8px;"></div>
+    <pre id="kg-log" style="margin-top: 12px; max-height: 220px; overflow: auto; display: none;
+         font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
+  </div>
+
+  <!-- ── 2. Train (stub) ───────────────────────────────────────────── -->
+  <div class="card" style="padding: 16px; margin-bottom: 16px; opacity: .6;">
+    <h2 style="margin-top: 0;"><span class="plugin-section-number">2</span> Train</h2>
+    <p style="margin: 0;">YOLOv11n from scratch @ 640 on <code>exdark_train</code> /
+      <code>exdark_val</code>. <em>Coming in session 2.</em></p>
+  </div>
+
+  <!-- ── 3. Predict + Submit (stub) ────────────────────────────────── -->
+  <div class="card" style="padding: 16px; margin-bottom: 16px; opacity: .6;">
+    <h2 style="margin-top: 0;"><span class="plugin-section-number">3</span> Predict + Submit</h2>
+    <p style="margin: 0;">Inference on <code>exdark_test</code> → <code>submission.csv</code>
+      (image_id = filename stem) → Kaggle submit. <em>Coming in session 3.</em></p>
+  </div>
+
+  <!-- ── 4. Status (stub) ──────────────────────────────────────────── -->
+  <div class="card" style="padding: 16px; margin-bottom: 16px; opacity: .6;">
+    <h2 style="margin-top: 0;"><span class="plugin-section-number">4</span> Status</h2>
+    <p style="margin: 0;">Runs, submissions and leaderboard state. <em>Coming in session 4.</em></p>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+      var API = window.PLUGIN_API;
+      var computeUrl = API ? API.getConfig('compute_service_url') : '';
+      var dashboardUrl = API ? API.getConfig('dashboard_url') : '';
+      var pollTimer = null;
+
+      var el = function (id) { return document.getElementById(id); };
+
+      function renderChecks(checks) {
+        if (!checks || !checks.length) { el('kg-checks').innerHTML = ''; return; }
+        var html = '<ul style="list-style: none; padding-left: 0; margin: 0;">';
+        checks.forEach(function (c) {
+          html += '<li>' + (c.ok ? '✅' : '❌') + ' ' + c.label +
+                  (c.detail ? ' <span style="opacity:.7">(' + c.detail + ')</span>' : '') + '</li>';
+        });
+        el('kg-checks').innerHTML = html + '</ul>';
+      }
+
+      function renderResult(result) {
+        if (!result || !result.tables) { return; }
+        var html = '<table style="border-collapse: collapse;">';
+        ['train', 'val', 'test'].forEach(function (split) {
+          var t = result.tables[split];
+          if (!t) { return; }
+          var open = dashboardUrl
+            ? ' <a href="' + dashboardUrl + '?table=' + encodeURIComponent(t.url) +
+              '" target="_blank">Open in Dashboard</a>'
+            : '';
+          html += '<tr><td style="padding: 2px 10px 2px 0;"><strong>' + split + '</strong></td>' +
+                  '<td style="padding: 2px 10px 2px 0;">' + t.rows + ' rows' +
+                  (t.reused ? ' <em>(reused existing)</em>' : ' (created)') + '</td>' +
+                  '<td style="padding: 2px 0;"><code style="font-size: 11px;">' + t.url + '</code>' +
+                  open + '</td></tr>';
+        });
+        el('kg-result').innerHTML = html + '</table>';
+      }
+
+      function poll(jobId) {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + jobId)
+          .then(function (r) { return r.json(); })
+          .then(function (job) {
+            el('kg-log').style.display = 'block';
+            el('kg-log').textContent = (job.log || []).join('\n');
+            el('kg-log').scrollTop = el('kg-log').scrollHeight;
+            renderChecks(job.checks);
+            if (job.status === 'running') {
+              el('kg-import-state').textContent = 'Importing…';
+              return;
+            }
+            clearInterval(pollTimer);
+            el('kg-import-btn').disabled = false;
+            if (job.status === 'completed') {
+              el('kg-import-state').textContent = '✅ Import complete';
+              renderResult(job.result);
+            } else {
+              el('kg-import-state').textContent = '❌ ' + (job.error || 'Import failed');
+            }
+          })
+          .catch(function (e) {
+            clearInterval(pollTimer);
+            el('kg-import-btn').disabled = false;
+            el('kg-import-state').textContent = '❌ Poll failed: ' + e;
+          });
+      }
+
+      el('kg-import-btn').addEventListener('click', function () {
+        var yaml = el('kg-yaml').value.trim();
+        if (!yaml) { el('kg-import-state').textContent = 'Enter the dataset.yaml path first.'; return; }
+        el('kg-import-btn').disabled = true;
+        el('kg-import-state').textContent = 'Starting…';
+        el('kg-checks').innerHTML = '';
+        el('kg-result').innerHTML = '';
+        API.authFetch(computeUrl + '/api/plugins/kaggle/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dataset_yaml: yaml,
+            project_name: el('kg-project').value.trim(),
+            table_name: el('kg-table').value.trim()
+          })
+        })
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+          .then(function (res) {
+            if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
+            pollTimer = setInterval(function () { poll(res.body.job_id); }, 1000);
+          })
+          .catch(function (e) {
+            el('kg-import-btn').disabled = false;
+            el('kg-import-state').textContent = '❌ ' + e.message;
+          });
+      });
+    })();
+  </script>
+</div>
