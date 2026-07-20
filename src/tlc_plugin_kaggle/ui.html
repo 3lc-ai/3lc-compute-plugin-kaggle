@@ -5,6 +5,9 @@
       Import the dataset, train the fixed baseline, predict and submit.
       <strong>Competition constraints: YOLOv11n from scratch · 640 px · 12 classes.</strong>
     </p>
+    <div id="kg-pipeline" style="margin-top: 10px; font-size: 14px; opacity: .9;">
+      <span>1 Import ○</span> → <span>2 Train ○</span> → <span>3 Submit ○</span> → <span>4 Status</span>
+    </div>
   </div>
 
   <!-- ── 1. Import ─────────────────────────────────────────────────── -->
@@ -169,10 +172,17 @@
          font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
   </div>
 
-  <!-- ── 4. Status (stub) ──────────────────────────────────────────── -->
-  <div class="card" style="padding: 16px; margin-bottom: 16px; opacity: .6;">
+  <!-- ── 4. Status ─────────────────────────────────────────────────── -->
+  <div class="card" style="padding: 16px; margin-bottom: 16px;">
     <h2 style="margin-top: 0;"><span class="plugin-section-number">4</span> Status</h2>
-    <p style="margin: 0;">Runs, submissions and leaderboard state. <em>Coming in session 4.</em></p>
+    <div class="plugin-action-bar" style="margin-bottom: 10px;">
+      <button id="st-refresh-btn" class="btn btn-secondary">Refresh</button>
+      <span id="st-state" style="margin-left: 10px; opacity: .8;"></span>
+    </div>
+    <h3 style="margin-bottom: 6px;">Local submission history</h3>
+    <div id="st-history" style="font-size: 13px;"><em style="opacity: .7;">Loading…</em></div>
+    <h3 style="margin: 14px 0 6px 0;">Kaggle live</h3>
+    <div id="st-kaggle" style="font-size: 13px;"><em style="opacity: .7;">Loading…</em></div>
   </div>
 
   <script>
@@ -416,6 +426,10 @@
         .then(function (r) { return r.json(); })
         .then(function (runs) {
           var sel = el('ps-run');
+          if (!runs.length) {
+            sel.options[0].textContent = '— no plugin runs yet: train first, or paste a weights path below —';
+            return;
+          }
           runs.forEach(function (run) {
             var opt = document.createElement('option');
             opt.value = run.job_id;
@@ -423,13 +437,15 @@
             sel.appendChild(opt);
           });
         })
-        .catch(function () {});
+        .catch(function () {
+          el('ps-run').options[0].textContent = '— could not load runs; paste a weights path below —';
+        });
 
       // Test table default from the same helper the Train card uses.
       API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
         .then(function (r) { return r.json(); })
         .then(function (d) { if (d.test) { el('ps-test-url').value = d.test.url; } })
-        .catch(function () {});
+        .catch(function () { el('ps-test-url').placeholder = 'paste the exdark_test table URL (run Import first)'; });
 
       function psPoll() {
         API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + psJobId)
@@ -453,7 +469,10 @@
             var facts = job.facts || {};
             var out = '';
             if (facts.csv_path) {
-              out += 'CSV: <code style="font-size: 11px;">' + facts.csv_path + '</code><br>';
+              out += 'CSV: <code style="font-size: 11px;">' + facts.csv_path + '</code>' +
+                     (typeof facts.local_score === 'number'
+                       ? ' — local mAP@0.5: <strong>' + facts.local_score.toFixed(4) + '</strong>'
+                       : '') + '<br>';
             }
             if (facts.submission) {
               out += 'Submission: <strong>' + facts.submission.status + '</strong>' +
@@ -501,6 +520,115 @@
             el('ps-state').textContent = '❌ ' + e.message;
           });
       });
+
+      // ── Pipeline indicator ─────────────────────────────────────────
+      function renderPipeline() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/pipeline')
+          .then(function (r) { return r.json(); })
+          .then(function (p) {
+            var mark = function (done) { return done ? '✓' : '○'; };
+            el('kg-pipeline').innerHTML =
+              '<span>1 Import ' + mark(p.import) + '</span> → ' +
+              '<span>2 Train ' + mark(p.train) + '</span> → ' +
+              '<span>3 Submit ' + mark(p.submit) + '</span> → ' +
+              '<span>4 Status</span>';
+          })
+          .catch(function () { /* keep the static placeholder */ });
+      }
+      renderPipeline();
+
+      // ── Status card ────────────────────────────────────────────────
+      function renderHistory() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=predict_submit')
+          .then(function (r) { return r.json(); })
+          .then(function (records) {
+            if (!records.length) {
+              el('st-history').innerHTML =
+                '<em style="opacity: .7;">No submissions yet — run Predict + Submit (card 3).</em>';
+              return;
+            }
+            var html = '<table style="border-collapse: collapse;">' +
+              '<tr style="opacity: .7;"><td style="padding: 2px 12px 2px 0;">run</td>' +
+              '<td style="padding: 2px 12px 2px 0;">when</td>' +
+              '<td style="padding: 2px 12px 2px 0;">local mAP@0.5</td>' +
+              '<td style="padding: 2px 12px 2px 0;">submission</td>' +
+              '<td style="padding: 2px 0;">csv</td></tr>';
+            records.forEach(function (job) {
+              var facts = job.facts || {};
+              var result = job.result || {};
+              var sub = facts.submission || {};
+              var when = job.created_at ? new Date(job.created_at * 1000).toLocaleString() : '—';
+              var run = result.run_name || (job.params || {}).run_name || '—';
+              var score = typeof facts.local_score === 'number' ? facts.local_score.toFixed(4) : '—';
+              var subTxt = job.status === 'failed' ? '❌ failed'
+                : (sub.status || '—') + (sub.ref ? ' (' + sub.ref + ')' : '');
+              html += '<tr><td style="padding: 2px 12px 2px 0;"><strong>' + run + '</strong></td>' +
+                      '<td style="padding: 2px 12px 2px 0;">' + when + '</td>' +
+                      '<td style="padding: 2px 12px 2px 0;">' + score + '</td>' +
+                      '<td style="padding: 2px 12px 2px 0;">' + subTxt + '</td>' +
+                      '<td style="padding: 2px 0;"><code style="font-size: 11px;">' + (facts.csv_path || '—') + '</code></td></tr>';
+            });
+            el('st-history').innerHTML = html + '</table>';
+          })
+          .catch(function (e) {
+            el('st-history').innerHTML = '<em style="opacity: .7;">Could not load history: ' + e + '</em>';
+          });
+      }
+
+      function renderKaggleLive() {
+        var slug = el('ps-slug').value.trim();
+        API.authFetch(computeUrl + '/api/plugins/kaggle/kaggle/status?slug=' + encodeURIComponent(slug))
+          .then(function (r) { return r.json(); })
+          .then(function (s) {
+            if (!s.connected) {
+              el('st-kaggle').innerHTML = '<em style="opacity: .8;">🔌 ' + s.reason + '</em>';
+              return;
+            }
+            if (s.configured === false) {
+              el('st-kaggle').innerHTML = '<em style="opacity: .8;">🏷 ' + s.reason + '</em>';
+              return;
+            }
+            var html = '';
+            if (typeof s.best_public_score === 'number') {
+              html += 'Best public score so far: <strong>' + s.best_public_score + '</strong><br>';
+            }
+            if (s.my_rank) {
+              html += 'Leaderboard: rank <strong>' + s.my_rank.rank + '</strong> (' + s.my_rank.score + ')<br>';
+            }
+            if (s.submissions && s.submissions.length) {
+              html += '<table style="border-collapse: collapse; margin-top: 4px;">' +
+                '<tr style="opacity: .7;"><td style="padding: 2px 12px 2px 0;">when</td>' +
+                '<td style="padding: 2px 12px 2px 0;">status</td>' +
+                '<td style="padding: 2px 12px 2px 0;">public score</td><td>message</td></tr>';
+              s.submissions.forEach(function (x) {
+                html += '<tr><td style="padding: 2px 12px 2px 0;">' + x.date + '</td>' +
+                        '<td style="padding: 2px 12px 2px 0;">' + x.status + '</td>' +
+                        '<td style="padding: 2px 12px 2px 0;">' + (x.public_score || '—') + '</td>' +
+                        '<td>' + x.message + '</td></tr>';
+              });
+              html += '</table>';
+            } else if (!s.submissions_error) {
+              html += '<em style="opacity: .7;">No Kaggle submissions yet.</em>';
+            }
+            if (s.submissions_error) { html += '<em style="opacity: .7;">Submissions: ' + s.submissions_error + '</em><br>'; }
+            if (s.leaderboard_error) { html += '<em style="opacity: .7;">Leaderboard: ' + s.leaderboard_error + '</em>'; }
+            el('st-kaggle').innerHTML = html || '<em style="opacity: .7;">Nothing to show yet.</em>';
+          })
+          .catch(function (e) {
+            el('st-kaggle').innerHTML = '<em style="opacity: .7;">Could not reach the service: ' + e + '</em>';
+          });
+      }
+
+      function refreshStatus() {
+        el('st-state').textContent = 'Refreshing…';
+        renderHistory();
+        renderKaggleLive();
+        renderPipeline();
+        setTimeout(function () { el('st-state').textContent = ''; }, 800);
+      }
+      el('st-refresh-btn').addEventListener('click', refreshStatus);
+      renderHistory();
+      renderKaggleLive();
     })();
   </script>
 </div>
