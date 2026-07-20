@@ -67,3 +67,55 @@ class KaggleController(Controller):
         if job is None:
             raise NotFoundException(detail=f"No such job: {job_id}")
         return job
+
+    @post("/jobs/{job_id:str}/cancel", sync_to_thread=True)
+    def cancel_job(self, job_id: str) -> dict[str, Any]:
+        from tlc_plugin_kaggle import jobs
+
+        job = jobs.cancel_job(job_id)
+        if job is None:
+            raise NotFoundException(detail=f"No such job: {job_id}")
+        return {"cancelled": True, "job_id": job_id, "status": job.get("status")}
+
+    @get("/jobs")
+    async def jobs_list(self, kind: str = "") -> list[dict[str, Any]]:
+        from tlc_plugin_kaggle import jobs
+
+        return jobs.list_jobs(kind or None)
+
+    @get("/tables/defaults", sync_to_thread=True)
+    def table_defaults(self, project: str = "exdark-competition", table: str = "initial") -> dict[str, Any]:
+        """Canonical table URLs for the pickers' defaults, with exists flags."""
+        import tlc
+
+        out: dict[str, Any] = {"project": project}
+        for split in ("train", "val", "test"):
+            url = tlc.Url.create_table_url(table, f"exdark_{split}", project)
+            out[split] = {"url": str(url), "exists": url.exists()}
+        return out
+
+    @post("/train", sync_to_thread=True)
+    def start_train(self, data: dict[str, Any]) -> Response:
+        """Start the Train job. Locked server-side: yolo11n.yaml / 640 / no pretrained."""
+        from tlc_plugin_kaggle import jobs, trainer
+
+        if not isinstance(data, dict):
+            return Response(content={"error": "Body must be a JSON object"}, status_code=HTTP_400_BAD_REQUEST)
+        for field in ("train_table_url", "val_table_url"):
+            if not str(data.get(field, "")).strip():
+                return Response(
+                    content={"error": f"Missing required field '{field}'"},
+                    status_code=HTTP_400_BAD_REQUEST,
+                )
+
+        # Fail fast — the extra-args lock guard and field validation run here
+        # so a locked-key attempt is a 400 with the participant-facing
+        # message, not a failed job. run_training re-validates (defense in
+        # depth: the locked kwargs are merged last there regardless).
+        try:
+            trainer.build_train_kwargs(data)
+        except ValueError as exc:
+            return Response(content={"error": str(exc)}, status_code=HTTP_400_BAD_REQUEST)
+
+        job_id = jobs.start_job("train", dict(data), trainer.run_training)
+        return Response(content={"job_id": job_id}, status_code=200)

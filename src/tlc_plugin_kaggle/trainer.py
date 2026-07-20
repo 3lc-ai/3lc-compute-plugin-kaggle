@@ -1,0 +1,296 @@
+"""Train card backend: constrained YOLOv11n from-scratch training via 3lc-ultralytics.
+
+Competition constraints are enforced SERVER-SIDE, not in the form:
+
+* ``model="yolo11n.yaml"`` — ultralytics builds the architecture from the yaml
+  with random init; no checkpoint is ever loaded.
+* ``imgsz=640``, ``pretrained=False``.
+* The locked kwargs are merged LAST into the train() call, so nothing a
+  participant submits can override them; additionally ``parse_extra_args``
+  rejects any attempt to name a locked key (model / imgsz / pretrained /
+  weights / resume) with a participant-facing error, so the attempt fails
+  loudly instead of silently losing.
+
+Provenance: the 3lc-ultralytics trainer logs every YOLO arg plus all 3LC
+settings onto the tlc.Run via run.set_parameters (engine/trainer.py
+_log_3lc_parameters), so the Run's recorded config proves the from-scratch
+setup: parameters["model"] == "yolo11n.yaml", ["imgsz"] == 640,
+["pretrained"] == False.
+
+Uses the documented tlc_ultralytics API only (YOLO, Settings,
+model.train(tables=..., settings=...), standard ultralytics callbacks).
+"""
+
+from __future__ import annotations
+
+import time
+from pathlib import Path
+from typing import Any
+
+LOCKED_TRAIN_ARGS: dict[str, Any] = {
+    "model": "yolo11n.yaml",  # from-scratch random init
+    "imgsz": 640,
+    "pretrained": False,
+}
+
+# Keys that would defeat the competition locks if injected via extra args.
+FORBIDDEN_LOCKED = {"model", "imgsz", "pretrained", "weights", "resume"}
+# Keys the plugin manages itself; overriding them breaks the run plumbing.
+FORBIDDEN_MANAGED = {"data", "tables", "settings", "project", "name", "exist_ok", "task"}
+
+LOCK_MESSAGE = (
+    "This competition trains YOLOv11n from scratch at 640 px — "
+    "'{key}' is locked and cannot be overridden."
+)
+
+DEFAULT_SAVE_ROOT = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle-plugin"
+
+# Exposed training args: name -> (converter, default). Mirrors the stock
+# form's remaining fields once the locked ones are removed.
+_EXPOSED = {
+    "epochs": (int, 100),
+    "batch": (float, 16),  # float: ultralytics accepts fractions for auto-batch
+    "lr0": (float, 0.01),
+    "lrf": (float, 0.01),
+    "optimizer": (str, "auto"),
+    "patience": (int, 100),
+    "device": (str, "0"),
+    "workers": (int, 0),  # Windows: keep dataloader workers at 0
+}
+
+
+def _coerce_scalar(raw: str) -> Any:
+    s = raw.strip()
+    low = s.lower()
+    if low in ("true", "false"):
+        return low == "true"
+    if low in ("none", "null"):
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        pass
+    try:
+        return float(s)
+    except ValueError:
+        pass
+    return s.strip("\"'")
+
+
+def parse_extra_args(text: str) -> dict[str, Any]:
+    """Parse 'key=value key2=value2' free text; enforce the competition locks.
+
+    Raises ValueError with a participant-facing message on any locked or
+    plugin-managed key.
+    """
+    out: dict[str, Any] = {}
+    if not text or not text.strip():
+        return out
+    tokens = [t for chunk in text.replace(",", " ").split() for t in [chunk.strip()] if t]
+    for token in tokens:
+        if "=" not in token:
+            raise ValueError(f"Extra args must be key=value pairs — could not parse '{token}'.")
+        key, _, value = token.partition("=")
+        key = key.strip()
+        if key in FORBIDDEN_LOCKED:
+            raise ValueError(LOCK_MESSAGE.format(key=key))
+        if key in FORBIDDEN_MANAGED:
+            raise ValueError(f"'{key}' is managed by the plugin and cannot be set via extra args.")
+        if not key.isidentifier():
+            raise ValueError(f"Invalid extra-arg name: '{key}'.")
+        out[key] = _coerce_scalar(value)
+    return out
+
+
+def build_train_kwargs(params: dict[str, Any]) -> dict[str, Any]:
+    """Exposed fields + validated extra args + locked args (locked last)."""
+    kwargs: dict[str, Any] = {}
+    for key, (conv, default) in _EXPOSED.items():
+        raw = params.get(key, default)
+        try:
+            kwargs[key] = conv(raw) if raw is not None and raw != "" else default
+        except (TypeError, ValueError):
+            raise ValueError(f"Invalid value for {key}: {raw!r}")
+    if kwargs["optimizer"].lower() == "auto":
+        kwargs["optimizer"] = "auto"
+    if str(kwargs["device"]).strip().isdigit():
+        kwargs["device"] = int(str(kwargs["device"]).strip())
+    if kwargs["batch"] == int(kwargs["batch"]):
+        kwargs["batch"] = int(kwargs["batch"])
+
+    kwargs.update(parse_extra_args(str(params.get("extra_args", ""))))
+
+    # The competition locks — merged last, they always win.
+    kwargs.update(LOCKED_TRAIN_ARGS)
+    return kwargs
+
+
+def build_settings(params: dict[str, Any]) -> Any:
+    """The 3LC settings block — the point of the competition."""
+    from tlc_ultralytics import Settings
+
+    def _f(key: str, default: Any, conv: Any) -> Any:
+        raw = params.get(key, default)
+        return conv(raw) if raw not in (None, "") else default
+
+    return Settings(
+        project_name=str(params.get("project_name") or "exdark-competition").strip(),
+        run_name=str(params.get("run_name") or f"kaggle_run_{time.strftime('%Y%m%d_%H%M%S')}").strip(),
+        conf_thres=_f("conf_thres", 0.1, float),
+        max_det=_f("max_det", 300, int),
+        collect_loss=bool(params.get("collect_loss", False)),
+        image_embeddings_dim=_f("image_embeddings_dim", 0, int),
+        image_embeddings_reducer=str(params.get("image_embeddings_reducer") or "pacmap"),
+        instance_embeddings_dim=_f("instance_embeddings_dim", 0, int),
+        ground_truth_instance_embeddings=bool(params.get("ground_truth_instance_embeddings", False)),
+        sampling_weights=bool(params.get("sampling_weights", False)),
+        exclude_zero_weight_training=bool(params.get("exclude_zero_weight_training", False)),
+        exclude_zero_weight_collection=bool(params.get("exclude_zero_weight_collection", False)),
+        collection_val_only=bool(params.get("collection_val_only", False)),
+        collection_disable=bool(params.get("collection_disable", False)),
+        collection_epoch_start=_f("collection_epoch_start", None, int),
+        collection_epoch_interval=_f("collection_epoch_interval", 1, int),
+    )
+
+
+def _resolve_table(url: str, use_latest: bool, ctx: Any, role: str) -> Any:
+    import tlc
+
+    table = tlc.Table.from_url(tlc.Url(str(url).strip().strip('"')))
+    if use_latest:
+        latest = table.latest()
+        if str(latest.url) != str(table.url):
+            ctx.log(f"{role}: following latest revision {latest.url}")
+        table = latest
+    ctx.log(f"{role}: {table.url} ({table.row_count} rows)")
+    return table
+
+
+def get_run_parameters(run: Any) -> dict[str, Any]:
+    """Best-effort readback of a tlc.Run's recorded parameters."""
+    constants = getattr(run, "constants", None)
+    if isinstance(constants, dict):
+        params = constants.get("parameters")
+        if isinstance(params, dict):
+            return params
+    params = getattr(run, "parameters", None)
+    if isinstance(params, dict):
+        return params
+    return {}
+
+
+def check_provenance(run_url: str) -> list[dict[str, Any]]:
+    """The acceptance criterion: the Run's own record proves from-scratch."""
+    import tlc
+
+    run = tlc.Run.from_url(tlc.Url(run_url))
+    p = get_run_parameters(run)
+    model = str(p.get("model", ""))
+    return [
+        {
+            "label": "run records model == yolo11n.yaml (from scratch)",
+            "ok": model.endswith("yolo11n.yaml"),
+            "detail": f"model={p.get('model')!r}",
+        },
+        {
+            "label": "run records imgsz == 640",
+            "ok": p.get("imgsz") == 640,
+            "detail": f"imgsz={p.get('imgsz')!r}",
+        },
+        {
+            "label": "run records pretrained == False",
+            "ok": p.get("pretrained") in (False, "False", 0),
+            "detail": f"pretrained={p.get('pretrained')!r}",
+        },
+    ]
+
+
+def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
+    """The Train job. Long-running; reports via ctx; cancels cooperatively."""
+    from tlc_ultralytics import YOLO
+
+    train_kwargs = build_train_kwargs(params)  # raises on locked-key attempts
+    settings = build_settings(params)
+
+    use_latest = bool(params.get("use_latest", True))
+    train_table = _resolve_table(params["train_table_url"], use_latest, ctx, "train")
+    val_table = _resolve_table(params["val_table_url"], use_latest, ctx, "val")
+
+    save_root = str(params.get("save_root") or DEFAULT_SAVE_ROOT)
+    Path(save_root).mkdir(parents=True, exist_ok=True)
+
+    ctx.log(
+        "Locked: model=yolo11n.yaml (from scratch) · imgsz=640 · pretrained=False. "
+        f"Training {train_kwargs['epochs']} epochs, batch {train_kwargs['batch']}, "
+        f"device {train_kwargs['device']}."
+    )
+
+    model = YOLO(LOCKED_TRAIN_ARGS["model"], task="detect")
+
+    state: dict[str, Any] = {"epoch": 0, "cancelled": False}
+
+    def _check_cancel(trainer: Any) -> None:
+        if ctx.is_cancelled():
+            state["cancelled"] = True
+            trainer.stop = True
+
+    def on_train_batch_end(trainer: Any) -> None:
+        _check_cancel(trainer)
+
+    def on_fit_epoch_end(trainer: Any) -> None:
+        _check_cancel(trainer)
+        epoch = int(getattr(trainer, "epoch", 0)) + 1
+        total = int(getattr(trainer, "epochs", 0))
+        metrics = {
+            k: round(float(v), 5)
+            for k, v in (getattr(trainer, "metrics", {}) or {}).items()
+            if isinstance(v, (int, float))
+        }
+        state["epoch"] = epoch
+        ctx.set_progress({"epoch": epoch, "total_epochs": total, "metrics": metrics})
+        ctx.log(f"epoch {epoch}/{total} — " + ", ".join(f"{k}={v}" for k, v in list(metrics.items())[:4]))
+
+    model.add_callback("on_train_batch_end", on_train_batch_end)
+    model.add_callback("on_fit_epoch_end", on_fit_epoch_end)
+
+    model.train(
+        tables={"train": train_table, "val": val_table},
+        settings=settings,
+        project=save_root,
+        name=settings.run_name,
+        **train_kwargs,
+    )
+
+    trainer = model.trainer
+    run = getattr(trainer, "_run", None)
+    run_url = str(run.url) if run is not None else ""
+    best = str(getattr(trainer, "best", "") or "")
+    ctx.set_field("run_url", run_url)
+    ctx.set_field("weights", best)  # session 3 (Predict + Submit) consumes this
+
+    if state["cancelled"]:
+        ctx.log("Training stopped by cancellation request.")
+        if run is not None:
+            try:
+                run.set_status_cancelled()
+            except Exception:
+                pass
+
+    checks = check_provenance(run_url) if run_url else []
+    ctx.set_checks(checks)
+    for c in checks:
+        ctx.log(("PASS " if c["ok"] else "FAIL ") + c["label"] + f" — {c['detail']}")
+
+    best_exists = bool(best) and Path(best).is_file()
+    ctx.log(f"best.pt: {best} (exists: {best_exists})")
+
+    return {
+        "run_url": run_url,
+        "run_name": settings.run_name,
+        "weights": best,
+        "weights_exists": best_exists,
+        "cancelled": state["cancelled"],
+        "epochs_completed": state["epoch"],
+        "provenance": checks,
+        "locked": dict(LOCKED_TRAIN_ARGS),
+    }

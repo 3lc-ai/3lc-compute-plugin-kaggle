@@ -37,11 +37,94 @@
          font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
   </div>
 
-  <!-- ── 2. Train (stub) ───────────────────────────────────────────── -->
-  <div class="card" style="padding: 16px; margin-bottom: 16px; opacity: .6;">
+  <!-- ── 2. Train ──────────────────────────────────────────────────── -->
+  <div class="card" style="padding: 16px; margin-bottom: 16px;">
     <h2 style="margin-top: 0;"><span class="plugin-section-number">2</span> Train</h2>
-    <p style="margin: 0;">YOLOv11n from scratch @ 640 on <code>exdark_train</code> /
-      <code>exdark_val</code>. <em>Coming in session 2.</em></p>
+    <p style="opacity: .8; margin-top: 0;">
+      <strong>Locked for the competition: YOLOv11n from scratch (yolo11n.yaml, random init) ·
+      640 px · no pretrained weights.</strong> These are enforced server-side and cannot be
+      overridden — not even via extra args.
+    </p>
+
+    <h3 style="margin-bottom: 6px;">Tables</h3>
+    <div class="plugin-form-grid" style="display: grid; gap: 8px; max-width: 720px;">
+      <label>Train table URL
+        <input id="tr-train-url" type="text" style="width: 100%;">
+      </label>
+      <label>Val table URL
+        <input id="tr-val-url" type="text" style="width: 100%;">
+      </label>
+      <label><input id="tr-latest" type="checkbox" checked>
+        Use latest revision (<code>.latest()</code>) — train on your newest label edits
+      </label>
+    </div>
+
+    <h3 style="margin-bottom: 6px;">Training</h3>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; max-width: 720px;">
+      <label>Epochs <input id="tr-epochs" type="number" value="100" min="1" style="width: 100%;"></label>
+      <label>Batch <input id="tr-batch" type="number" value="16" style="width: 100%;"></label>
+      <label>lr0 <input id="tr-lr0" type="number" value="0.01" step="0.001" style="width: 100%;"></label>
+      <label>lrf <input id="tr-lrf" type="number" value="0.01" step="0.001" style="width: 100%;"></label>
+      <label>Optimizer
+        <select id="tr-optimizer" style="width: 100%;">
+          <option value="auto" selected>Auto</option>
+          <option value="SGD">SGD</option>
+          <option value="Adam">Adam</option>
+          <option value="AdamW">AdamW</option>
+        </select>
+      </label>
+      <label>Patience <input id="tr-patience" type="number" value="100" min="0" style="width: 100%;"></label>
+      <label>Device <input id="tr-device" type="text" value="0" style="width: 100%;"></label>
+      <label>Workers <input id="tr-workers" type="number" value="0" min="0" style="width: 100%;"></label>
+    </div>
+    <label style="display: block; margin-top: 8px; max-width: 720px;">Extra args (key=value …; locked keys are rejected)
+      <input id="tr-extra" type="text" style="width: 100%;" placeholder="e.g. mosaic=0.5 cos_lr=true">
+    </label>
+
+    <h3 style="margin-bottom: 6px;">3LC settings</h3>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; max-width: 720px;">
+      <label>Project <input id="tr-project" type="text" value="exdark-competition" style="width: 100%;"></label>
+      <label>Run name <input id="tr-runname" type="text" placeholder="kaggle_run_<timestamp>" style="width: 100%;"></label>
+      <label>Conf threshold <input id="tr-conf" type="number" value="0.1" step="0.01" min="0" max="1" style="width: 100%;"></label>
+      <label>Max detections <input id="tr-maxdet" type="number" value="300" min="1" style="width: 100%;"></label>
+      <label>Image emb. dim
+        <select id="tr-embdim" style="width: 100%;">
+          <option value="0" selected>off</option><option value="2">2</option><option value="3">3</option>
+        </select>
+      </label>
+      <label>Emb. reducer
+        <select id="tr-embreducer" style="width: 100%;">
+          <option value="pacmap" selected>pacmap</option><option value="umap">umap</option>
+        </select>
+      </label>
+      <label>Instance emb. dim
+        <select id="tr-instdim" style="width: 100%;">
+          <option value="0" selected>off</option><option value="2">2</option><option value="3">3</option>
+        </select>
+      </label>
+      <label>Collection start <input id="tr-colstart" type="number" placeholder="default" style="width: 100%;"></label>
+      <label>Collection interval <input id="tr-colint" type="number" value="1" min="1" style="width: 100%;"></label>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(200px, 1fr)); gap: 4px; max-width: 720px; margin-top: 8px;">
+      <label><input id="tr-collectloss" type="checkbox"> Collect loss</label>
+      <label><input id="tr-gtinst" type="checkbox"> Ground-truth instance embeddings</label>
+      <label><input id="tr-sampling" type="checkbox"> Use sampling weights</label>
+      <label><input id="tr-exclzero-train" type="checkbox"> Exclude zero-weight (training)</label>
+      <label><input id="tr-exclzero-col" type="checkbox"> Exclude zero-weight (collection)</label>
+      <label><input id="tr-valonly" type="checkbox"> Collection: val only</label>
+      <label><input id="tr-coldisable" type="checkbox"> Disable collection</label>
+    </div>
+
+    <div class="plugin-action-bar" style="margin-top: 12px;">
+      <button id="tr-start-btn" class="btn btn-primary">Start Training</button>
+      <button id="tr-cancel-btn" class="btn btn-secondary" disabled>Cancel</button>
+      <span id="tr-state" style="margin-left: 10px; opacity: .8;"></span>
+    </div>
+    <div id="tr-progress" style="margin-top: 10px;"></div>
+    <div id="tr-checks" style="margin-top: 8px;"></div>
+    <div id="tr-result" style="margin-top: 8px;"></div>
+    <pre id="tr-log" style="margin-top: 12px; max-height: 220px; overflow: auto; display: none;
+         font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
   </div>
 
   <!-- ── 3. Predict + Submit (stub) ────────────────────────────────── -->
@@ -149,6 +232,144 @@
             el('kg-import-btn').disabled = false;
             el('kg-import-state').textContent = '❌ ' + e.message;
           });
+      });
+
+      // ── Train card ─────────────────────────────────────────────────
+      var trainJobId = null;
+      var trainTimer = null;
+
+      // Prefill table pickers with the canonical import outputs.
+      API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.train) { el('tr-train-url').value = d.train.url; }
+          if (d.val) { el('tr-val-url').value = d.val.url; }
+        })
+        .catch(function () { /* leave pickers empty */ });
+
+      function trainChecks(checks) {
+        if (!checks || !checks.length) { el('tr-checks').innerHTML = ''; return; }
+        var html = '<ul style="list-style: none; padding-left: 0; margin: 0;">';
+        checks.forEach(function (c) {
+          html += '<li>' + (c.ok ? '✅' : '❌') + ' ' + c.label +
+                  (c.detail ? ' <span style="opacity:.7">(' + c.detail + ')</span>' : '') + '</li>';
+        });
+        el('tr-checks').innerHTML = html + '</ul>';
+      }
+
+      function trainProgress(job) {
+        var p = job.progress || {};
+        var html = '';
+        if (p.total_epochs) {
+          var pct = Math.round(100 * (p.epoch || 0) / p.total_epochs);
+          html += '<strong>Epoch ' + (p.epoch || 0) + ' / ' + p.total_epochs + '</strong> (' + pct + '%)';
+          var m = p.metrics || {};
+          var keys = Object.keys(m);
+          if (keys.length) {
+            html += '<table style="border-collapse: collapse; margin-top: 4px; font-size: 12px;">';
+            keys.forEach(function (k) {
+              html += '<tr><td style="padding: 1px 10px 1px 0;">' + k + '</td><td>' + m[k] + '</td></tr>';
+            });
+            html += '</table>';
+          }
+        }
+        el('tr-progress').innerHTML = html;
+        var facts = job.facts || {};
+        var out = '';
+        if (facts.run_url) {
+          var open = dashboardUrl
+            ? ' <a href="' + dashboardUrl + '?run=' + encodeURIComponent(facts.run_url) +
+              '" target="_blank">Open Run in Dashboard</a>' : '';
+          out += 'Run: <code style="font-size: 11px;">' + facts.run_url + '</code>' + open + '<br>';
+        }
+        if (facts.weights) {
+          out += 'Weights: <code style="font-size: 11px;">' + facts.weights + '</code>';
+        }
+        el('tr-result').innerHTML = out;
+      }
+
+      function pollTrain() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + trainJobId)
+          .then(function (r) { return r.json(); })
+          .then(function (job) {
+            el('tr-log').style.display = 'block';
+            el('tr-log').textContent = (job.log || []).join('\n');
+            el('tr-log').scrollTop = el('tr-log').scrollHeight;
+            trainChecks(job.checks);
+            trainProgress(job);
+            if (job.status === 'running') {
+              el('tr-state').textContent = job.cancelled ? 'Cancelling…' : 'Training…';
+              return;
+            }
+            clearInterval(trainTimer);
+            el('tr-start-btn').disabled = false;
+            el('tr-cancel-btn').disabled = true;
+            el('tr-state').textContent =
+              job.status === 'completed' ? '✅ Training complete'
+              : job.status === 'cancelled' ? '⏹ Cancelled'
+              : '❌ ' + (job.error || 'Training failed');
+          })
+          .catch(function () { /* transient poll error — keep trying */ });
+      }
+
+      el('tr-start-btn').addEventListener('click', function () {
+        var body = {
+          train_table_url: el('tr-train-url').value.trim(),
+          val_table_url: el('tr-val-url').value.trim(),
+          use_latest: el('tr-latest').checked,
+          epochs: el('tr-epochs').value,
+          batch: el('tr-batch').value,
+          lr0: el('tr-lr0').value,
+          lrf: el('tr-lrf').value,
+          optimizer: el('tr-optimizer').value,
+          patience: el('tr-patience').value,
+          device: el('tr-device').value,
+          workers: el('tr-workers').value,
+          extra_args: el('tr-extra').value,
+          project_name: el('tr-project').value.trim(),
+          run_name: el('tr-runname').value.trim(),
+          conf_thres: el('tr-conf').value,
+          max_det: el('tr-maxdet').value,
+          image_embeddings_dim: el('tr-embdim').value,
+          image_embeddings_reducer: el('tr-embreducer').value,
+          instance_embeddings_dim: el('tr-instdim').value,
+          collection_epoch_start: el('tr-colstart').value,
+          collection_epoch_interval: el('tr-colint').value,
+          collect_loss: el('tr-collectloss').checked,
+          ground_truth_instance_embeddings: el('tr-gtinst').checked,
+          sampling_weights: el('tr-sampling').checked,
+          exclude_zero_weight_training: el('tr-exclzero-train').checked,
+          exclude_zero_weight_collection: el('tr-exclzero-col').checked,
+          collection_val_only: el('tr-valonly').checked,
+          collection_disable: el('tr-coldisable').checked
+        };
+        el('tr-start-btn').disabled = true;
+        el('tr-state').textContent = 'Starting…';
+        el('tr-checks').innerHTML = '';
+        el('tr-result').innerHTML = '';
+        API.authFetch(computeUrl + '/api/plugins/kaggle/train', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+          .then(function (res) {
+            if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
+            trainJobId = res.body.job_id;
+            el('tr-cancel-btn').disabled = false;
+            trainTimer = setInterval(pollTrain, 2000);
+          })
+          .catch(function (e) {
+            el('tr-start-btn').disabled = false;
+            el('tr-state').textContent = '❌ ' + e.message;
+          });
+      });
+
+      el('tr-cancel-btn').addEventListener('click', function () {
+        if (!trainJobId) { return; }
+        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + trainJobId + '/cancel', { method: 'POST' })
+          .then(function () { el('tr-state').textContent = 'Cancelling…'; })
+          .catch(function () {});
       });
     })();
   </script>
