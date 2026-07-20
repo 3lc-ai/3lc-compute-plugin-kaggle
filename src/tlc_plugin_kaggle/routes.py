@@ -119,3 +119,72 @@ class KaggleController(Controller):
 
         job_id = jobs.start_job("train", dict(data), trainer.run_training)
         return Response(content={"job_id": job_id}, status_code=200)
+
+    @get("/runs")
+    async def list_runs(self) -> list[dict[str, Any]]:
+        """Completed train jobs that produced weights, newest first (Run selector)."""
+        from tlc_plugin_kaggle import jobs
+
+        out: list[dict[str, Any]] = []
+        for job in jobs.list_jobs("train"):
+            facts = job.get("facts") or {}
+            if not facts.get("weights"):
+                continue
+            out.append(
+                {
+                    "job_id": job.get("id"),
+                    "run_name": (job.get("result") or {}).get("run_name")
+                    or (job.get("params") or {}).get("run_name")
+                    or "",
+                    "weights": facts.get("weights"),
+                    "run_url": facts.get("run_url"),
+                    "status": job.get("status"),
+                    "created_at": job.get("created_at"),
+                }
+            )
+        return out
+
+    @post("/predict_submit", sync_to_thread=True)
+    def start_predict_submit(self, data: dict[str, Any]) -> Response:
+        """Start the Predict + Submit job.
+
+        Body: {train_job_id? | weights_path?, test_table_url, conf?, device?,
+               message?, competition_slug?, csv_only?}
+        """
+        from pathlib import Path
+
+        from tlc_plugin_kaggle import jobs, predictor
+
+        if not isinstance(data, dict):
+            return Response(content={"error": "Body must be a JSON object"}, status_code=HTTP_400_BAD_REQUEST)
+
+        weights = str(data.get("weights_path", "")).strip().strip('"')
+        train_job_id = str(data.get("train_job_id", "")).strip()
+        run_name = ""
+        if not weights and train_job_id:
+            job = jobs.get_job(train_job_id)
+            facts = (job or {}).get("facts") or {}
+            weights = str(facts.get("weights", ""))
+            run_name = ((job or {}).get("result") or {}).get("run_name", "")
+        if not weights:
+            return Response(
+                content={"error": "Select a run or provide a weights path."},
+                status_code=HTTP_400_BAD_REQUEST,
+            )
+        if not Path(weights).is_file():
+            return Response(
+                content={"error": f"Weights file not found: {weights}"},
+                status_code=HTTP_400_BAD_REQUEST,
+            )
+        if not str(data.get("test_table_url", "")).strip():
+            return Response(
+                content={"error": "Missing required field 'test_table_url'"},
+                status_code=HTTP_400_BAD_REQUEST,
+            )
+
+        params = dict(data)
+        params["weights_path"] = weights
+        if run_name:
+            params.setdefault("run_name", run_name)
+        job_id = jobs.start_job("predict_submit", params, predictor.run_predict_submit)
+        return Response(content={"job_id": job_id}, status_code=200)

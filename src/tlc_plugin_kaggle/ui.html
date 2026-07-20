@@ -127,11 +127,46 @@
          font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
   </div>
 
-  <!-- ── 3. Predict + Submit (stub) ────────────────────────────────── -->
-  <div class="card" style="padding: 16px; margin-bottom: 16px; opacity: .6;">
+  <!-- ── 3. Predict + Submit ───────────────────────────────────────── -->
+  <div class="card" style="padding: 16px; margin-bottom: 16px;">
     <h2 style="margin-top: 0;"><span class="plugin-section-number">3</span> Predict + Submit</h2>
-    <p style="margin: 0;">Inference on <code>exdark_test</code> → <code>submission.csv</code>
-      (image_id = filename stem) → Kaggle submit. <em>Coming in session 3.</em></p>
+    <p style="opacity: .8; margin-top: 0;">
+      Inference on the test table (imgsz 640, locked) → <code>submission.csv</code>
+      (id, image_id, prediction_string; image_id = filename stem) → pre-flight format
+      validation (the metric's exact rules, so a bad file never burns a Kaggle
+      submission) → optional Kaggle upload.
+    </p>
+    <div class="plugin-form-grid" style="display: grid; gap: 8px; max-width: 720px;">
+      <label>Run (trained via this plugin)
+        <select id="ps-run" style="width: 100%;"><option value="">— select a run —</option></select>
+      </label>
+      <label>…or weights path (for runs made outside the plugin)
+        <input id="ps-weights" type="text" style="width: 100%;" placeholder="C:\...\weights\best.pt">
+      </label>
+      <label>Test table URL
+        <input id="ps-test-url" type="text" style="width: 100%;">
+      </label>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 8px; max-width: 720px; margin-top: 8px;">
+      <label>Conf threshold <input id="ps-conf" type="number" value="0.25" step="0.01" min="0" max="1" style="width: 100%;"></label>
+      <label>Device <input id="ps-device" type="text" value="0" style="width: 100%;"></label>
+      <label>Competition slug <input id="ps-slug" type="text" placeholder="[SLUG] — set at launch" style="width: 100%;"></label>
+    </div>
+    <label style="display: block; margin-top: 8px; max-width: 720px;">Submission message
+      <input id="ps-message" type="text" style="width: 100%;" placeholder="<run_name> via 3LC plugin">
+    </label>
+    <label style="display: block; margin-top: 6px;">
+      <input id="ps-csvonly" type="checkbox"> Generate CSV only — don't submit to Kaggle
+    </label>
+    <div class="plugin-action-bar" style="margin-top: 12px;">
+      <button id="ps-start-btn" class="btn btn-primary">Predict &amp; Submit</button>
+      <span id="ps-state" style="margin-left: 10px; opacity: .8;"></span>
+    </div>
+    <div id="ps-progress" style="margin-top: 10px;"></div>
+    <div id="ps-checks" style="margin-top: 8px;"></div>
+    <div id="ps-result" style="margin-top: 8px;"></div>
+    <pre id="ps-log" style="margin-top: 12px; max-height: 220px; overflow: auto; display: none;
+         font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
   </div>
 
   <!-- ── 4. Status (stub) ──────────────────────────────────────────── -->
@@ -370,6 +405,101 @@
         API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + trainJobId + '/cancel', { method: 'POST' })
           .then(function () { el('tr-state').textContent = 'Cancelling…'; })
           .catch(function () {});
+      });
+
+      // ── Predict + Submit card ──────────────────────────────────────
+      var psJobId = null;
+      var psTimer = null;
+
+      // Run selector: plugin-trained runs with weights, newest first.
+      API.authFetch(computeUrl + '/api/plugins/kaggle/runs')
+        .then(function (r) { return r.json(); })
+        .then(function (runs) {
+          var sel = el('ps-run');
+          runs.forEach(function (run) {
+            var opt = document.createElement('option');
+            opt.value = run.job_id;
+            opt.textContent = run.run_name + ' (' + run.status + ')';
+            sel.appendChild(opt);
+          });
+        })
+        .catch(function () {});
+
+      // Test table default from the same helper the Train card uses.
+      API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d.test) { el('ps-test-url').value = d.test.url; } })
+        .catch(function () {});
+
+      function psPoll() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + psJobId)
+          .then(function (r) { return r.json(); })
+          .then(function (job) {
+            el('ps-log').style.display = 'block';
+            el('ps-log').textContent = (job.log || []).join('\n');
+            el('ps-log').scrollTop = el('ps-log').scrollHeight;
+            var p = job.progress || {};
+            el('ps-progress').innerHTML = p.total_images
+              ? '<strong>Inference: ' + (p.images || 0) + ' / ' + p.total_images + ' images</strong>'
+              : '';
+            if (job.checks && job.checks.length) {
+              var html = '<ul style="list-style: none; padding-left: 0; margin: 0;">';
+              job.checks.forEach(function (c) {
+                html += '<li>' + (c.ok ? '✅' : '❌') + ' ' + c.label +
+                        (c.detail ? ' <span style="opacity:.7">(' + c.detail + ')</span>' : '') + '</li>';
+              });
+              el('ps-checks').innerHTML = html + '</ul>';
+            }
+            var facts = job.facts || {};
+            var out = '';
+            if (facts.csv_path) {
+              out += 'CSV: <code style="font-size: 11px;">' + facts.csv_path + '</code><br>';
+            }
+            if (facts.submission) {
+              out += 'Submission: <strong>' + facts.submission.status + '</strong>' +
+                     (facts.submission.ref ? ' — ' + facts.submission.ref : '') +
+                     (facts.submission.reason ? ' <span style="opacity:.7">' + facts.submission.reason + '</span>' : '');
+            }
+            el('ps-result').innerHTML = out;
+            if (job.status === 'running') { el('ps-state').textContent = 'Working…'; return; }
+            clearInterval(psTimer);
+            el('ps-start-btn').disabled = false;
+            el('ps-state').textContent =
+              job.status === 'completed' ? '✅ Done' : '❌ ' + (job.error || 'Failed');
+          })
+          .catch(function () {});
+      }
+
+      el('ps-start-btn').addEventListener('click', function () {
+        var body = {
+          train_job_id: el('ps-run').value,
+          weights_path: el('ps-weights').value.trim(),
+          test_table_url: el('ps-test-url').value.trim(),
+          conf: el('ps-conf').value,
+          device: el('ps-device').value.trim(),
+          competition_slug: el('ps-slug').value.trim(),
+          message: el('ps-message').value.trim(),
+          csv_only: el('ps-csvonly').checked
+        };
+        el('ps-start-btn').disabled = true;
+        el('ps-state').textContent = 'Starting…';
+        el('ps-checks').innerHTML = '';
+        el('ps-result').innerHTML = '';
+        API.authFetch(computeUrl + '/api/plugins/kaggle/predict_submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+          .then(function (res) {
+            if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
+            psJobId = res.body.job_id;
+            psTimer = setInterval(psPoll, 1500);
+          })
+          .catch(function (e) {
+            el('ps-start-btn').disabled = false;
+            el('ps-state').textContent = '❌ ' + e.message;
+          });
       });
     })();
   </script>
