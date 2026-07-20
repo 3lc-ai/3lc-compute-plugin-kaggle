@@ -211,9 +211,14 @@ def _import_test_split(info: dict[str, Any], project: str, table_name: str, log:
     return table, False, "tablewriter-images-only"
 
 
-def run_import(params: dict[str, Any], log: Callable[[str], None]) -> dict[str, Any]:
-    """The Import job. Raises with a participant-facing message on failure."""
-    set_checks = params.get("_set_checks", lambda checks: None)
+def run_import(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
+    """The Import job. Raises with a participant-facing message on failure.
+
+    ``ctx`` is a jobs.JobCtx (log / set_checks); a bare function with those
+    two attributes works too (used by the verification harness).
+    """
+    log = ctx.log
+    set_checks = ctx.set_checks
     checks: list[dict[str, Any]] = []
 
     def check(label: str, ok: bool, detail: str = "") -> bool:
