@@ -66,13 +66,32 @@ class KaggleController(Controller):
                 status_code=HTTP_400_BAD_REQUEST,
             )
 
+        raw_force = data.get("force_splits") or []
+        if not isinstance(raw_force, list):
+            return Response(
+                content={"error": "'force_splits' must be a list of split names"},
+                status_code=HTTP_400_BAD_REQUEST,
+            )
         params = {
             "dataset_yaml": str(data["dataset_yaml"]).strip(),
             "project_name": str(data.get("project_name") or "exdark-competition").strip(),
             "table_name": str(data.get("table_name") or "initial").strip(),
+            "force_splits": [s for s in (str(x) for x in raw_force) if s in importer.SPLITS],
         }
         job_id = jobs.start_job("import", params, importer.run_import)
         return Response(content={"job_id": job_id}, status_code=200)
+
+    @get("/import/revisions", sync_to_thread=True)
+    def import_revisions(self, url: str = "") -> dict[str, Any]:
+        """Revision info for one table (force-reimport confirmation guard)."""
+        from tlc_plugin_kaggle import importer
+
+        if not url.strip():
+            return {"error": "url is required"}
+        try:
+            return importer.table_revisions(url.strip())
+        except Exception as exc:
+            return {"error": f"{type(exc).__name__}: {exc}"}
 
     @get("/jobs/{job_id:str}")
     async def job_status(self, job_id: str) -> dict[str, Any]:

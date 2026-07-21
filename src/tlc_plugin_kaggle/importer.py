@@ -196,12 +196,19 @@ def _stems(table: Any) -> list[str]:
     return [Path(str(table.table_rows[i]["image"])).stem for i in range(table.row_count)]
 
 
-def _import_labeled_split(info: dict[str, Any], split: str, project: str, table_name: str) -> tuple[Any, bool]:
-    """from_yolo import for train/val. Returns (table, reused)."""
+def _import_labeled_split(
+    info: dict[str, Any], split: str, project: str, table_name: str, force: bool = False
+) -> tuple[Any, bool]:
+    """from_yolo import for train/val. Returns (table, reused).
+
+    ``force`` re-imports from disk over an existing table
+    (``if_exists="overwrite"``) — destructive to revisions derived from it,
+    so the UI confirms first (see table_revisions).
+    """
     import tlc
 
     url = tlc.Url.create_table_url(table_name, f"{DATASET_PREFIX}_{split}", project)
-    reused = url.exists()
+    reused = url.exists() and not force
     table = tlc.Table.from_yolo(
         dataset_yaml_file=info["yaml_path"],
         split=split,
@@ -209,18 +216,20 @@ def _import_labeled_split(info: dict[str, Any], split: str, project: str, table_
         project_name=project,
         dataset_name=f"{DATASET_PREFIX}_{split}",
         table_name=table_name,
-        if_exists="reuse",
+        if_exists="overwrite" if force else "reuse",
     )
     return table, reused
 
 
-def _import_test_split(info: dict[str, Any], project: str, table_name: str, log: Callable[[str], None]) -> tuple[Any, bool, str]:
+def _import_test_split(
+    info: dict[str, Any], project: str, table_name: str, log: Callable[[str], None], force: bool = False
+) -> tuple[Any, bool, str]:
     """Images-only test import. Returns (table, reused, mechanism)."""
     import tlc
 
     dataset_name = f"{DATASET_PREFIX}_test"
     url = tlc.Url.create_table_url(table_name, dataset_name, project)
-    if url.exists():
+    if url.exists() and not force:
         # Reuse — validation (row count, zero boxes, unique stems) still runs
         # on the reused table, so a stale or GT-leaked table cannot pass.
         return tlc.Table.from_url(url), True, "reuse-existing"
@@ -238,7 +247,7 @@ def _import_test_split(info: dict[str, Any], project: str, table_name: str, log:
             project_name=project,
             dataset_name=dataset_name,
             table_name=table_name,
-            if_exists="reuse",
+            if_exists="overwrite" if force else "reuse",
         )
         return table, False, "from_yolo-labelless"
 
@@ -253,7 +262,8 @@ def _import_test_split(info: dict[str, Any], project: str, table_name: str, log:
         table_name=table_name,
         description="Competition test split (images only — hidden ground truth).",
         column_schemas={"image": tlc.ImagePath("image")},
-        if_exists="raise",  # url.exists() was False above; anything else is a race
+        # Non-force: url.exists() was False above, anything else is a race.
+        if_exists="overwrite" if force else "raise",
     )
     for img in images:
         writer.add_row({"image": str(img)})
@@ -299,6 +309,11 @@ def run_import(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     yaml_path = str(params.get("dataset_yaml", "")).strip()
     project = str(params.get("project_name") or "exdark-competition").strip()
     table_name = str(params.get("table_name") or "initial").strip()
+    # Splits to forcibly re-import from disk (overwrite instead of reuse).
+    # The UI confirms revision loss before sending this (table_revisions).
+    force_splits = {s for s in (params.get("force_splits") or []) if s in SPLITS}
+    if force_splits:
+        log(f"Force re-import requested for: {', '.join(sorted(force_splits))}")
 
     log(f"Parsing {yaml_path}")
     info = parse_dataset_yaml(yaml_path)
@@ -324,15 +339,19 @@ def run_import(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     for split in ("train", "val"):
         stage(split)
         log(f"{split}: importing via Table.from_yolo ...")
-        table, reused = _import_labeled_split(info, split, project, table_name)
+        table, reused = _import_labeled_split(info, split, project, table_name, force=split in force_splits)
         tables[split] = {"url": str(table.url), "rows": table.row_count, "reused": reused, "_table": table}
-        mechanisms[split] = "from_yolo" + (" (reused existing)" if reused else "")
+        mechanisms[split] = "from_yolo" + (
+            " (forced re-import)" if split in force_splits else " (reused existing)" if reused else ""
+        )
         log(f"{split}: {'reused' if reused else 'created'} {table.url} ({table.row_count} rows)")
 
     stage("test")
-    table, reused, mechanism = _import_test_split(info, project, table_name, log)
+    table, reused, mechanism = _import_test_split(info, project, table_name, log, force="test" in force_splits)
     tables["test"] = {"url": str(table.url), "rows": table.row_count, "reused": reused, "_table": table}
-    mechanisms["test"] = mechanism + (" (reused existing)" if reused else "")
+    mechanisms["test"] = mechanism + (
+        " (forced re-import)" if "test" in force_splits else " (reused existing)" if reused else ""
+    )
     log(f"test: {'reused' if reused else 'created'} {table.url} ({table.row_count} rows)")
 
     # ── Post-import validation ──────────────────────────────────────────
@@ -380,3 +399,41 @@ def run_import(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
         "mechanisms": mechanisms,
         "checks": checks,
     }
+
+
+def table_revisions(table_url: str) -> dict[str, Any]:
+    """Best-effort revision info for the force-reimport confirmation guard.
+
+    A forced overwrite of a base table orphans every revision derived from it
+    — and label-edit-then-retrain is the whole Loop — so the UI must warn
+    with a count when it can. ``revisions`` is the number of lineage steps
+    from the latest revision back to this table, or None when the walk fails;
+    the UI falls back to a generic always-confirm dialog then.
+    """
+    import tlc
+
+    url = tlc.Url(table_url)
+    if not url.exists():
+        return {"exists": False, "has_revisions": False, "revisions": 0}
+    base = tlc.Table.from_url(url)
+    try:
+        latest = base.latest(wait_for_rescan=False)
+    except Exception:
+        return {"exists": True, "has_revisions": None, "revisions": None}
+    if str(latest.url) == str(base.url):
+        return {"exists": True, "has_revisions": False, "revisions": 0, "latest_url": str(latest.url)}
+
+    out: dict[str, Any] = {"exists": True, "has_revisions": True, "latest_url": str(latest.url)}
+    try:
+        # Walk latest -> base along the first-input lineage, counting steps.
+        count, cur = 0, latest
+        while str(cur.url) != str(base.url) and count < 200:
+            inputs = list(getattr(cur, "input_tables", None) or [])
+            if not inputs:
+                break
+            count += 1
+            cur = tlc.Table.from_url(inputs[0])
+        out["revisions"] = count if str(cur.url) == str(base.url) else None
+    except Exception:
+        out["revisions"] = None
+    return out
