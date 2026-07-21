@@ -26,6 +26,17 @@
 .kg-panel { display: none; }
 .kg-panel.active { display: block; }
 
+/* "The Loop" banner — the pedagogy of the competition, always visible */
+.kg-loop {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 14px; padding: 7px 12px; font-size: 12px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--accent-light, rgba(42,74,97,.04)); color: var(--text-secondary);
+}
+.kg-loop a { color: var(--accent); font-weight: 600; text-decoration: none; cursor: pointer; }
+.kg-loop a:hover { text-decoration: underline; }
+.kg-loop .sep { opacity: .5; }
+
 /* Kaggle connection panel (Submit tab) */
 .kg-conn {
   padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border);
@@ -55,6 +66,17 @@
       <span class="kg-chip">🔒 640 px</span>
       <span class="kg-chip">12 classes</span>
       <span class="kg-chip">metric: mAP@0.5</span>
+    </div>
+    <!-- The data-centric loop, surfaced in the tool. Inspect deep-links to
+         the Dashboard (newest Run when one exists). -->
+    <div class="kg-loop" id="kg-loop">
+      <strong>The Loop:</strong>
+      <a data-goto="import">import</a><span class="sep">→</span>
+      <a data-goto="train">train</a><span class="sep">→</span>
+      <a id="kg-loop-inspect" target="_blank">inspect ↗</a><span class="sep">→</span>
+      <span title="Edit labels in the Dashboard, then re-import / use latest revision">fix labels</span><span class="sep">→</span>
+      <a data-goto="train">retrain</a><span class="sep">→</span>
+      <a data-goto="submit">submit</a>
     </div>
   </div>
 
@@ -328,6 +350,19 @@
       try { savedTab = localStorage.getItem(TAB_KEY); } catch (e) { /* sandboxed */ }
       showTab(savedTab || 'import');
 
+      // Loop banner: tab links + Dashboard deep-link for "inspect".
+      Array.prototype.forEach.call(
+        document.querySelectorAll('#kg-loop a[data-goto]'),
+        function (a) {
+          a.addEventListener('click', function () { showTab(a.getAttribute('data-goto')); });
+        }
+      );
+      if (dashboardUrl) { el('kg-loop-inspect').href = dashboardUrl; }
+
+      function dashRunLink(runUrl) {
+        return dashboardUrl ? dashboardUrl + '?run=' + encodeURIComponent(runUrl) : '';
+      }
+
       // Stepper states from the pipeline endpoint: ✓ done, ● current, ○ pending.
       function renderPipeline() {
         API.authFetch(computeUrl + '/api/plugins/kaggle/pipeline')
@@ -370,7 +405,7 @@
           if (!t) { return; }
           var open = dashboardUrl
             ? ' <a href="' + dashboardUrl + '?table=' + encodeURIComponent(t.url) +
-              '" target="_blank">Open in Dashboard</a>'
+              '" target="_blank">Explore table →</a>'
             : '';
           html += '<tr><td style="padding: 2px 10px 2px 0;"><strong>' + split + '</strong></td>' +
                   '<td style="padding: 2px 10px 2px 0;">' + t.rows + ' rows' +
@@ -480,10 +515,14 @@
         var facts = job.facts || {};
         var out = '';
         if (facts.run_url) {
-          var open = dashboardUrl
-            ? ' <a href="' + dashboardUrl + '?run=' + encodeURIComponent(facts.run_url) +
-              '" target="_blank">Open Run in Dashboard</a>' : '';
-          out += 'Run: <code style="font-size: 11px;">' + facts.run_url + '</code>' + open + '<br>';
+          var link = dashRunLink(facts.run_url);
+          out += '<div style="margin: 6px 0;">' +
+                 (link ? '<a class="btn btn-primary btn-sm" href="' + link +
+                         '" target="_blank">Open Run in Dashboard →</a> ' : '') +
+                 '<code style="font-size: 11px;">' + facts.run_url + '</code></div>' +
+                 '<div style="opacity: .75; font-size: 12px; margin-bottom: 4px;">💡 Review ' +
+                 'per-sample losses and embeddings to find label issues, then re-import ' +
+                 'your fixed tables.</div>';
         }
         if (facts.weights) {
           out += 'Weights: <code style="font-size: 11px;">' + facts.weights + '</code>';
@@ -713,6 +752,10 @@
             opt.textContent = run.run_name + ' (' + run.status + ')';
             sel.appendChild(opt);
           });
+          // Loop banner "inspect" deep-links to the newest Run once one exists.
+          if (runs[0] && runs[0].run_url && dashboardUrl) {
+            el('kg-loop-inspect').href = dashRunLink(runs[0].run_url);
+          }
         })
         .catch(function () {
           el('ps-run').options[0].textContent = '— could not load runs; paste a weights path below —';
@@ -814,7 +857,18 @@
 
       // ── Status tab ─────────────────────────────────────────────────
       function renderHistory() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=predict_submit')
+        // /runs first: maps train job_id -> run_url so each submission row
+        // links back to its originating Run in the Dashboard.
+        var runsByJob = {};
+        API.authFetch(computeUrl + '/api/plugins/kaggle/runs')
+          .then(function (r) { return r.json(); })
+          .then(function (runs) {
+            runs.forEach(function (run) { runsByJob[run.job_id] = run; });
+          })
+          .catch(function () { /* rows render without run links */ })
+          .then(function () {
+            return API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=predict_submit');
+          })
           .then(function (r) { return r.json(); })
           .then(function (records) {
             if (!records.length) {
@@ -834,6 +888,12 @@
               var sub = facts.submission || {};
               var when = job.created_at ? new Date(job.created_at * 1000).toLocaleString() : '—';
               var run = result.run_name || (job.params || {}).run_name || '—';
+              // Link the row back to its originating Run in the Dashboard.
+              var origin = runsByJob[(job.params || {}).train_job_id];
+              if (origin && origin.run_url && dashboardUrl) {
+                run = '<a href="' + dashRunLink(origin.run_url) + '" target="_blank" ' +
+                      'title="Open the originating Run in the Dashboard">' + run + ' ↗</a>';
+              }
               var score = typeof facts.local_score === 'number' ? facts.local_score.toFixed(4) : '—';
               var subTxt = job.status === 'failed' ? '❌ failed'
                 : (sub.status || '—') + (sub.ref ? ' (' + sub.ref + ')' : '');
