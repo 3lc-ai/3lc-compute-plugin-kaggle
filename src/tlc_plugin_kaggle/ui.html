@@ -51,6 +51,40 @@
   padding: 8px 10px; border-radius: 6px; margin-top: 6px; font-size: 12px;
   background: rgba(217,119,6,.08); border: 1px solid rgba(217,119,6,.3);
 }
+
+/* Locked-format banner — the stock importer's .format-selected-banner
+   (values copied verbatim from its fragment: it isn't in shared CSS), minus
+   the Change Format button, plus the lock. Entry animation is our own
+   deterministic copy of the stock plugin-badge-in effect. */
+@keyframes kg-banner-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.format-selected-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; margin-bottom: 14px;
+  background: var(--accent-light, rgba(42,74,97,.06));
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-lg, 8px);
+  animation: kg-banner-in 0.3s ease-out both;
+}
+.format-selected-banner .fmt-icon { font-size: 24px; flex-shrink: 0; }
+.format-selected-banner .fmt-name { font-size: 14px; font-weight: 700; color: var(--text); }
+.format-selected-banner .fmt-desc { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+/* Guide pulse — stock importer's next-required-field affordance, verbatim */
+@keyframes guide-pulse {
+  0%, 100% { background: var(--bg-card); box-shadow: 0 0 0 0 rgba(217,119,6,0); }
+  50% { background: rgba(217,119,6,0.1); box-shadow: 0 0 0 3px rgba(217,119,6,0.25); }
+}
+.form-control.guide-next {
+  animation: guide-pulse 2s ease-in-out infinite;
+  border-color: var(--warning, #d97706);
+}
+
+/* Inline preflight feedback under the YAML path field */
+.kg-preflight-ok { color: var(--success); font-size: 12px; margin-top: 6px; line-height: 1.5; }
+.kg-callout { padding: 8px 10px; border-radius: 6px; margin-top: 6px; font-size: 12px; line-height: 1.55; }
+.kg-callout.warn { background: rgba(217,119,6,.08); border: 1px solid rgba(217,119,6,.3); }
+.kg-callout.err { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); }
+.kg-callout.info { background: var(--accent-light, rgba(42,74,97,.05)); border: 1px solid var(--border); color: var(--text-secondary); }
 </style>
 
 <div class="plugin-page-narrow" style="padding: 24px; max-width: 900px; margin: 0 auto;">
@@ -102,33 +136,66 @@
 
   <!-- ── 1. Import ─────────────────────────────────────────────────── -->
   <div class="kg-panel" id="kg-panel-import">
-  <div class="card" style="padding: 16px; margin-bottom: 16px;">
-    <h2 style="margin-top: 0;"><span class="plugin-section-number">1</span> Import</h2>
-    <p style="opacity: .8; margin-top: 0;">
-      Point at the starter kit's <code>dataset.yaml</code>. Format: YOLO · Task: detection (fixed).
-      Creates <code>exdark_train</code> / <code>exdark_val</code> / <code>exdark_test</code> tables
-      and validates them against the competition dataset.
-    </p>
-    <div class="plugin-form-grid" style="display: grid; gap: 10px; max-width: 640px;">
-      <label>Dataset YAML path (required)
-        <input id="kg-yaml" type="text" style="width: 100%;"
-               placeholder="C:\path\to\starter_kit\dataset.yaml">
-      </label>
-      <label>Project name
-        <input id="kg-project" type="text" style="width: 100%;" value="exdark-competition">
-      </label>
-      <label>Table name
-        <input id="kg-table" type="text" style="width: 100%;" value="initial">
-      </label>
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-header"><div>
+      <div class="card-title"><span class="plugin-section-number">1</span> Import</div>
+      <div class="card-subtitle">Creates <code>exdark_train</code> / <code>exdark_val</code> /
+        <code>exdark_test</code> tables from the starter kit and validates them against the
+        competition dataset.</div>
+    </div></div>
+    <div class="card-body">
+      <!-- Locked format: stock selected-format banner, no Change Format -->
+      <div class="format-selected-banner">
+        <span class="fmt-icon">🔒</span>
+        <div style="flex: 1;">
+          <div class="fmt-name">YOLO format · Object Detection</div>
+          <div class="fmt-desc">Fixed for this competition — point Import at the official starter kit.</div>
+        </div>
+      </div>
+
+      <!-- Success / failure banner (rendered by JS) -->
+      <div id="kg-import-banner"></div>
+
+      <form id="kg-import-form" onsubmit="return false;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;">
+          <div>
+            <div class="form-group">
+              <label class="form-label required" for="kg-yaml">Dataset YAML path</label>
+              <input id="kg-yaml" type="text" class="form-control"
+                     placeholder="C:\path\to\starter_kit\dataset.yaml" autocomplete="off" spellcheck="false">
+              <div id="kg-preflight"></div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="kg-project">Project name</label>
+              <input id="kg-project" type="text" class="form-control" value="exdark-competition">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="kg-table">Table name</label>
+              <input id="kg-table" type="text" class="form-control" value="initial">
+              <div class="form-help">Table revision name. Leave as <code>initial</code> unless told otherwise.</div>
+            </div>
+          </div>
+          <div>
+            <div class="form-group" id="kg-splits-group">
+              <label class="form-label">Splits to Import</label>
+              <div id="kg-splits-body"></div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button type="button" id="kg-import-btn" class="btn btn-primary btn-lg" disabled>↑ Import &amp; Validate</button>
+          <span class="spinner" id="kg-import-spinner" style="display: none;"></span>
+          <span id="kg-import-state" style="font-size: 12px; color: var(--text-muted);"></span>
+        </div>
+        <div id="kg-import-progress" style="margin-top: 12px;"></div>
+        <div id="kg-checks" style="margin-top: 12px;"></div>
+        <div id="kg-result" style="margin-top: 8px;"></div>
+        <pre id="kg-log" style="margin-top: 12px; max-height: 220px; overflow: auto; display: none;
+             font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
+      </form>
     </div>
-    <div class="plugin-action-bar" style="margin-top: 12px;">
-      <button id="kg-import-btn" class="btn btn-primary">Import &amp; Validate</button>
-      <span id="kg-import-state" style="margin-left: 10px; opacity: .8;"></span>
-    </div>
-    <div id="kg-checks" style="margin-top: 12px;"></div>
-    <div id="kg-result" style="margin-top: 8px;"></div>
-    <pre id="kg-log" style="margin-top: 12px; max-height: 220px; overflow: auto; display: none;
-         font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
   </div>
   </div>
 
@@ -371,6 +438,16 @@
         return s + 's';
       }
 
+      function esc(s) {
+        if (s === null || s === undefined) { return ''; }
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      function fmtCount(n) {
+        return (n === null || n === undefined) ? '?' : Number(n).toLocaleString('en-US');
+      }
+
       // ── Config persistence: last-used values per tab ────────────────
       // element id -> stored key, per tab. Checkboxes detected by type.
       var CFG_FIELDS = {
@@ -452,6 +529,150 @@
       }
       renderPipeline();
 
+      // ── Import: preflight (State 2 progressive disclosure) ─────────
+      // "Import & Validate" stays disabled until a preflight comes back
+      // all-green. Preflight failures never clear the form.
+      var kgPreflight = null;        // last successful (parsed) preflight payload
+      var kgPreflightTimer = null;
+      var kgPreflightSeq = 0;        // stale-response guard for out-of-order fetches
+      var kgLastPreflightYaml = null;
+      var kgImporting = false;
+
+      var KG_HINT_HTML =
+        '<div class="form-help">Point this at the starter kit’s <code>dataset.yaml</code> ' +
+        '— typically <code>&lt;starter_kit&gt;\\dataset.yaml</code>.</div>';
+
+      function kgSplitsPlaceholder() {
+        el('kg-splits-body').innerHTML =
+          '<div style="font-size:12px;color:var(--text-muted);padding:8px 0">' +
+          'Enter a YAML path above to auto-detect splits.</div>';
+      }
+
+      function kgRenderSplitsLocked() {
+        var html = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">';
+        ['Train', 'Val', 'Test'].forEach(function (s) {
+          html += '<label style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:.75;cursor:default" ' +
+                  'title="Locked by competition rules — all three splits are imported.">' +
+                  '<input type="checkbox" checked disabled> ' + s + ' 🔒</label>';
+        });
+        html += '</div><div class="form-help">All three splits are mandatory for the competition.</div>';
+        el('kg-splits-body').innerHTML = html;
+      }
+
+      function kgTestLabelsNote() {
+        return '<div class="kg-callout info">ℹ Test labels detected on disk — the GT-leak ' +
+               'guard will import the test split as images only (hidden ground truth stays hidden).</div>';
+      }
+
+      function kgRenderPreflight(data) {
+        var box = el('kg-preflight');
+        if (!data) {                       // State 1: empty / no path yet
+          box.innerHTML = KG_HINT_HTML;
+          kgSplitsPlaceholder();
+          return;
+        }
+        if (data.checking) {
+          box.innerHTML = '<div class="form-help">Checking dataset…</div>';
+          return;
+        }
+        if (data.error) {                  // parse failure / path not found
+          box.innerHTML = '<div class="kg-callout err">✕ ' + esc(data.error) + '</div>';
+          kgSplitsPlaceholder();
+          return;
+        }
+        if (data.all_ok) {
+          var counts = ['train', 'val', 'test'].map(function (s) {
+            return fmtCount(data.splits[s].found);
+          }).join(' / ');
+          var html = '<div class="kg-preflight-ok">✓ Detected: train / val / test · ' +
+                     '12 classes (canonical order ✓) · ' + counts +
+                     ' images — matches competition dataset.</div>';
+          if (data.test_labels_on_disk) { html += kgTestLabelsNote(); }
+          box.innerHTML = html;
+          kgRenderSplitsLocked();
+          return;
+        }
+        // Mismatch: name exactly what's off, with a remediation hint.
+        var problems = [];
+        if (!data.classes.canonical) {
+          var names = data.classes.names || [];
+          problems.push('classes: expected the canonical 12 (Bicycle … Table), found ' +
+            data.classes.count + (names.length ? ' (first: ' + esc(names.slice(0, 3).join(', ')) + '…)' : '') +
+            ' — use the unmodified starter-kit dataset.yaml.');
+        }
+        ['train', 'val', 'test'].forEach(function (s) {
+          var sp = data.splits[s];
+          if (!sp || sp.ok) { return; }
+          if (sp.error === 'split not declared in dataset.yaml') {
+            problems.push(s + ': not declared in dataset.yaml — use the unmodified starter-kit dataset.yaml.');
+          } else if (sp.error) {
+            problems.push(s + ': ' + esc(sp.error) + (sp.dir ? ' (<code>' + esc(sp.dir) + '</code>)' : '') +
+              ' — re-download the starter kit or fix the path in dataset.yaml.');
+          } else {
+            problems.push(s + ': expected ' + fmtCount(sp.expected) + ' images, found ' + fmtCount(sp.found) +
+              ' — did the starter kit download complete? Re-download or check <code>images\\' + s + '\\</code>.');
+          }
+        });
+        var mhtml = '<div class="kg-callout warn"><strong>Doesn’t match the competition dataset:</strong><br>' +
+                    problems.map(function (p) { return '• ' + p; }).join('<br>') + '</div>';
+        if (data.test_labels_on_disk) { mhtml += kgTestLabelsNote(); }
+        box.innerHTML = mhtml;
+        kgSplitsPlaceholder();
+      }
+
+      function kgCheckReady() {
+        var btn = el('kg-import-btn');
+        btn.disabled = kgImporting || !(kgPreflight && kgPreflight.all_ok);
+        // Guide pulse: the YAML path is the one required field.
+        el('kg-yaml').classList.toggle('guide-next', !el('kg-yaml').value.trim() && !kgImporting);
+      }
+
+      function kgRunPreflight(force) {
+        var yaml = el('kg-yaml').value.trim();
+        if (!force && yaml === kgLastPreflightYaml) { return; }
+        kgLastPreflightYaml = yaml;
+        kgPreflight = null;
+        kgCheckReady();
+        if (!yaml) { kgRenderPreflight(null); return; }
+        var seq = ++kgPreflightSeq;
+        kgRenderPreflight({ checking: true });
+        API.authFetch(computeUrl + '/api/plugins/kaggle/import/preflight?yaml_path=' + encodeURIComponent(yaml))
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (seq !== kgPreflightSeq) { return; }   // superseded by newer input
+            kgPreflight = data.error ? null : data;
+            kgRenderPreflight(data);
+            kgCheckReady();
+          })
+          .catch(function (e) {
+            if (seq !== kgPreflightSeq) { return; }
+            kgRenderPreflight({ error: 'Could not reach the compute service: ' + e.message });
+            kgCheckReady();
+          });
+      }
+
+      el('kg-yaml').addEventListener('input', function () {
+        clearTimeout(kgPreflightTimer);
+        kgPreflightTimer = setTimeout(kgRunPreflight, 500);
+      });
+      el('kg-yaml').addEventListener('blur', function () {
+        clearTimeout(kgPreflightTimer);
+        kgRunPreflight();
+      });
+      el('kg-yaml').addEventListener('paste', function () {
+        clearTimeout(kgPreflightTimer);
+        setTimeout(kgRunPreflight, 0);   // after the pasted text lands
+      });
+
+      // Initial paint, then re-run once the saved config may have filled the
+      // path (prefill auto-preflight is intentional; State 6 resolution will
+      // take precedence over this in a later step).
+      kgRenderPreflight(null);
+      kgCheckReady();
+      configLoaded.then(function () {
+        if (el('kg-yaml').value.trim()) { kgRunPreflight(); }
+      });
+
       function renderChecks(checks) {
         if (!checks || !checks.length) { el('kg-checks').innerHTML = ''; return; }
         var html = '<ul style="list-style: none; padding-left: 0; margin: 0;">';
@@ -494,7 +715,9 @@
               return;
             }
             clearInterval(pollTimer);
-            el('kg-import-btn').disabled = false;
+            kgImporting = false;
+            el('kg-import-spinner').style.display = 'none';
+            kgCheckReady();
             if (job.status === 'completed') {
               el('kg-import-state').textContent = '✅ Import complete';
               renderResult(job.result);
@@ -505,16 +728,24 @@
           })
           .catch(function (e) {
             clearInterval(pollTimer);
-            el('kg-import-btn').disabled = false;
+            kgImporting = false;
+            el('kg-import-spinner').style.display = 'none';
+            kgCheckReady();
             el('kg-import-state').textContent = '❌ Poll failed: ' + e;
           });
       }
 
       el('kg-import-btn').addEventListener('click', function () {
         var yaml = el('kg-yaml').value.trim();
-        if (!yaml) { el('kg-import-state').textContent = 'Enter the dataset.yaml path first.'; return; }
+        // Safety net — the button is disabled until preflight passes.
+        if (!yaml || !(kgPreflight && kgPreflight.all_ok)) {
+          el('kg-import-state').textContent = 'Preflight must pass first — check the YAML path.';
+          return;
+        }
         saveTabConfig('import');
-        el('kg-import-btn').disabled = true;
+        kgImporting = true;
+        kgCheckReady();
+        el('kg-import-spinner').style.display = 'inline-block';
         el('kg-import-state').textContent = 'Starting…';
         el('kg-checks').innerHTML = '';
         el('kg-result').innerHTML = '';
@@ -533,7 +764,9 @@
             pollTimer = setInterval(function () { poll(res.body.job_id); }, 1000);
           })
           .catch(function (e) {
-            el('kg-import-btn').disabled = false;
+            kgImporting = false;
+            el('kg-import-spinner').style.display = 'none';
+            kgCheckReady();
             el('kg-import-state').textContent = '❌ ' + e.message;
           });
       });
