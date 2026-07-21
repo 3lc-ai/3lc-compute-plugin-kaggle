@@ -1062,6 +1062,26 @@
         return '';
       }
 
+      // Display transform: passing checks compress — a parenthetical that
+      // merely echoes the assertion ("row count == 5910 (got 5910)") is
+      // dropped, and row counts read as "train row count · 5,910".
+      // Informative details (class-name sample, example stem, schema note)
+      // stay. Failing checks keep full expected-vs-got density. Thousands
+      // separators throughout, matching the Dashboard.
+      function kgCheckDisplay(c) {
+        var label = c.label || '';
+        var detail = c.detail || '';
+        var m = label.match(/^(train|val|test) row count == (\d+)$/);
+        if (c.ok) {
+          if (m) { return { label: m[1] + ' row count · ' + fmtCount(+m[2]), detail: '' }; }
+          if (/^dataset\.yaml declares/.test(label)) { return { label: label, detail: '' }; }
+          if (/value map is the canonical/.test(label)) { return { label: label, detail: '' }; }
+        }
+        if (m) { label = m[1] + ' row count == ' + fmtCount(+m[2]); }
+        detail = detail.replace(/\b\d{4,}\b/g, function (n) { return fmtCount(+n); });
+        return { label: label, detail: detail };
+      }
+
       // The 9 checks arrive in stable backend order: the first five are
       // dataset structure (yaml splits, canonical classes, three row
       // counts), the rest competition integrity (value maps, stems, GT).
@@ -1071,21 +1091,30 @@
       // item index drives the stagger).
       function renderChecks(checks, animate) {
         if (!checks || !checks.length) { el('kg-checks').innerHTML = ''; return; }
+        var passed = checks.filter(function (c) { return c.ok; }).length;
+        var total = checks.length;
+        var allOk = passed === total;
+        var html = '<div class="kg-verdict">' +
+          (allOk ? '<span class="ok">' + kgIcon('check-circle') + '</span>'
+                 : '<span class="bad">' + kgIcon('x-circle') + '</span>') +
+          '<span>' + passed + '/' + total + ' checks passed' +
+          (allOk ? '' : ' — ' + (total - passed) + ' failed') + '</span></div>';
         var groups = [
           { title: 'Dataset structure', items: checks.slice(0, 5) },
           { title: 'Competition integrity', items: checks.slice(5) }
         ];
-        var html = '<div class="kg-checks-grid' + (animate ? ' kgl-cascade' : '') + '">';
+        html += '<div class="kg-checks-grid' + (animate ? ' kgl-cascade' : '') + '">';
         groups.forEach(function (g) {
           if (!g.items.length) { return; }
           html += '<div><div class="kg-checks-head">' + g.title + '</div>';
           g.items.forEach(function (c, i) {
             var remedy = c.ok ? '' : kgRemedyFor(c.label || '');
+            var d = kgCheckDisplay(c);
             html += '<div class="kg-check"' + (animate ? ' style="--kgl-i:' + i + '"' : '') + '>' +
                     (c.ok ? '<span class="ok">' + kgIcon('check') + '</span>'
                           : '<span class="bad">' + kgIcon('x') + '</span>') +
-                    '<span class="kg-check-body">' + esc(c.label) +
-                    (c.detail ? ' <span class="detail">(' + esc(c.detail) + ')</span>' : '') +
+                    '<span class="kg-check-body">' + esc(d.label) +
+                    (d.detail ? ' <span class="detail">(' + esc(d.detail) + ')</span>' : '') +
                     (remedy ? '<span class="remedy">' + esc(remedy) + '</span>' : '') +
                     '</span></div>';
           });
