@@ -31,6 +31,21 @@ class KaggleController(Controller):
         html = plugin.get_ui_fragment() if plugin else ""
         return Response(content=html, media_type="text/html", headers={"Cache-Control": "no-store"})
 
+    @get("/import/preflight", sync_to_thread=True)
+    def import_preflight(self, yaml_path: str = "") -> dict[str, Any]:
+        """Read-only dry run of the yaml for the Import form's progressive
+        disclosure. Never writes; failures come back as {"error": ...} with
+        HTTP 200 so the debounced form handler treats them as render states,
+        not exceptions."""
+        from tlc_plugin_kaggle import importer
+
+        if not yaml_path.strip():
+            return {"error": "yaml_path is required"}
+        try:
+            return importer.preflight(yaml_path)
+        except Exception as exc:
+            return {"error": f"{type(exc).__name__}: {exc}"}
+
     @post("/import", sync_to_thread=True)
     def start_import(self, data: dict[str, Any]) -> Response:
         """Start the Import job. Body: {dataset_yaml, project_name?, table_name?}."""

@@ -99,6 +99,55 @@ def parse_dataset_yaml(yaml_path: str) -> dict[str, Any]:
     }
 
 
+def preflight(yaml_path: str) -> dict[str, Any]:
+    """Read-only dry run: parse the yaml and diff it against the competition
+    dataset. No table creation, no writes — cheap enough to call from a
+    debounced input handler.
+
+    Mirrors (but does not replace) the real checks in run_import: the same
+    EXPECTED_ROWS / CANONICAL_CLASSES constants drive both, so preflight
+    green means the pre-import and row-count checks will pass.
+    """
+    info = parse_dataset_yaml(yaml_path)  # raises on missing/unparsable yaml
+
+    splits: dict[str, dict[str, Any]] = {}
+    for split in SPLITS:
+        entry: dict[str, Any] = {"expected": EXPECTED_ROWS[split], "found": None, "ok": False}
+        d = info["splits"].get(split)
+        if d is None:
+            entry["error"] = "split not declared in dataset.yaml"
+        else:
+            entry["dir"] = str(d)
+            try:
+                entry["found"] = len(_list_images(d))
+                entry["ok"] = entry["found"] == EXPECTED_ROWS[split]
+            except FileNotFoundError:
+                entry["error"] = "image directory not found"
+        splits[split] = entry
+
+    classes = {
+        "count": info["nc"],
+        "names": info["class_names"],
+        "canonical": info["nc"] == 12 and info["class_names"] == CANONICAL_CLASSES,
+    }
+
+    # Informational, never gates all_ok: on the organizer machine (or a
+    # participant with stray label files) the import will route test through
+    # the TableWriter images-only path. Surfacing it here makes the GT-leak
+    # guard visible BEFORE import instead of silent magic.
+    test_dir = info["splits"].get("test")
+    test_labels_on_disk = bool(test_dir is not None and _split_has_label_files(test_dir))
+
+    return {
+        "yaml_path": info["yaml_path"],
+        "root": info["root"],
+        "splits": splits,
+        "classes": classes,
+        "test_labels_on_disk": test_labels_on_disk,
+        "all_ok": classes["canonical"] and all(s["ok"] for s in splits.values()),
+    }
+
+
 def _labels_dir_for(images_dir: Path) -> Path:
     """YOLO convention: swap the last 'images' path component for 'labels'."""
     parts = list(images_dir.parts)
