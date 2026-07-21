@@ -79,6 +79,66 @@
   border-color: var(--warning, #d97706);
 }
 
+/* Overflow containment: long table paths / log lines must never push the
+   card past its container. Scoped to the Import panel (other tabs restyle
+   in their own sessions). */
+#kg-panel-import .card { min-width: 0; }
+#kg-panel-import .card-body { min-width: 0; }
+#kg-panel-import code { word-break: break-all; }
+#kg-panel-import pre { white-space: pre-wrap; word-break: break-all; overflow-x: auto; max-width: 100%; }
+
+/* Per-split job rows (stock importer queue-panel anatomy) */
+.kg-job-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid var(--border-light, rgba(0,0,0,.06));
+}
+.kg-job-row .kg-job-label { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; }
+.kg-job-elapsed { font-size: 11px; color: var(--text-muted); }
+
+/* Grouped checks: compact confirmation, not a wall */
+.kg-checks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-top: 14px; }
+.kg-checks-head {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .3px; color: var(--text-muted); margin-bottom: 6px;
+}
+.kg-check { font-size: 12.5px; color: var(--text); padding: 2px 0; line-height: 1.45; }
+.kg-check .ok { color: var(--success); font-weight: 700; }
+.kg-check .bad { color: var(--danger, #ef4444); font-weight: 700; }
+.kg-check .detail { color: var(--text-muted); font-size: 11px; }
+
+/* Table summary rows */
+.kg-table-rows { margin-top: 14px; }
+.kg-table-row {
+  display: flex; align-items: center; gap: 10px; padding: 7px 0;
+  border-bottom: 1px solid var(--border-light, rgba(0,0,0,.06)); font-size: 12.5px;
+}
+.kg-table-row .split { font-weight: 600; min-width: 42px; }
+.kg-table-row .rows { color: var(--text-secondary); white-space: nowrap; }
+.kg-table-row .path {
+  flex: 1; min-width: 0; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden;
+}
+.kg-table-row a { white-space: nowrap; }
+.kg-badge-created {
+  font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  background: rgba(5,150,105,.1); color: var(--success); white-space: nowrap;
+}
+.kg-badge-reused {
+  font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  background: var(--bg-secondary, rgba(0,0,0,.06)); color: var(--text-muted); white-space: nowrap;
+}
+
+/* Collapsed log accordion — the only monospace visible anywhere, and only
+   after the user opens it */
+.kg-log-details { margin-top: 14px; }
+.kg-log-details summary { font-size: 12px; color: var(--text-muted); cursor: pointer; user-select: none; }
+.kg-log-details summary:hover { color: var(--text-secondary); }
+.kg-log-details pre {
+  margin: 8px 0 0; max-height: 260px; overflow: auto; font-size: 11px; line-height: 1.5;
+  padding: 10px; border-radius: 6px;
+  background: var(--bg-secondary, rgba(0,0,0,.04)); border: 1px solid var(--border-light, rgba(0,0,0,.06));
+}
+
 /* Inline preflight feedback under the YAML path field */
 .kg-preflight-ok { color: var(--success); font-size: 12px; margin-top: 6px; line-height: 1.5; }
 .kg-callout { padding: 8px 10px; border-radius: 6px; margin-top: 6px; font-size: 12px; line-height: 1.55; }
@@ -190,10 +250,12 @@
           <span id="kg-import-state" style="font-size: 12px; color: var(--text-muted);"></span>
         </div>
         <div id="kg-import-progress" style="margin-top: 12px;"></div>
-        <div id="kg-checks" style="margin-top: 12px;"></div>
-        <div id="kg-result" style="margin-top: 8px;"></div>
-        <pre id="kg-log" style="margin-top: 12px; max-height: 220px; overflow: auto; display: none;
-             font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
+        <div id="kg-checks"></div>
+        <div id="kg-result"></div>
+        <details class="kg-log-details" id="kg-log-details" style="display: none;">
+          <summary>Show log</summary>
+          <pre id="kg-log"></pre>
+        </details>
       </form>
     </div>
   </div>
@@ -673,53 +735,188 @@
         if (el('kg-yaml').value.trim()) { kgRunPreflight(); }
       });
 
+      // The 9 checks arrive in stable backend order: the first five are
+      // dataset structure (yaml splits, canonical classes, three row
+      // counts), the rest competition integrity (value maps, stems, GT).
       function renderChecks(checks) {
         if (!checks || !checks.length) { el('kg-checks').innerHTML = ''; return; }
-        var html = '<ul style="list-style: none; padding-left: 0; margin: 0;">';
-        checks.forEach(function (c) {
-          html += '<li>' + (c.ok ? '✅' : '❌') + ' ' + c.label +
-                  (c.detail ? ' <span style="opacity:.7">(' + c.detail + ')</span>' : '') + '</li>';
+        var groups = [
+          { title: 'Dataset structure', items: checks.slice(0, 5) },
+          { title: 'Competition integrity', items: checks.slice(5) }
+        ];
+        var html = '<div class="kg-checks-grid">';
+        groups.forEach(function (g) {
+          if (!g.items.length) { return; }
+          html += '<div><div class="kg-checks-head">' + g.title + '</div>';
+          g.items.forEach(function (c) {
+            html += '<div class="kg-check">' +
+                    (c.ok ? '<span class="ok">✓</span> ' : '<span class="bad">✕</span> ') + esc(c.label) +
+                    (c.detail ? ' <span class="detail">(' + esc(c.detail) + ')</span>' : '') + '</div>';
+          });
+          html += '</div>';
         });
-        el('kg-checks').innerHTML = html + '</ul>';
+        el('kg-checks').innerHTML = html + '</div>';
       }
 
+      function midTrunc(s, max) {
+        s = s || '';
+        if (s.length <= max) { return s; }
+        var keep = Math.floor((max - 1) / 2);
+        return s.slice(0, keep) + '…' + s.slice(s.length - keep);
+      }
+
+      function kgBindCopy(container) {
+        container.querySelectorAll('[data-copy]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var text = b.getAttribute('data-copy');
+            var p = (navigator.clipboard && navigator.clipboard.writeText)
+              ? navigator.clipboard.writeText(text) : Promise.reject(new Error('no clipboard API'));
+            p.then(function () {
+              b.textContent = 'Copied ✓';
+              setTimeout(function () { b.textContent = 'Copy'; }, 1200);
+            }).catch(function () { window.prompt('Copy the table path:', text); });
+          });
+        });
+      }
+
+      // ── State 3: per-split progress rows (stock queue-panel style) ──
+      var KG_STAGE_LABELS = {
+        train: 'Import train', val: 'Import val', test: 'Import test',
+        validate: 'Validate (9 checks)'
+      };
+
+      function kgRenderProgress(job) {
+        var box = el('kg-import-progress');
+        if (!job || job.status !== 'running') { box.innerHTML = ''; return; }
+        var p = job.progress || {};
+        var stages = p.stages || ['train', 'val', 'test', 'validate'];
+        var done = p.done || [];
+        var startedAt = p.started_at || {};
+        var finishedAt = p.finished_at || {};
+        var now = Date.now() / 1000;
+        var html = '';
+        stages.forEach(function (s) {
+          var isDone = done.indexOf(s) !== -1;
+          var isCur = p.current === s;
+          var badge = isDone ? '<span class="badge badge-status-completed">completed</span>'
+            : isCur ? '<span class="badge badge-status-running">running</span>'
+            : '<span class="badge badge-status-queued">queued</span>';
+          var elapsed = '';
+          if (startedAt[s]) {
+            var secs = ((isDone && finishedAt[s]) ? finishedAt[s] : now) - startedAt[s];
+            elapsed = '<span class="kg-job-elapsed">' + fmtDur(secs) + '</span>';
+          }
+          html += '<div class="kg-job-row"><span class="kg-job-label">' +
+                  (KG_STAGE_LABELS[s] || esc(s)) + '</span>' + badge + elapsed + '</div>';
+          if (isCur) {
+            html += '<div class="plugin-progress-wrap" style="margin:4px 0 8px">' +
+                    '<div class="plugin-progress-bar indeterminate" style="width:30%"></div></div>';
+          }
+        });
+        box.innerHTML = html;
+      }
+
+      // ── State 4: success banner + table summary rows ────────────────
       function renderResult(result) {
         if (!result || !result.tables) { return; }
-        var html = '<table style="border-collapse: collapse;">';
+
+        // Green headline banner (stock .alert-success anatomy). This
+        // supersedes the "Import complete" state chip — never show both.
+        var banner = '<div class="alert alert-success"><span class="alert-icon">✓</span>' +
+          '<div style="flex:1;min-width:0">' +
+          '<strong>Imported &amp; validated — exdark_train · exdark_val · exdark_test</strong>' +
+          '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+          '<button type="button" class="btn btn-primary btn-sm" id="kg-continue-train">Continue to Train →</button>';
+        ['train', 'val', 'test'].forEach(function (split) {
+          var t = result.tables[split];
+          if (t && dashboardUrl) {
+            banner += '<a class="btn btn-secondary btn-sm" target="_blank" href="' +
+                      dashboardUrl + '?table=' + encodeURIComponent(t.url) + '">Explore ' + split + '</a>';
+          }
+        });
+        banner += '</div></div></div>';
+        el('kg-import-banner').innerHTML = banner;
+        el('kg-continue-train').addEventListener('click', function () { showTab('train'); });
+
+        // Summary rows: count · badge · middle-truncated path · Copy ·
+        // Explore. Full untruncated paths live only in the log accordion.
+        var html = '<div class="kg-table-rows">';
         ['train', 'val', 'test'].forEach(function (split) {
           var t = result.tables[split];
           if (!t) { return; }
-          var open = dashboardUrl
-            ? ' <a href="' + dashboardUrl + '?table=' + encodeURIComponent(t.url) +
-              '" target="_blank">Explore table →</a>'
-            : '';
-          html += '<tr><td style="padding: 2px 10px 2px 0;"><strong>' + split + '</strong></td>' +
-                  '<td style="padding: 2px 10px 2px 0;">' + t.rows + ' rows' +
-                  (t.reused ? ' <em>(reused existing)</em>' : ' (created)') + '</td>' +
-                  '<td style="padding: 2px 0;"><code style="font-size: 11px;">' + t.url + '</code>' +
-                  open + '</td></tr>';
+          var badge = t.reused
+            ? '<span class="kg-badge-reused" title="An identical table already existed and was reused — validation still ran on it.">REUSED</span>'
+            : '<span class="kg-badge-created">CREATED</span>';
+          html += '<div class="kg-table-row">' +
+            '<span class="split">' + split + '</span>' +
+            '<span class="rows">' + fmtCount(t.rows) + ' rows</span>' + badge +
+            '<span class="path" title="' + esc(t.url) + '">' + esc(midTrunc(t.url, 52)) + '</span>' +
+            '<button type="button" class="btn btn-ghost btn-sm" data-copy="' + esc(t.url) + '">Copy</button>' +
+            (dashboardUrl ? '<a target="_blank" href="' + dashboardUrl + '?table=' +
+              encodeURIComponent(t.url) + '">Explore →</a>' : '') +
+            (t.reused ? '<a href="#" class="kg-reimport" data-split="' + split + '" data-url="' +
+              esc(t.url) + '" title="Discard the reused table and re-import this split from disk">Re-import fresh</a>' : '') +
+            '</div>';
         });
-        el('kg-result').innerHTML = html + '</table>';
+        el('kg-result').innerHTML = html + '</div>';
+        kgBindCopy(el('kg-result'));
+        el('kg-result').querySelectorAll('.kg-reimport').forEach(function (a) {
+          a.addEventListener('click', function (e) {
+            e.preventDefault();
+            kgReimportFresh(a.getAttribute('data-split'), a.getAttribute('data-url'));
+          });
+        });
+      }
+
+      // Re-import fresh: destructive to revisions derived from the table
+      // (label edits!), so confirm with a revision count when the backend
+      // can prove one; when it can't (revisions=null), always confirm.
+      // Provably zero revisions -> nothing to lose, no dialog.
+      function kgReimportFresh(split, url) {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/import/revisions?url=' + encodeURIComponent(url))
+          .then(function (r) { return r.json(); })
+          .catch(function () { return {}; })
+          .then(function (info) {
+            info = info || {};
+            var proceed;
+            if (info.has_revisions === false) {
+              proceed = true;
+            } else if (typeof info.revisions === 'number' && info.revisions > 0) {
+              proceed = window.confirm(
+                'exdark_' + split + ' has ' + info.revisions + ' revision' +
+                (info.revisions === 1 ? '' : 's') + ' derived from it (label edits). ' +
+                'Re-importing fresh discards them. Continue?');
+            } else {
+              proceed = window.confirm(
+                'exdark_' + split + ' may have revisions derived from it (label edits) — ' +
+                'the revision count could not be determined. Re-importing fresh would discard them. Continue?');
+            }
+            if (proceed) { kgStartImport([split]); }
+          });
       }
 
       function poll(jobId) {
         API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + jobId)
           .then(function (r) { return r.json(); })
           .then(function (job) {
-            el('kg-log').style.display = 'block';
+            el('kg-log-details').style.display = 'block';
             el('kg-log').textContent = (job.log || []).join('\n');
-            el('kg-log').scrollTop = el('kg-log').scrollHeight;
+            if (el('kg-log-details').open) { el('kg-log').scrollTop = el('kg-log').scrollHeight; }
             renderChecks(job.checks);
+            kgRenderProgress(job);
             if (job.status === 'running') {
-              el('kg-import-state').textContent = 'Importing…';
+              // Honest claim: the import runs as a disk-persisted background
+              // job and this UI reconnects to it on load.
+              el('kg-import-state').textContent = 'Importing… — safe to navigate away';
               return;
             }
             clearInterval(pollTimer);
             kgImporting = false;
             el('kg-import-spinner').style.display = 'none';
             kgCheckReady();
+            kgRenderProgress(null);
             if (job.status === 'completed') {
-              el('kg-import-state').textContent = '✅ Import complete';
+              el('kg-import-state').textContent = '';   // the banner is the headline
               renderResult(job.result);
             } else {
               el('kg-import-state').textContent = '❌ ' + (job.error || 'Import failed');
@@ -735,7 +932,7 @@
           });
       }
 
-      el('kg-import-btn').addEventListener('click', function () {
+      function kgStartImport(forceSplits) {
         var yaml = el('kg-yaml').value.trim();
         // Safety net — the button is disabled until preflight passes.
         if (!yaml || !(kgPreflight && kgPreflight.all_ok)) {
@@ -747,15 +944,18 @@
         kgCheckReady();
         el('kg-import-spinner').style.display = 'inline-block';
         el('kg-import-state').textContent = 'Starting…';
+        el('kg-import-banner').innerHTML = '';
         el('kg-checks').innerHTML = '';
         el('kg-result').innerHTML = '';
+        el('kg-log-details').style.display = 'none';
         API.authFetch(computeUrl + '/api/plugins/kaggle/import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             dataset_yaml: yaml,
             project_name: el('kg-project').value.trim(),
-            table_name: el('kg-table').value.trim()
+            table_name: el('kg-table').value.trim(),
+            force_splits: forceSplits || []
           })
         })
           .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
@@ -769,7 +969,26 @@
             kgCheckReady();
             el('kg-import-state').textContent = '❌ ' + e.message;
           });
-      });
+      }
+
+      el('kg-import-btn').addEventListener('click', function () { kgStartImport([]); });
+
+      // Reconnect on load: imports are disk-persisted background jobs whose
+      // worker thread survives page navigation (that's what makes the "safe
+      // to navigate away" line honest). Orphans from a service restart come
+      // back as status "stale" (pid check server-side), never "running".
+      API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=import')
+        .then(function (r) { return r.json(); })
+        .then(function (list) {
+          var running = (list || []).filter(function (j) { return j.status === 'running'; })[0];
+          if (!running || pollTimer) { return; }
+          kgImporting = true;
+          kgCheckReady();
+          el('kg-import-spinner').style.display = 'inline-block';
+          el('kg-import-state').textContent = 'Importing… — safe to navigate away';
+          pollTimer = setInterval(function () { poll(running.id); }, 1000);
+        })
+        .catch(function () { /* no reconnect — fresh form */ });
 
       // ── Train tab ──────────────────────────────────────────────────
       var trainJobId = null;
