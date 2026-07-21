@@ -105,27 +105,44 @@
 .kg-check .ok { color: var(--success); font-weight: 700; }
 .kg-check .bad { color: var(--danger, #ef4444); font-weight: 700; }
 .kg-check .detail { color: var(--text-muted); font-size: 11px; }
+.kg-check .remedy {
+  display: block; font-size: 11px; color: var(--text-muted); font-style: italic;
+  margin: 1px 0 3px 18px;
+}
 
-/* Table summary rows */
+/* Table summary rows. Paths render as plain muted text like the stock
+   details strip (no font-family anywhere in this fragment — monospace comes
+   only from the <pre> in the log accordion). */
 .kg-table-rows { margin-top: 14px; }
 .kg-table-row {
-  display: flex; align-items: center; gap: 10px; padding: 7px 0;
+  display: flex; align-items: center; gap: 10px; padding: 6px 0;
   border-bottom: 1px solid var(--border-light, rgba(0,0,0,.06)); font-size: 12.5px;
 }
 .kg-table-row .split { font-weight: 600; min-width: 42px; }
-.kg-table-row .rows { color: var(--text-secondary); white-space: nowrap; }
+.kg-table-row .rows { color: var(--text-secondary); white-space: nowrap; min-width: 76px; }
 .kg-table-row .path {
-  flex: 1; min-width: 0; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
-  font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden;
+  flex: 1; min-width: 0; font-size: 11px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden;
 }
-.kg-table-row a { white-space: nowrap; }
+.kg-row-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+/* Fixed-width slot so Copy/Explore columns align whether or not the row
+   carries a Re-import fresh action (created rows have nothing to force). */
+.kg-reimport-slot { min-width: 118px; display: flex; justify-content: flex-end; }
+/* Quiet/tertiary destructive-ish action: ghost at rest, danger tint on hover */
+.kg-btn-danger-hover:hover {
+  color: var(--danger, #ef4444) !important;
+  border-color: rgba(239,68,68,.35) !important;
+  background: rgba(239,68,68,.06) !important;
+}
 .kg-badge-created {
   font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
-  background: rgba(5,150,105,.1); color: var(--success); white-space: nowrap;
+  background: rgba(5,150,105,.1); color: var(--success);
+  white-space: nowrap; min-width: 58px; text-align: center;
 }
 .kg-badge-reused {
   font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
-  background: var(--bg-secondary, rgba(0,0,0,.06)); color: var(--text-muted); white-space: nowrap;
+  background: var(--bg-secondary, rgba(0,0,0,.06)); color: var(--text-muted);
+  white-space: nowrap; min-width: 58px; text-align: center;
 }
 
 /* Collapsed log accordion — the only monospace visible anywhere, and only
@@ -726,14 +743,30 @@
         setTimeout(kgRunPreflight, 0);   // after the pasted text lands
       });
 
-      // Initial paint, then re-run once the saved config may have filled the
-      // path (prefill auto-preflight is intentional; State 6 resolution will
-      // take precedence over this in a later step).
-      kgRenderPreflight(null);
-      kgCheckReady();
-      configLoaded.then(function () {
-        if (el('kg-yaml').value.trim()) { kgRunPreflight(); }
-      });
+      // One-line remediation hints per check, shown only when it fails.
+      // Ordered [regex, hint]; first match wins. $1 = the split name.
+      var KG_REMEDIES = [
+        [/^dataset\.yaml declares/,
+          'Use the unmodified starter-kit dataset.yaml — it must declare all three splits.'],
+        [/^12 classes in canonical order/,
+          'Don’t edit nc/names in dataset.yaml — restore the starter kit’s class list.'],
+        [/^(train|val|test) row count/,
+          'Image count doesn’t match the competition dataset — re-download the starter kit or check images\\$1\\.'],
+        [/^(train|val) value map/,
+          'The existing $1 table has a modified class map — use “Re-import fresh” on that split and run again.'],
+        [/^test stems unique/,
+          'Duplicate test image filenames — restore the starter kit’s test images (don’t add or rename files).'],
+        [/^test table carries no ground-truth boxes/,
+          'Ground truth leaked into the test table — “Re-import fresh” the test split; the guard imports images only.']
+      ];
+
+      function kgRemedyFor(label) {
+        for (var i = 0; i < KG_REMEDIES.length; i++) {
+          var m = label.match(KG_REMEDIES[i][0]);
+          if (m) { return KG_REMEDIES[i][1].replace('$1', m[1] || ''); }
+        }
+        return '';
+      }
 
       // The 9 checks arrive in stable backend order: the first five are
       // dataset structure (yaml splits, canonical classes, three row
@@ -749,9 +782,12 @@
           if (!g.items.length) { return; }
           html += '<div><div class="kg-checks-head">' + g.title + '</div>';
           g.items.forEach(function (c) {
+            var remedy = c.ok ? '' : kgRemedyFor(c.label || '');
             html += '<div class="kg-check">' +
                     (c.ok ? '<span class="ok">✓</span> ' : '<span class="bad">✕</span> ') + esc(c.label) +
-                    (c.detail ? ' <span class="detail">(' + esc(c.detail) + ')</span>' : '') + '</div>';
+                    (c.detail ? ' <span class="detail">(' + esc(c.detail) + ')</span>' : '') +
+                    (remedy ? '<span class="remedy">' + esc(remedy) + '</span>' : '') +
+                    '</div>';
           });
           html += '</div>';
         });
@@ -767,13 +803,14 @@
 
       function kgBindCopy(container) {
         container.querySelectorAll('[data-copy]').forEach(function (b) {
+          var glyph = b.textContent;
           b.addEventListener('click', function () {
             var text = b.getAttribute('data-copy');
             var p = (navigator.clipboard && navigator.clipboard.writeText)
               ? navigator.clipboard.writeText(text) : Promise.reject(new Error('no clipboard API'));
             p.then(function () {
               b.textContent = 'Copied ✓';
-              setTimeout(function () { b.textContent = 'Copy'; }, 1200);
+              setTimeout(function () { b.textContent = glyph; }, 1200);
             }).catch(function () { window.prompt('Copy the table path:', text); });
           });
         });
@@ -834,36 +871,55 @@
                       dashboardUrl + '?table=' + encodeURIComponent(t.url) + '">Explore ' + split + '</a>';
           }
         });
+        banner += '<button type="button" class="btn btn-ghost btn-sm" id="kg-start-over">Start over</button>';
         banner += '</div></div></div>';
         el('kg-import-banner').innerHTML = banner;
         el('kg-continue-train').addEventListener('click', function () { showTab('train'); });
+        el('kg-start-over').addEventListener('click', function () { kgEnterFormState(); });
 
-        // Summary rows: count · badge · middle-truncated path · Copy ·
-        // Explore. Full untruncated paths live only in the log accordion.
+        // Summary rows: count · badge · middle-truncated path · actions.
+        // Full untruncated paths live only in the log accordion / Copy.
+        // Actions use the stock small-button vocabulary; the Re-import slot
+        // is fixed-width so Copy/Explore align across rows (created rows
+        // have nothing to force — by design).
         var html = '<div class="kg-table-rows">';
         ['train', 'val', 'test'].forEach(function (split) {
           var t = result.tables[split];
           if (!t) { return; }
           var badge = t.reused
             ? '<span class="kg-badge-reused" title="An identical table already existed and was reused — validation still ran on it.">REUSED</span>'
-            : '<span class="kg-badge-created">CREATED</span>';
+            : '<span class="kg-badge-created" title="Freshly imported from disk this run.">CREATED</span>';
           html += '<div class="kg-table-row">' +
             '<span class="split">' + split + '</span>' +
             '<span class="rows">' + fmtCount(t.rows) + ' rows</span>' + badge +
             '<span class="path" title="' + esc(t.url) + '">' + esc(midTrunc(t.url, 52)) + '</span>' +
-            '<button type="button" class="btn btn-ghost btn-sm" data-copy="' + esc(t.url) + '">Copy</button>' +
-            (dashboardUrl ? '<a target="_blank" href="' + dashboardUrl + '?table=' +
-              encodeURIComponent(t.url) + '">Explore →</a>' : '') +
-            (t.reused ? '<a href="#" class="kg-reimport" data-split="' + split + '" data-url="' +
-              esc(t.url) + '" title="Discard the reused table and re-import this split from disk">Re-import fresh</a>' : '') +
-            '</div>';
+            '<span class="kg-row-actions">' +
+            '<button type="button" class="btn btn-ghost btn-sm" data-copy="' + esc(t.url) +
+              '" title="Copy full table path">⧉</button>' +
+            (dashboardUrl ? '<a class="btn btn-secondary btn-sm" target="_blank" href="' +
+              dashboardUrl + '?table=' + encodeURIComponent(t.url) + '">Explore →</a>' : '') +
+            '<span class="kg-reimport-slot">' +
+            (t.reused ? '<button type="button" class="btn btn-ghost btn-sm kg-btn-danger-hover kg-reimport" ' +
+              'data-split="' + split + '" data-url="' + esc(t.url) +
+              '" title="Discard the reused table and re-import this split from disk">Re-import fresh</button>' : '') +
+            '</span></span></div>';
         });
         el('kg-result').innerHTML = html + '</div>';
+
+        // GT-leak guard visibility: when the test split was built via the
+        // images-only TableWriter path, say so as an informational note —
+        // never buried in the log.
+        var testMech = (result.mechanisms || {}).test || '';
+        if (testMech.indexOf('tablewriter-images-only') !== -1) {
+          el('kg-result').innerHTML +=
+            '<div class="kg-callout info">ℹ GT-leak guard active: test label files were present on disk, ' +
+            'so the test table was built images-only (hidden ground truth stays hidden).</div>';
+        }
+
         kgBindCopy(el('kg-result'));
-        el('kg-result').querySelectorAll('.kg-reimport').forEach(function (a) {
-          a.addEventListener('click', function (e) {
-            e.preventDefault();
-            kgReimportFresh(a.getAttribute('data-split'), a.getAttribute('data-url'));
+        el('kg-result').querySelectorAll('.kg-reimport').forEach(function (b) {
+          b.addEventListener('click', function () {
+            kgReimportFresh(b.getAttribute('data-split'), b.getAttribute('data-url'));
           });
         });
       }
@@ -895,6 +951,14 @@
           });
       }
 
+      // ── State 5: red failure banner (headline; the chip stays empty) ──
+      function renderFailBanner(message) {
+        el('kg-import-banner').innerHTML =
+          '<div class="alert alert-error"><span class="alert-icon">✕</span>' +
+          '<div style="flex:1;min-width:0"><strong>Import failed</strong>' +
+          '<div style="margin-top:4px;font-size:12.5px">' + esc(message) + '</div></div></div>';
+      }
+
       function poll(jobId) {
         API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + jobId)
           .then(function (r) { return r.json(); })
@@ -919,7 +983,11 @@
               el('kg-import-state').textContent = '';   // the banner is the headline
               renderResult(job.result);
             } else {
-              el('kg-import-state').textContent = '❌ ' + (job.error || 'Import failed');
+              // State 5: red banner is the headline; the form stays
+              // populated and the button invites a re-run.
+              el('kg-import-state').textContent = '';
+              renderFailBanner(job.error || 'Import failed — see the checks below.');
+              el('kg-import-btn').innerHTML = '↻ Re-run Import &amp; Validate';
             }
             renderPipeline();
           })
@@ -932,16 +1000,35 @@
           });
       }
 
+      // Set while the revisit (State 6) view is active: the form is hidden,
+      // so re-imports launched from it take their values from the verified
+      // snapshot instead of the form (the backend re-validates everything).
+      var kgRevisitSrc = null;
+
       function kgStartImport(forceSplits) {
-        var yaml = el('kg-yaml').value.trim();
-        // Safety net — the button is disabled until preflight passes.
-        if (!yaml || !(kgPreflight && kgPreflight.all_ok)) {
-          el('kg-import-state').textContent = 'Preflight must pass first — check the YAML path.';
+        var yaml, project, table;
+        if (kgRevisitSrc) {
+          yaml = kgRevisitSrc.yaml;
+          project = kgRevisitSrc.project;
+          table = kgRevisitSrc.table;
+        } else {
+          yaml = el('kg-yaml').value.trim();
+          project = el('kg-project').value.trim();
+          table = el('kg-table').value.trim();
+          // Safety net — the button is disabled until preflight passes.
+          if (!yaml || !(kgPreflight && kgPreflight.all_ok)) {
+            el('kg-import-state').textContent = 'Preflight must pass first — check the YAML path.';
+            return;
+          }
+          saveTabConfig('import');
+        }
+        if (!yaml) {
+          el('kg-import-state').textContent = '❌ No dataset.yaml recorded — use Start over and re-enter the path.';
           return;
         }
-        saveTabConfig('import');
         kgImporting = true;
         kgCheckReady();
+        el('kg-import-btn').innerHTML = '↑ Import &amp; Validate';   // reset a Re-run label
         el('kg-import-spinner').style.display = 'inline-block';
         el('kg-import-state').textContent = 'Starting…';
         el('kg-import-banner').innerHTML = '';
@@ -953,8 +1040,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             dataset_yaml: yaml,
-            project_name: el('kg-project').value.trim(),
-            table_name: el('kg-table').value.trim(),
+            project_name: project,
+            table_name: table,
             force_splits: forceSplits || []
           })
         })
@@ -973,22 +1060,236 @@
 
       el('kg-import-btn').addEventListener('click', function () { kgStartImport([]); });
 
-      // Reconnect on load: imports are disk-persisted background jobs whose
-      // worker thread survives page navigation (that's what makes the "safe
-      // to navigate away" line honest). Orphans from a service restart come
-      // back as status "stale" (pid check server-side), never "running".
-      API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=import')
-        .then(function (r) { return r.json(); })
-        .then(function (list) {
-          var running = (list || []).filter(function (j) { return j.status === 'running'; })[0];
-          if (!running || pollTimer) { return; }
-          kgImporting = true;
-          kgCheckReady();
-          el('kg-import-spinner').style.display = 'inline-block';
-          el('kg-import-state').textContent = 'Importing… — safe to navigate away';
-          pollTimer = setInterval(function () { poll(running.id); }, 1000);
-        })
-        .catch(function () { /* no reconnect — fresh form */ });
+      // ── Tab-open state resolution (State 6 precedence) ───────────────
+      // Order: a still-running import wins (reconnect → State 3), then a
+      // verified revisit snapshot (State 4), then the form (State 1; a
+      // saved path prefills and auto-preflights).
+
+      function kgEnterFormState() {
+        kgRevisitSrc = null;
+        el('kg-import-form').style.display = '';
+        el('kg-import-banner').innerHTML = '';
+        el('kg-checks').innerHTML = '';
+        el('kg-result').innerHTML = '';
+        el('kg-import-progress').innerHTML = '';
+        el('kg-import-state').textContent = '';
+        el('kg-log-details').style.display = 'none';
+        el('kg-import-btn').innerHTML = '↑ Import &amp; Validate';
+        kgRenderPreflight(null);
+        kgCheckReady();
+        configLoaded.then(function () {
+          if (el('kg-yaml').value.trim()) { kgRunPreflight(true); }
+        });
+      }
+
+      function kgRenderRevisit(state) {
+        var snap = state.snapshot || {};
+        kgRevisitSrc = {
+          yaml: snap.dataset_yaml || '',
+          project: snap.project || 'exdark-competition',
+          table: snap.table_name || 'initial'
+        };
+        el('kg-import-form').style.display = 'none';
+        var result = { tables: {}, mechanisms: snap.mechanisms || {} };
+        ['train', 'val', 'test'].forEach(function (s) {
+          var t = (snap.tables || {})[s] || {};
+          // Synthesized snapshots (imports made before snapshot support)
+          // carry URLs only; those tables pre-exist, so REUSED is accurate.
+          result.tables[s] = { url: t.url || '', rows: t.rows, reused: state.synthesized ? true : !!t.reused };
+        });
+        renderResult(result);
+        renderChecks(snap.checks || []);
+        if (state.synthesized) {
+          el('kg-checks').innerHTML =
+            '<div class="kg-callout info">ℹ Tables found from a previous session — no stored validation ' +
+            'results. “Start over” and re-run Import &amp; Validate to re-check them.</div>' +
+            el('kg-checks').innerHTML;
+        }
+        // Log accordion from the surviving job record — optional garnish;
+        // table verification already decided this state, a pruned record
+        // just means no log.
+        if (state.job_available && snap.job_id) {
+          API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + snap.job_id)
+            .then(function (r) { return r.json(); })
+            .then(function (job) {
+              if (job && job.log && job.log.length && !kgImporting) {
+                el('kg-log').textContent = job.log.join('\n');
+                el('kg-log-details').style.display = 'block';
+              }
+            })
+            .catch(function () {});
+        }
+      }
+
+      function kgInitImportTab() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=import')
+          .then(function (r) { return r.json(); })
+          .catch(function () { return []; })
+          .then(function (list) {
+            var running = (list || []).filter(function (j) { return j.status === 'running'; })[0];
+            if (running && !pollTimer) {
+              // Reconnect: imports are disk-persisted background jobs whose
+              // worker survives navigation (what makes "safe to navigate
+              // away" honest). Restart orphans come back "stale", never
+              // "running" (server-side pid check).
+              kgImporting = true;
+              kgCheckReady();
+              el('kg-import-spinner').style.display = 'inline-block';
+              el('kg-import-state').textContent = 'Importing… — safe to navigate away';
+              pollTimer = setInterval(function () { poll(running.id); }, 1000);
+              return;
+            }
+            return API.authFetch(computeUrl + '/api/plugins/kaggle/import/state')
+              .then(function (r) { return r.json(); })
+              .catch(function () { return { state: 'empty' }; })
+              .then(function (state) {
+                if (state.state === 'success') { kgRenderRevisit(state); }
+                else { kgEnterFormState(); }
+              });
+          });
+      }
+
+      // ── Dev affordance: ?kgdev=<state> renders each UI state from static
+      // fixtures for screenshotting — no fetches, no job side effects.
+      // Values: state1, state2, state2-mismatch, state2-error, state3,
+      // state4, state5, state6. Documented in docs/ui-notes.md.
+      function kgDevForce(mode) {
+        var devYaml = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\competition_exdark\\package_build\\starter_kit\\dataset.yaml';
+        var base = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
+        function T(s, rows, reused) {
+          return { url: base + 'exdark_' + s + '/tables/initial', rows: rows, reused: reused };
+        }
+        function CHECKS(valShort, gtLeak) {
+          return [
+            { label: 'dataset.yaml declares train/val/test', ok: true, detail: "found: ['test', 'train', 'val']" },
+            { label: '12 classes in canonical order', ok: true, detail: "nc=12, names=['Bicycle', 'Boat', 'Bottle']..." },
+            { label: 'train row count == 5910', ok: true, detail: 'got 5910' },
+            { label: 'val row count == 733', ok: !valShort, detail: valShort ? 'got 731' : 'got 733' },
+            { label: 'test row count == 715', ok: true, detail: 'got 715' },
+            { label: 'train value map is the canonical 12 classes', ok: true, detail: 'got 12 classes' },
+            { label: 'val value map is the canonical 12 classes', ok: true, detail: 'got 12 classes' },
+            { label: 'test stems unique (one image_id per image)', ok: true, detail: '715 unique / 715 rows; e.g. 2015_00001' },
+            { label: 'test table carries no ground-truth boxes', ok: !gtLeak, detail: gtLeak ? '3 boxes found' : 'images-only schema (no bbs column)' }
+          ];
+        }
+        var LOG = [
+          'Parsing ' + devYaml,
+          "PASS dataset.yaml declares train/val/test — found: ['test', 'train', 'val']",
+          'PASS 12 classes in canonical order — nc=12, names=[\'Bicycle\', \'Boat\', \'Bottle\']...',
+          'train: importing via Table.from_yolo ...',
+          'train: created ' + T('train').url + ' (5910 rows)',
+          'val: importing via Table.from_yolo ...',
+          'val: created ' + T('val').url + ' (733 rows)',
+          'test: no label files on disk — importing via Table.from_yolo (primary path)',
+          'test: created ' + T('test').url + ' (715 rows)'
+        ];
+        var pfGreen = {
+          all_ok: true, test_labels_on_disk: false,
+          classes: { count: 12, canonical: true, names: [] },
+          splits: {
+            train: { found: 5910, expected: 5910, ok: true },
+            val: { found: 733, expected: 733, ok: true },
+            test: { found: 715, expected: 715, ok: true }
+          }
+        };
+        var pfMismatch = {
+          all_ok: false, test_labels_on_disk: true,
+          classes: { count: 12, canonical: true, names: [] },
+          splits: {
+            train: { found: 5910, expected: 5910, ok: true },
+            val: { found: 731, expected: 733, ok: false },
+            test: { found: 715, expected: 715, ok: true }
+          }
+        };
+
+        function apply() {
+          kgRevisitSrc = null;
+          el('kg-import-state').textContent = '';
+          if (mode === 'state1') {
+            el('kg-yaml').value = '';
+            kgPreflight = null;
+            kgRenderPreflight(null);
+            kgCheckReady();
+          } else if (mode === 'state2') {
+            el('kg-yaml').value = devYaml;
+            kgPreflight = pfGreen;
+            kgRenderPreflight(pfGreen);
+            kgCheckReady();
+          } else if (mode === 'state2-mismatch') {
+            el('kg-yaml').value = devYaml;
+            kgPreflight = null;
+            kgRenderPreflight(pfMismatch);
+            kgCheckReady();
+          } else if (mode === 'state2-error') {
+            el('kg-yaml').value = 'C:\\nope\\dataset.yaml';
+            kgPreflight = null;
+            kgRenderPreflight({ error: 'FileNotFoundError: dataset.yaml not found: C:\\nope\\dataset.yaml' });
+            kgCheckReady();
+          } else if (mode === 'state3') {
+            var now = Date.now() / 1000;
+            el('kg-yaml').value = devYaml;
+            kgPreflight = pfGreen;
+            kgRenderPreflight(pfGreen);
+            kgImporting = true;
+            kgCheckReady();
+            el('kg-import-spinner').style.display = 'inline-block';
+            el('kg-import-state').textContent = 'Importing… — safe to navigate away';
+            kgRenderProgress({
+              status: 'running',
+              progress: {
+                stages: ['train', 'val', 'test', 'validate'], current: 'val', done: ['train'],
+                started_at: { train: now - 97, val: now - 14 }, finished_at: { train: now - 14 }
+              }
+            });
+            el('kg-log').textContent = LOG.slice(0, 6).join('\n');
+            el('kg-log-details').style.display = 'block';
+          } else if (mode === 'state4') {
+            el('kg-yaml').value = devYaml;
+            kgPreflight = pfGreen;
+            kgRenderPreflight(pfGreen);
+            kgCheckReady();
+            renderResult({
+              tables: { train: T('train', 5910, true), val: T('val', 733, false), test: T('test', 715, true) },
+              mechanisms: { test: 'tablewriter-images-only' }
+            });
+            renderChecks(CHECKS());
+            el('kg-log').textContent = LOG.join('\n');
+            el('kg-log-details').style.display = 'block';
+          } else if (mode === 'state5') {
+            el('kg-yaml').value = devYaml;
+            kgPreflight = pfGreen;
+            kgRenderPreflight(pfGreen);
+            kgCheckReady();
+            renderFailBanner('RuntimeError: Your local copy does not match the competition dataset. ' +
+              'Re-download the starter kit and point Import at its dataset.yaml.');
+            renderChecks(CHECKS(true, true));
+            el('kg-import-btn').innerHTML = '↻ Re-run Import &amp; Validate';
+            el('kg-log').textContent = LOG.concat(['FAIL val row count == 733 — got 731',
+              'FAIL test table carries no ground-truth boxes — 3 boxes found',
+              'FAILED: Your local copy does not match the competition dataset.']).join('\n');
+            el('kg-log-details').style.display = 'block';
+          } else if (mode === 'state6') {
+            kgRenderRevisit({
+              state: 'success', synthesized: false, job_available: false,
+              snapshot: {
+                project: 'exdark-competition', table_name: 'initial', dataset_yaml: devYaml,
+                tables: { train: T('train', 5910, true), val: T('val', 733, true), test: T('test', 715, true) },
+                mechanisms: {}, checks: CHECKS()
+              }
+            });
+          } else {
+            kgInitImportTab();   // unknown value → normal resolution
+            return;
+          }
+        }
+        apply();
+        // The async config load fills saved form values after we've applied
+        // the fixture — re-apply once it lands so the forced state sticks.
+        configLoaded.then(function () { setTimeout(apply, 0); });
+      }
+
+      var kgDevMode = new URLSearchParams(window.location.search).get('kgdev');
+      if (kgDevMode) { kgDevForce(kgDevMode); } else { kgInitImportTab(); }
 
       // ── Train tab ──────────────────────────────────────────────────
       var trainJobId = null;
