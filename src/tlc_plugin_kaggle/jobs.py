@@ -38,6 +38,10 @@ class JobCtx:
     def __init__(self, job: dict[str, Any]) -> None:
         self._job = job
 
+    @property
+    def job_id(self) -> str:
+        return str(self._job["id"])
+
     def log(self, message: str) -> None:
         with _lock:
             self._job["log"].append(message)

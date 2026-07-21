@@ -393,11 +393,92 @@ def run_import(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     for t in tables.values():
         t.pop("_table", None)
 
-    return {
+    result = {
         "project": project,
         "tables": tables,
         "mechanisms": mechanisms,
         "checks": checks,
+    }
+
+    # Persist the revisit snapshot (State 6). Table existence — re-verified
+    # by verified_import_state on every read — is the source of truth; the
+    # job_id is optional garnish that may outlive its pruned job record.
+    try:
+        from tlc_plugin_kaggle import config_store
+
+        config_store.save(
+            {
+                "import_state": {
+                    **result,
+                    "table_name": table_name,
+                    "dataset_yaml": yaml_path,
+                    "job_id": getattr(ctx, "job_id", ""),
+                    "finished_at": time.time(),
+                }
+            }
+        )
+    except Exception as exc:
+        log(f"WARNING: could not persist the import-state snapshot ({exc}) — revisit view will start blank.")
+
+    return result
+
+
+def verified_import_state() -> dict[str, Any]:
+    """The persisted last-successful-import snapshot, re-verified against disk.
+
+    The Import tab's revisit view (State 6 -> State 4) and the stepper
+    checkmark render from this. Verification order matters: table existence
+    on disk decides, the snapshot only supplies the details — a snapshot
+    whose tables were deleted reports state="empty" (fall back to the form),
+    and a pruned job record downgrades gracefully (job_available=False).
+    """
+    import tlc
+
+    from tlc_plugin_kaggle import config_store, jobs
+
+    cfg = config_store.load() or {}
+    snapshot = cfg.get("import_state") or {}
+    tables = snapshot.get("tables")
+    if not isinstance(tables, dict):
+        # Pre-snapshot imports (older plugin versions): synthesize from the
+        # canonical table URLs so the revisit view and the stepper agree.
+        import_cfg = cfg.get("import") or {}
+        project = str(import_cfg.get("project_name") or "exdark-competition").strip()
+        table_name = str(import_cfg.get("table_name") or "initial").strip()
+        urls = {s: tlc.Url.create_table_url(table_name, f"{DATASET_PREFIX}_{s}", project) for s in SPLITS}
+        try:
+            if all(u.exists() for u in urls.values()):
+                return {
+                    "state": "success",
+                    "synthesized": True,  # no stored checks/rows — UI degrades gracefully
+                    "snapshot": {
+                        "project": project,
+                        "table_name": table_name,
+                        "tables": {s: {"url": str(u)} for s, u in urls.items()},
+                    },
+                    "verified": {s: True for s in SPLITS},
+                    "job_available": False,
+                }
+        except Exception:
+            pass
+        return {"state": "empty"}
+
+    verified: dict[str, bool] = {}
+    for split in SPLITS:
+        url = str((tables.get(split) or {}).get("url", ""))
+        try:
+            verified[split] = bool(url) and tlc.Url(url).exists()
+        except Exception:
+            verified[split] = False
+    if not all(verified.values()):
+        return {"state": "empty", "reason": "snapshot tables missing on disk", "verified": verified}
+
+    job_id = str(snapshot.get("job_id") or "")
+    return {
+        "state": "success",
+        "snapshot": snapshot,
+        "verified": verified,
+        "job_available": bool(job_id and jobs.get_job(job_id) is not None),
     }
 
 

@@ -81,6 +81,17 @@ class KaggleController(Controller):
         job_id = jobs.start_job("import", params, importer.run_import)
         return Response(content={"job_id": job_id}, status_code=200)
 
+    @get("/import/state", sync_to_thread=True)
+    def import_state(self) -> dict[str, Any]:
+        """Revisit state for the Import tab: the persisted last-successful-
+        import snapshot, re-verified against table existence on disk."""
+        from tlc_plugin_kaggle import importer
+
+        try:
+            return importer.verified_import_state()
+        except Exception as exc:
+            return {"state": "empty", "reason": f"{type(exc).__name__}: {exc}"}
+
     @get("/import/revisions", sync_to_thread=True)
     def import_revisions(self, url: str = "") -> dict[str, Any]:
         """Revision info for one table (force-reimport confirmation guard)."""
@@ -281,20 +292,15 @@ class KaggleController(Controller):
     def pipeline_state(self, project: str = "exdark-competition") -> dict[str, Any]:
         """Where the participant is in the Import -> Train -> Submit loop.
 
-        Import counts as done when an import job completed OR the three
-        canonical tables exist (covers imports made before job persistence).
+        Import-done delegates to verified_import_state so the stepper
+        checkmark and the Import tab's revisit view can never disagree:
+        both mean "snapshot (or synthesized pre-snapshot state) whose three
+        tables verifiably exist on disk right now".
         """
-        import tlc
-
-        from tlc_plugin_kaggle import jobs
+        from tlc_plugin_kaggle import importer, jobs
 
         all_jobs = jobs.list_jobs()
-        import_done = any(j.get("kind") == "import" and j.get("status") == "completed" for j in all_jobs)
-        if not import_done:
-            import_done = all(
-                tlc.Url.create_table_url("initial", f"exdark_{s}", project).exists()
-                for s in ("train", "val", "test")
-            )
+        import_done = importer.verified_import_state().get("state") == "success"
         train_done = any(
             j.get("kind") == "train" and (j.get("facts") or {}).get("weights") for j in all_jobs
         )
