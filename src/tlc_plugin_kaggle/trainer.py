@@ -45,18 +45,36 @@ LOCK_MESSAGE = (
 
 DEFAULT_SAVE_ROOT = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle-plugin"
 
-# Exposed training args: name -> (converter, default). Mirrors the stock
-# form's remaining fields once the locked ones are removed.
+# Exposed training args: name -> (converter, default, min, max). Bounds are
+# enforced server-side below (participant-facing error naming the bound) and
+# mirrored as client-side attributes in ui.html; None bounds = free field.
+# Bounds apply to the FINAL kwargs, so extra args cannot sidestep them.
 _EXPOSED = {
-    "epochs": (int, 100),
-    "batch": (float, 16),  # float: ultralytics accepts fractions for auto-batch
-    "lr0": (float, 0.01),
-    "lrf": (float, 0.01),
-    "optimizer": (str, "auto"),
-    "patience": (int, 100),
-    "device": (str, "0"),
-    "workers": (int, 0),  # Windows: keep dataloader workers at 0
+    "epochs": (int, 100, 1, 300),
+    "batch": (int, 16, 1, 128),
+    "lr0": (float, 0.01, 0.0001, 0.1),
+    "lrf": (float, 0.01, 0.01, 1.0),
+    "optimizer": (str, "auto", None, None),
+    "patience": (int, 100, 0, 100),
+    "device": (str, "0", None, None),
+    "workers": (int, 0, 0, 16),  # Windows: keep dataloader workers at 0
 }
+
+_OPTIMIZERS = ("auto", "SGD", "Adam", "AdamW", "NAdam", "RAdam", "RMSProp")
+
+BOUND_MESSAGE = "{key} must be between {lo} and {hi} (got {val})."
+
+
+def _check_bound(key: str, val: Any) -> None:
+    """Range-check a final kwarg against _EXPOSED bounds (post-merge)."""
+    spec = _EXPOSED.get(key)
+    if spec is None or spec[2] is None:
+        return
+    _, _, lo, hi = spec
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
+        raise ValueError(f"Invalid value for {key}: {val!r} (expected a number).")
+    if not (lo <= val <= hi):
+        raise ValueError(BOUND_MESSAGE.format(key=key, lo=lo, hi=hi, val=val))
 
 
 def _coerce_scalar(raw: str) -> Any:
@@ -105,24 +123,45 @@ def parse_extra_args(text: str) -> dict[str, Any]:
 def build_train_kwargs(params: dict[str, Any]) -> dict[str, Any]:
     """Exposed fields + validated extra args + locked args (locked last)."""
     kwargs: dict[str, Any] = {}
-    for key, (conv, default) in _EXPOSED.items():
+    for key, (conv, default, _lo, _hi) in _EXPOSED.items():
         raw = params.get(key, default)
+        if raw is None or raw == "":
+            raw = default
         try:
-            kwargs[key] = conv(raw) if raw is not None and raw != "" else default
+            # int fields tolerate "16.0"-style input as long as it's integral
+            kwargs[key] = int(float(raw)) if conv is int and float(raw) == int(float(raw)) else conv(raw)
         except (TypeError, ValueError):
             raise ValueError(f"Invalid value for {key}: {raw!r}")
-    if kwargs["optimizer"].lower() == "auto":
-        kwargs["optimizer"] = "auto"
+    optimizer = str(kwargs["optimizer"]).strip()
+    matched = next((o for o in _OPTIMIZERS if o.lower() == optimizer.lower()), None)
+    if matched is None:
+        raise ValueError(f"optimizer must be one of {', '.join(_OPTIMIZERS)} (got {optimizer!r}).")
+    kwargs["optimizer"] = matched
     if str(kwargs["device"]).strip().isdigit():
         kwargs["device"] = int(str(kwargs["device"]).strip())
-    if kwargs["batch"] == int(kwargs["batch"]):
-        kwargs["batch"] = int(kwargs["batch"])
 
     kwargs.update(parse_extra_args(str(params.get("extra_args", ""))))
+
+    # Bounds run on the MERGED kwargs so 'epochs=999' via extra args is
+    # rejected with the same participant-facing message as the form field.
+    for key, val in kwargs.items():
+        _check_bound(key, val)
 
     # The competition locks — merged last, they always win.
     kwargs.update(LOCKED_TRAIN_ARGS)
     return kwargs
+
+
+# Judgment bounds for the exposed 3LC settings (same message style as the
+# training args). dims/reducer are membership checks, not ranges.
+_SETTINGS_BOUNDS = {
+    "conf_thres": (0.0, 1.0),
+    "max_det": (1, 1000),
+    "collection_epoch_start": (0, 300),
+    "collection_epoch_interval": (1, 300),
+}
+_EMB_DIMS = (0, 2, 3)
+_EMB_REDUCERS = ("pacmap", "umap")
 
 
 def build_settings(params: dict[str, Any]) -> Any:
@@ -131,7 +170,20 @@ def build_settings(params: dict[str, Any]) -> Any:
 
     def _f(key: str, default: Any, conv: Any) -> Any:
         raw = params.get(key, default)
-        return conv(raw) if raw not in (None, "") else default
+        try:
+            val = conv(raw) if raw not in (None, "") else default
+        except (TypeError, ValueError):
+            raise ValueError(f"Invalid value for {key}: {raw!r}")
+        bounds = _SETTINGS_BOUNDS.get(key)
+        if bounds is not None and val is not None and not (bounds[0] <= val <= bounds[1]):
+            raise ValueError(BOUND_MESSAGE.format(key=key, lo=bounds[0], hi=bounds[1], val=val))
+        return val
+
+    for dim_key in ("image_embeddings_dim", "instance_embeddings_dim"):
+        if _f(dim_key, 0, int) not in _EMB_DIMS:
+            raise ValueError(f"{dim_key} must be one of {_EMB_DIMS}.")
+    if str(params.get("image_embeddings_reducer") or "pacmap") not in _EMB_REDUCERS:
+        raise ValueError(f"image_embeddings_reducer must be one of {_EMB_REDUCERS}.")
 
     return Settings(
         project_name=str(params.get("project_name") or "exdark-competition").strip(),

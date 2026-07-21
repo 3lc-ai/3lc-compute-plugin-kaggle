@@ -108,12 +108,14 @@ class KaggleController(Controller):
                     status_code=HTTP_400_BAD_REQUEST,
                 )
 
-        # Fail fast — the extra-args lock guard and field validation run here
-        # so a locked-key attempt is a 400 with the participant-facing
-        # message, not a failed job. run_training re-validates (defense in
-        # depth: the locked kwargs are merged last there regardless).
+        # Fail fast — the extra-args lock guard, bounds, and field validation
+        # run here so a locked-key attempt or out-of-bounds value is a 400
+        # with the participant-facing message, not a failed job. run_training
+        # re-validates (defense in depth: the locked kwargs are merged last
+        # there regardless).
         try:
             trainer.build_train_kwargs(data)
+            trainer.build_settings(data)
         except ValueError as exc:
             return Response(content={"error": str(exc)}, status_code=HTTP_400_BAD_REQUEST)
 
