@@ -18,6 +18,19 @@
   --kgl-ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
+/* ── Icon system (see docs/ui-notes.md § Icons) ────────────────────────
+   Inline monochrome SVGs on a 16px grid, 1.5px stroke, stroke=currentColor
+   — tinted by the cascade, never multicolor, never hardcoded hex. Three
+   sizes: 14px inline with text (default), 16px in buttons/banners, 20px
+   header identity. Vertical centering comes from flex containers. */
+.kgi { width: 14px; height: 14px; flex-shrink: 0; display: inline-block; vertical-align: -2px; }
+.kgi-12 { width: 12px; height: 12px; }
+.kgi-16 { width: 16px; height: 16px; }
+.kgi-20 { width: 20px; height: 20px; }
+.kgi-muted { color: var(--text-muted); }
+/* Buttons that carry an icon: flex-align icon and label */
+.kgi-btn { display: inline-flex; align-items: center; gap: 6px; }
+
 .kg-chip {
   display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px;
   border-radius: 999px; border: 1px solid var(--border); background: var(--bg-card);
@@ -81,7 +94,9 @@
   border: 1.5px solid var(--accent);
   border-radius: var(--radius-lg, 8px);
 }
-.format-selected-banner .fmt-icon { font-size: 24px; flex-shrink: 0; }
+.format-selected-banner .fmt-icon {
+  display: flex; align-items: center; flex-shrink: 0; color: var(--text-muted);
+}
 .format-selected-banner .fmt-name { font-size: 14px; font-weight: 700; color: var(--text); }
 .format-selected-banner .fmt-desc { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
 
@@ -106,19 +121,31 @@
 .kg-job-elapsed { font-size: 11px; color: var(--text-muted); }
 
 /* Grouped checks: compact confirmation, not a wall */
-.kg-checks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-top: 14px; }
+.kg-checks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-top: 8px; }
 .kg-checks-head {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .3px; color: var(--text-muted); margin-bottom: 6px;
 }
-.kg-check { font-size: 12.5px; color: var(--text); padding: 2px 0; line-height: 1.45; }
-.kg-check .ok { color: var(--success); font-weight: 700; }
-.kg-check .bad { color: var(--danger, #ef4444); font-weight: 700; }
+.kg-check {
+  display: flex; gap: 6px; align-items: flex-start;
+  font-size: 12.5px; color: var(--text); padding: 2px 0; line-height: 1.45;
+}
+.kg-check .kgi { margin-top: 2px; }
+.kg-check .ok { color: var(--success); display: flex; }
+.kg-check .bad { color: var(--danger, #ef4444); display: flex; }
 .kg-check .detail { color: var(--text-muted); font-size: 11px; }
+.kg-check-body { flex: 1; min-width: 0; }
 .kg-check .remedy {
   display: block; font-size: 11px; color: var(--text-muted); font-style: italic;
-  margin: 1px 0 3px 18px;
+  margin: 1px 0 3px;
 }
+/* Verdict headline above the two check columns */
+.kg-verdict {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-secondary); margin: 14px 0 0;
+}
+.kg-verdict .ok { color: var(--success); display: flex; }
+.kg-verdict .bad { color: var(--danger, #ef4444); display: flex; }
 
 /* Table summary rows. Paths render as plain muted text like the stock
    details strip (no font-family anywhere in this fragment — monospace comes
@@ -166,7 +193,7 @@
   display: inline-flex; align-items: center; gap: 5px;
 }
 .kgl-acc-summary:hover { color: var(--text-secondary); }
-.kgl-acc-caret { display: inline-block; font-size: 10px; }
+.kgl-acc-caret { display: inline-flex; align-items: center; }
 .kgl-acc-summary[aria-expanded="true"] .kgl-acc-caret { transform: rotate(90deg); }
 .kgl-acc { display: grid; grid-template-rows: 0fr; }
 .kgl-acc.open { grid-template-rows: 1fr; }
@@ -234,12 +261,25 @@
 /* Primary-path hover lift (state style; the gated transition smooths it) */
 #kg-continue-train:hover { filter: brightness(1.06); }
 
-/* Inline preflight feedback under the YAML path field */
-.kg-preflight-ok { color: var(--success); font-size: 12px; margin-top: 6px; line-height: 1.5; }
-.kg-callout { padding: 8px 10px; border-radius: 6px; margin-top: 6px; font-size: 12px; line-height: 1.55; }
+/* Inline preflight feedback under the YAML path field. Callouts share one
+   internal geometry: icon column + text, same padding/radius everywhere. */
+.kg-preflight-ok {
+  display: flex; gap: 7px; align-items: flex-start;
+  color: var(--success); font-size: 12px; margin-top: 6px; line-height: 1.5;
+}
+.kg-preflight-ok .kgi { margin-top: 2px; }
+.kg-callout {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 9px 12px; border-radius: var(--radius-lg, 8px); margin-top: 6px;
+  font-size: 12px; line-height: 1.55;
+}
+.kg-callout > .kgi { margin-top: 2px; }
 .kg-callout.warn { background: rgba(217,119,6,.08); border: 1px solid rgba(217,119,6,.3); }
+.kg-callout.warn > .kgi { color: var(--warning, #d97706); }
 .kg-callout.err { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); }
+.kg-callout.err > .kgi { color: var(--danger, #ef4444); }
 .kg-callout.info { background: var(--accent-light, rgba(42,74,97,.05)); border: 1px solid var(--border); color: var(--text-secondary); }
+.kg-callout.info > .kgi { color: var(--text-muted); }
 </style>
 
 <div class="plugin-page-narrow" style="padding: 24px; max-width: 900px; margin: 0 auto;">
@@ -301,7 +341,7 @@
     <div class="card-body">
       <!-- Locked format: stock selected-format banner, no Change Format -->
       <div class="format-selected-banner">
-        <span class="fmt-icon">🔒</span>
+        <span class="fmt-icon"><svg class="kgi kgi-16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></span>
         <div style="flex: 1;">
           <div class="fmt-name">YOLO format · Object Detection</div>
           <div class="fmt-desc">Fixed for this competition — point Import at the official starter kit.</div>
@@ -340,7 +380,7 @@
 
         <hr class="divider">
         <div style="display: flex; gap: 10px; align-items: center;">
-          <button type="button" id="kg-import-btn" class="btn btn-primary btn-lg" disabled>↑ Import &amp; Validate</button>
+          <button type="button" id="kg-import-btn" class="btn btn-primary btn-lg kgi-btn" disabled>Import &amp; Validate</button>
           <span class="spinner" id="kg-import-spinner" style="display: none;"></span>
           <span id="kg-import-state" style="font-size: 12px; color: var(--text-muted);"></span>
         </div>
@@ -350,7 +390,7 @@
         <div class="kg-log-details" id="kg-log-details" style="display: none;">
           <button type="button" class="kgl-acc-summary" id="kg-log-toggle"
                   aria-expanded="false" aria-controls="kg-log-panel">
-            <span class="kgl-acc-caret" aria-hidden="true">▸</span> Show log
+            <span class="kgl-acc-caret" aria-hidden="true"><svg class="kgi kgi-12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span> Show log
           </button>
           <div class="kgl-acc" id="kg-log-panel" hidden>
             <div class="kgl-acc-inner">
@@ -612,6 +652,36 @@
         return (n === null || n === undefined) ? '?' : Number(n).toLocaleString('en-US');
       }
 
+      // ── Icon system (see docs/ui-notes.md § Icons) ──────────────────
+      // 16px grid, 1.5px stroke, currentColor — tinted by the cascade.
+      var KG_ICONS = {
+        'lock': '<rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/>',
+        'check': '<path d="M3 8.5l3.5 3.5L13 4.5"/>',
+        'x': '<path d="M4 4l8 8M12 4l-8 8"/>',
+        'check-circle': '<circle cx="8" cy="8" r="6.25"/><path d="M5.4 8.2l1.8 1.8 3.4-4"/>',
+        'x-circle': '<circle cx="8" cy="8" r="6.25"/><path d="M6 6l4 4M10 6l-4 4"/>',
+        'alert-triangle': '<path d="M8 2.6L14.4 13.4H1.6L8 2.6z"/><path d="M8 6.8v2.8"/><path d="M8 12h.01"/>',
+        'info': '<circle cx="8" cy="8" r="6.25"/><path d="M8 7.4V11"/><path d="M8 5h.01"/>',
+        'copy': '<rect x="6" y="6" width="7.5" height="7.5" rx="1.5"/><path d="M10 3.5H4A1.5 1.5 0 0 0 2.5 5v6"/>',
+        'arrow-right': '<path d="M2.5 8h11"/><path d="M9.5 4l4 4-4 4"/>',
+        'upload': '<path d="M8 10.5v-8"/><path d="M4.5 6L8 2.5 11.5 6"/><path d="M2.5 13.5h11"/>',
+        'flag': '<path d="M3.5 14V2.5"/><path d="M3.5 3h8.5l-1.8 2.5L12 8H3.5"/>',
+        'refresh-cw': '<path d="M13.5 8a5.5 5.5 0 1 1-1.7-3.97"/><path d="M13.5 2.5V6H10"/>',
+        'chevron-right': '<path d="M6 3.5L10.5 8 6 12.5"/>',
+        'external-link': '<path d="M6.5 3.5h-2A1.5 1.5 0 0 0 3 5v6.5A1.5 1.5 0 0 0 4.5 13H11a1.5 1.5 0 0 0 1.5-1.5v-2"/><path d="M9.5 2.5H13.5V6.5"/><path d="M13.5 2.5L8 8"/>'
+      };
+
+      function kgIcon(name, cls) {
+        return '<svg class="kgi' + (cls ? ' ' + cls : '') + '" viewBox="0 0 16 16" aria-hidden="true" ' +
+               'fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" ' +
+               'stroke-linejoin="round">' + (KG_ICONS[name] || '') + '</svg>';
+      }
+
+      // Primary CTA labels (icon + text), used everywhere the label resets.
+      var KG_BTN_IMPORT = kgIcon('upload', 'kgi-16') + '<span>Import &amp; Validate</span>';
+      var KG_BTN_RERUN = kgIcon('refresh-cw', 'kgi-16') + '<span>Re-run Import &amp; Validate</span>';
+      el('kg-import-btn').innerHTML = KG_BTN_IMPORT;
+
       // ── Motion helpers (see docs/ui-notes.md § Motion) ──────────────
       function kgMotionOK() {
         return !!(window.matchMedia &&
@@ -633,14 +703,14 @@
         });
       }
 
-      // Fade a button's label swap (Copy → "Copied ✓"); instant under
+      // Fade a button's label swap (Copy → "Copied"); instant under
       // reduced motion. Relies on the gated opacity transition on .btn.
-      function kgSwapText(elm, text) {
-        if (!kgMotionOK()) { elm.textContent = text; return; }
+      function kgSwapHtml(elm, html) {
+        if (!kgMotionOK()) { elm.innerHTML = html; return; }
         elm.addEventListener('transitionend', function h(e) {
           if (e.propertyName !== 'opacity') { return; }
           elm.removeEventListener('transitionend', h);
-          elm.textContent = text;
+          elm.innerHTML = html;
           elm.style.opacity = '';
         });
         elm.style.opacity = '0';
@@ -792,15 +862,17 @@
         ['Train', 'Val', 'Test'].forEach(function (s) {
           html += '<label style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:.75;cursor:default" ' +
                   'title="Locked by competition rules — all three splits are imported.">' +
-                  '<input type="checkbox" checked disabled> ' + s + ' 🔒</label>';
+                  '<input type="checkbox" checked disabled> ' + s + ' ' +
+                  kgIcon('lock', 'kgi-12 kgi-muted') + '</label>';
         });
         html += '</div><div class="form-help">All three splits are mandatory for the competition.</div>';
         el('kg-splits-body').innerHTML = html;
       }
 
       function kgTestLabelsNote() {
-        return '<div class="kg-callout info">ℹ Test labels detected on disk — the GT-leak ' +
-               'guard will import the test split as images only (hidden ground truth stays hidden).</div>';
+        return '<div class="kg-callout info">' + kgIcon('info') +
+               '<span>Test labels detected on disk — the GT-leak guard will import the test ' +
+               'split as images only (hidden ground truth stays hidden).</span></div>';
       }
 
       // Entrance animates only when the OUTCOME TYPE transitions (none→green,
@@ -829,7 +901,8 @@
           return;
         }
         if (data.error) {                  // parse failure / path not found
-          box.innerHTML = '<div class="kg-callout err' + entering + '">✕ ' + esc(data.error) + '</div>';
+          box.innerHTML = '<div class="kg-callout err' + entering + '">' + kgIcon('x-circle') +
+                          '<span>' + esc(data.error) + '</span></div>';
           kgSplitsPlaceholder();
           return;
         }
@@ -837,9 +910,9 @@
           var counts = ['train', 'val', 'test'].map(function (s) {
             return fmtCount(data.splits[s].found);
           }).join(' / ');
-          var html = '<div class="kg-preflight-ok">✓ Detected: train / val / test · ' +
-                     '12 classes (canonical order ✓) · ' + counts +
-                     ' images — matches competition dataset.</div>';
+          var html = '<div class="kg-preflight-ok">' + kgIcon('check') +
+                     '<span>Detected: train / val / test · 12 classes (canonical order) · ' + counts +
+                     ' images — matches the competition dataset.</span></div>';
           if (data.test_labels_on_disk) { html += kgTestLabelsNote(); }
           box.innerHTML = '<div class="' + (entering ? 'kgl-enter' : '') + '">' + html + '</div>';
           kgRenderSplitsLocked();
@@ -866,8 +939,9 @@
               ' — did the starter kit download complete? Re-download or check <code>images\\' + s + '\\</code>.');
           }
         });
-        var mhtml = '<div class="kg-callout warn"><strong>Doesn’t match the competition dataset:</strong><br>' +
-                    problems.map(function (p) { return '• ' + p; }).join('<br>') + '</div>';
+        var mhtml = '<div class="kg-callout warn">' + kgIcon('alert-triangle') +
+                    '<span><strong>Doesn’t match the competition dataset:</strong><br>' +
+                    problems.map(function (p) { return '• ' + p; }).join('<br>') + '</span></div>';
         if (data.test_labels_on_disk) { mhtml += kgTestLabelsNote(); }
         box.innerHTML = '<div class="' + (entering ? 'kgl-enter' : '') + '">' + mhtml + '</div>';
         kgSplitsPlaceholder();
@@ -962,10 +1036,12 @@
           g.items.forEach(function (c, i) {
             var remedy = c.ok ? '' : kgRemedyFor(c.label || '');
             html += '<div class="kg-check"' + (animate ? ' style="--kgl-i:' + i + '"' : '') + '>' +
-                    (c.ok ? '<span class="ok">✓</span> ' : '<span class="bad">✕</span> ') + esc(c.label) +
+                    (c.ok ? '<span class="ok">' + kgIcon('check') + '</span>'
+                          : '<span class="bad">' + kgIcon('x') + '</span>') +
+                    '<span class="kg-check-body">' + esc(c.label) +
                     (c.detail ? ' <span class="detail">(' + esc(c.detail) + ')</span>' : '') +
                     (remedy ? '<span class="remedy">' + esc(remedy) + '</span>' : '') +
-                    '</div>';
+                    '</span></div>';
           });
           html += '</div>';
         });
@@ -981,15 +1057,15 @@
 
       function kgBindCopy(container) {
         container.querySelectorAll('[data-copy]').forEach(function (b) {
-          var glyph = b.textContent;
+          var glyph = b.innerHTML;
           b.addEventListener('click', function () {
             var text = b.getAttribute('data-copy');
             var p = (navigator.clipboard && navigator.clipboard.writeText)
               ? navigator.clipboard.writeText(text) : Promise.reject(new Error('no clipboard API'));
             p.then(function () {
-              kgSwapText(b, 'Copied ✓');
+              kgSwapHtml(b, kgIcon('check') + '<span>Copied</span>');
               // 1200ms is the hold duration (UX timing), not an animation.
-              setTimeout(function () { kgSwapText(b, glyph); }, 1200);
+              setTimeout(function () { kgSwapHtml(b, glyph); }, 1200);
             }).catch(function () { window.prompt('Copy the table path:', text); });
           });
         });
@@ -1062,7 +1138,8 @@
           '<div style="flex:1;min-width:0">' +
           '<strong>Imported &amp; validated — exdark_train · exdark_val · exdark_test</strong>' +
           '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
-          '<button type="button" class="btn btn-primary btn-sm" id="kg-continue-train">Continue to Train →</button>';
+          '<button type="button" class="btn btn-primary btn-sm kgi-btn" id="kg-continue-train">' +
+          '<span>Continue to Train</span>' + kgIcon('arrow-right') + '</button>';
         ['train', 'val', 'test'].forEach(function (split) {
           var t = result.tables[split];
           if (t && dashboardUrl) {
@@ -1093,14 +1170,16 @@
             '<span class="rows">' + fmtCount(t.rows) + ' rows</span>' + badge +
             '<span class="path" title="' + esc(t.url) + '">' + esc(midTrunc(t.url, 52)) + '</span>' +
             '<span class="kg-row-actions">' +
-            '<button type="button" class="btn btn-ghost btn-sm" data-copy="' + esc(t.url) +
-              '" title="Copy full table path">⧉</button>' +
-            (dashboardUrl ? '<a class="btn btn-secondary btn-sm" target="_blank" href="' +
-              dashboardUrl + '?table=' + encodeURIComponent(t.url) + '">Explore →</a>' : '') +
+            '<button type="button" class="btn btn-ghost btn-sm kgi-btn" data-copy="' + esc(t.url) +
+              '" title="Copy full table path">' + kgIcon('copy') + '</button>' +
+            (dashboardUrl ? '<a class="btn btn-secondary btn-sm kgi-btn" target="_blank" href="' +
+              dashboardUrl + '?table=' + encodeURIComponent(t.url) + '"><span>Explore</span>' +
+              kgIcon('arrow-right', 'kgi-12') + '</a>' : '') +
             '<span class="kg-reimport-slot">' +
-            (t.reused ? '<button type="button" class="btn btn-ghost btn-sm kg-btn-danger-hover kg-reimport" ' +
+            (t.reused ? '<button type="button" class="btn btn-ghost btn-sm kgi-btn kg-btn-danger-hover kg-reimport" ' +
               'data-split="' + split + '" data-url="' + esc(t.url) +
-              '" title="Discard the reused table and re-import this split from disk">Re-import fresh</button>' : '') +
+              '" title="Discard the reused table and re-import this split from disk">' +
+              kgIcon('refresh-cw', 'kgi-12') + '<span>Re-import fresh</span></button>' : '') +
             '</span></span></div>';
         });
         el('kg-result').innerHTML = html + '</div>';
@@ -1111,8 +1190,9 @@
         var testMech = (result.mechanisms || {}).test || '';
         if (testMech.indexOf('tablewriter-images-only') !== -1) {
           el('kg-result').innerHTML +=
-            '<div class="kg-callout info">ℹ GT-leak guard active: test label files were present on disk, ' +
-            'so the test table was built images-only (hidden ground truth stays hidden).</div>';
+            '<div class="kg-callout info">' + kgIcon('info') +
+            '<span>GT-leak guard active: test label files were present on disk, so the test ' +
+            'table was built images-only (hidden ground truth stays hidden).</span></div>';
         }
 
         kgBindCopy(el('kg-result'));
@@ -1154,7 +1234,8 @@
       // Standard entrance when live; plain ✕ — the draw is success-only.
       function renderFailBanner(message, animate) {
         el('kg-import-banner').innerHTML =
-          '<div class="alert alert-error' + (animate ? ' kgl-enter' : '') + '"><span class="alert-icon">✕</span>' +
+          '<div class="alert alert-error' + (animate ? ' kgl-enter' : '') + '">' +
+          '<span class="alert-icon">' + kgIcon('x-circle', 'kgi-16') + '</span>' +
           '<div style="flex:1;min-width:0"><strong>Import failed</strong>' +
           '<div style="margin-top:4px;font-size:12.5px">' + esc(message) + '</div></div></div>';
       }
@@ -1189,7 +1270,7 @@
               // populated and the button invites a re-run.
               el('kg-import-state').textContent = '';
               renderFailBanner(job.error || 'Import failed — see the checks below.', true);
-              el('kg-import-btn').innerHTML = '↻ Re-run Import &amp; Validate';
+              el('kg-import-btn').innerHTML = KG_BTN_RERUN;
             }
             renderPipeline();
           })
@@ -1198,7 +1279,7 @@
             kgImporting = false;
             el('kg-import-spinner').style.display = 'none';
             kgCheckReady();
-            el('kg-import-state').textContent = '❌ Poll failed: ' + e;
+            el('kg-import-state').textContent = 'Poll failed: ' + e;
           });
       }
 
@@ -1225,13 +1306,13 @@
           saveTabConfig('import');
         }
         if (!yaml) {
-          el('kg-import-state').textContent = '❌ No dataset.yaml recorded — use Start over and re-enter the path.';
+          el('kg-import-state').textContent = 'No dataset.yaml recorded for this import — Start over restores the form.';
           return;
         }
         kgImporting = true;
         kgPrevStageStatus = {};
         kgCheckReady();
-        el('kg-import-btn').innerHTML = '↑ Import &amp; Validate';   // reset a Re-run label
+        el('kg-import-btn').innerHTML = KG_BTN_IMPORT;   // reset a Re-run label
         el('kg-import-spinner').style.display = 'inline-block';
         el('kg-import-state').textContent = 'Starting…';
         el('kg-import-banner').innerHTML = '';
@@ -1257,7 +1338,7 @@
             kgImporting = false;
             el('kg-import-spinner').style.display = 'none';
             kgCheckReady();
-            el('kg-import-state').textContent = '❌ ' + e.message;
+            el('kg-import-state').textContent = 'Import request failed: ' + e.message;
           });
       }
 
@@ -1280,7 +1361,7 @@
         el('kg-import-progress').innerHTML = '';
         el('kg-import-state').textContent = '';
         kgLogReset();
-        el('kg-import-btn').innerHTML = '↑ Import &amp; Validate';
+        el('kg-import-btn').innerHTML = KG_BTN_IMPORT;
         if (animate) { kglEnter(el('kg-import-form')); }
         kgRenderPreflight(null);
         kgCheckReady();
@@ -1308,8 +1389,8 @@
         renderChecks(snap.checks || []);
         if (state.synthesized) {
           el('kg-checks').innerHTML =
-            '<div class="kg-callout info">ℹ Tables found from a previous session — no stored validation ' +
-            'results. “Start over” and re-run Import &amp; Validate to re-check them.</div>' +
+            '<div class="kg-callout info">' + kgIcon('info') + '<span>Tables found from a previous session — no stored validation ' +
+            'results. Re-running Import &amp; Validate re-checks them.</span></div>' +
             el('kg-checks').innerHTML;
         }
         // Log accordion from the surviving job record — optional garnish;
@@ -1470,7 +1551,7 @@
             renderFailBanner('RuntimeError: Your local copy does not match the competition dataset. ' +
               'Re-download the starter kit and point Import at its dataset.yaml.');
             renderChecks(CHECKS(true, true));
-            el('kg-import-btn').innerHTML = '↻ Re-run Import &amp; Validate';
+            el('kg-import-btn').innerHTML = KG_BTN_RERUN;
             el('kg-log').textContent = LOG.concat(['FAIL val row count == 733 — got 731',
               'FAIL test table carries no ground-truth boxes — 3 boxes found',
               'FAILED: Your local copy does not match the competition dataset.']).join('\n');
