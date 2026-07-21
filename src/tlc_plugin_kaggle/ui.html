@@ -1,5 +1,23 @@
 <style>
 /* ── Kaggle plugin styles (shared tokens from main.css / plugin-common.css) ── */
+
+/* ── Motion vocabulary (see docs/ui-notes.md § Motion) ─────────────────────
+   All animation timings/easings reference these tokens — no literal ms
+   elsewhere (exception: the stock-copied guide-pulse cadence). Every
+   animated rule lives inside the prefers-reduced-motion gate below; under
+   `reduce`, every state change is instant with zero functional difference.
+   Motion is information: announce a state change, acknowledge an action, or
+   direct attention — never decorate. No exit animations (removals are
+   instant). No replays on revisit/forced states. */
+.plugin-page-narrow {
+  --kgl-motion-fast: 120ms;   /* button/hover feedback, badge swaps */
+  --kgl-motion-base: 180ms;   /* content entrances */
+  --kgl-motion-slow: 300ms;   /* accordion, checkmark draw */
+  --kgl-stagger: 30ms;        /* per-item cascade offset */
+  --kgl-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --kgl-ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
 .kg-chip {
   display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px;
   border-radius: 999px; border: 1px solid var(--border); background: var(--bg-card);
@@ -54,30 +72,22 @@
 
 /* Locked-format banner — the stock importer's .format-selected-banner
    (values copied verbatim from its fragment: it isn't in shared CSS), minus
-   the Change Format button, plus the lock. Entry animation is our own
-   deterministic copy of the stock plugin-badge-in effect. */
-@keyframes kg-banner-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+   the Change Format button, plus the lock. Entrance lives in the motion
+   block below. */
 .format-selected-banner {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 16px; margin-bottom: 14px;
   background: var(--accent-light, rgba(42,74,97,.06));
   border: 1.5px solid var(--accent);
   border-radius: var(--radius-lg, 8px);
-  animation: kg-banner-in 0.3s ease-out both;
 }
 .format-selected-banner .fmt-icon { font-size: 24px; flex-shrink: 0; }
 .format-selected-banner .fmt-name { font-size: 14px; font-weight: 700; color: var(--text); }
 .format-selected-banner .fmt-desc { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
 
-/* Guide pulse — stock importer's next-required-field affordance, verbatim */
-@keyframes guide-pulse {
-  0%, 100% { background: var(--bg-card); box-shadow: 0 0 0 0 rgba(217,119,6,0); }
-  50% { background: rgba(217,119,6,0.1); box-shadow: 0 0 0 3px rgba(217,119,6,0.25); }
-}
-.form-control.guide-next {
-  animation: guide-pulse 2s ease-in-out infinite;
-  border-color: var(--warning, #d97706);
-}
+/* Guide pulse — the static border indicator works without motion; the
+   pulse itself lives in the motion block below. */
+.form-control.guide-next { border-color: var(--warning, #d97706); }
 
 /* Overflow containment: long table paths / log lines must never push the
    card past its container. Scoped to the Import panel (other tabs restyle
@@ -146,15 +156,83 @@
 }
 
 /* Collapsed log accordion — the only monospace visible anywhere, and only
-   after the user opens it */
+   after the user opens it. Button + region (aria-expanded / hidden) instead
+   of <details> so the expand can animate; when closed the panel carries the
+   `hidden` attribute (display:none-equivalent for screen readers). */
 .kg-log-details { margin-top: 14px; }
-.kg-log-details summary { font-size: 12px; color: var(--text-muted); cursor: pointer; user-select: none; }
-.kg-log-details summary:hover { color: var(--text-secondary); }
+.kgl-acc-summary {
+  background: none; border: 0; padding: 0; font: inherit; font-size: 12px;
+  color: var(--text-muted); cursor: pointer; user-select: none;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.kgl-acc-summary:hover { color: var(--text-secondary); }
+.kgl-acc-caret { display: inline-block; font-size: 10px; }
+.kgl-acc-summary[aria-expanded="true"] .kgl-acc-caret { transform: rotate(90deg); }
+.kgl-acc { display: grid; grid-template-rows: 0fr; }
+.kgl-acc.open { grid-template-rows: 1fr; }
+.kgl-acc-inner { overflow: hidden; min-height: 0; }
 .kg-log-details pre {
   margin: 8px 0 0; max-height: 260px; overflow: auto; font-size: 11px; line-height: 1.5;
   padding: 10px; border-radius: 6px;
   background: var(--bg-secondary, rgba(0,0,0,.04)); border: 1px solid var(--border-light, rgba(0,0,0,.06));
 }
+
+/* Success-banner checkmark: inline SVG sized like the glyph it replaces.
+   Static (drawn) by default; the draw animation applies only via .kgl-draw
+   inside the motion gate — revisit/forced states render it pre-drawn. */
+.kgl-check-svg { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; }
+.kgl-check-svg path { stroke-dasharray: 1; stroke-dashoffset: 0; }
+
+/* ── Motion (gated): every animated rule lives here ──────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes kgl-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes kgl-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes kgl-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+  /* Stock-copied pulse; its 2s cadence is house style, outside the token scale. */
+  @keyframes guide-pulse {
+    0%, 100% { background: var(--bg-card); box-shadow: 0 0 0 0 rgba(217,119,6,0); }
+    50% { background: rgba(217,119,6,0.1); box-shadow: 0 0 0 3px rgba(217,119,6,0.25); }
+  }
+
+  /* Entrances: state-change announcements (preflight outcome, banners,
+     the form arriving after Start over). Locked-format banner keeps the
+     stock plugin-badge-in character. */
+  .kgl-enter { animation: kgl-in var(--kgl-motion-base) var(--kgl-ease-out) both; }
+  .format-selected-banner { animation: kgl-in var(--kgl-motion-base) var(--kgl-ease-out) both; }
+
+  /* Progress badge arrival (status just changed this render) */
+  .kgl-badge-in { animation: kgl-fade var(--kgl-motion-fast) var(--kgl-ease-out) both; }
+
+  /* Checks cascade: per-column stagger via --kgl-i; columns run in parallel */
+  .kg-checks-grid.kgl-cascade .kg-check {
+    animation: kgl-in var(--kgl-motion-base) var(--kgl-ease-out) both;
+    animation-delay: calc(var(--kgl-stagger) * var(--kgl-i, 0));
+  }
+
+  /* Checkmark draw: the tab's single celebration beat, starting one fast
+     beat after the banner lands */
+  .kgl-check-svg.kgl-draw path {
+    animation: kgl-draw var(--kgl-motion-slow) var(--kgl-ease-out) var(--kgl-motion-fast) both;
+  }
+
+  /* Button feedback: smooth whatever the shared hover styles change */
+  #kg-panel-import .btn {
+    transition: background-color var(--kgl-motion-fast) var(--kgl-ease-out),
+                border-color var(--kgl-motion-fast) var(--kgl-ease-out),
+                color var(--kgl-motion-fast) var(--kgl-ease-out),
+                opacity var(--kgl-motion-fast) var(--kgl-ease-out),
+                filter var(--kgl-motion-fast) var(--kgl-ease-out);
+  }
+
+  /* Accordion expand/collapse + disclosure caret */
+  .kgl-acc { transition: grid-template-rows var(--kgl-motion-slow) var(--kgl-ease-inout); }
+  .kgl-acc-caret { transition: transform var(--kgl-motion-slow) var(--kgl-ease-inout); }
+
+  .form-control.guide-next { animation: guide-pulse 2s ease-in-out infinite; }
+}
+
+/* Primary-path hover lift (state style; the gated transition smooths it) */
+#kg-continue-train:hover { filter: brightness(1.06); }
 
 /* Inline preflight feedback under the YAML path field */
 .kg-preflight-ok { color: var(--success); font-size: 12px; margin-top: 6px; line-height: 1.5; }
@@ -269,10 +347,17 @@
         <div id="kg-import-progress" style="margin-top: 12px;"></div>
         <div id="kg-checks"></div>
         <div id="kg-result"></div>
-        <details class="kg-log-details" id="kg-log-details" style="display: none;">
-          <summary>Show log</summary>
-          <pre id="kg-log"></pre>
-        </details>
+        <div class="kg-log-details" id="kg-log-details" style="display: none;">
+          <button type="button" class="kgl-acc-summary" id="kg-log-toggle"
+                  aria-expanded="false" aria-controls="kg-log-panel">
+            <span class="kgl-acc-caret" aria-hidden="true">▸</span> Show log
+          </button>
+          <div class="kgl-acc" id="kg-log-panel" hidden>
+            <div class="kgl-acc-inner">
+              <pre id="kg-log"></pre>
+            </div>
+          </div>
+        </div>
       </form>
     </div>
   </div>
@@ -527,6 +612,81 @@
         return (n === null || n === undefined) ? '?' : Number(n).toLocaleString('en-US');
       }
 
+      // ── Motion helpers (see docs/ui-notes.md § Motion) ──────────────
+      function kgMotionOK() {
+        return !!(window.matchMedia &&
+                  window.matchMedia('(prefers-reduced-motion: no-preference)').matches);
+      }
+
+      // Re-triggerable entrance for a PERSISTENT element (fresh innerHTML
+      // nodes just include the class in their markup). Single reflow read to
+      // restart; cleanup on animationend, not a timer.
+      function kglEnter(elm) {
+        if (!kgMotionOK()) { return; }
+        elm.classList.remove('kgl-enter');
+        void elm.offsetWidth;
+        elm.classList.add('kgl-enter');
+        elm.addEventListener('animationend', function h(e) {
+          if (e.target !== elm) { return; }
+          elm.classList.remove('kgl-enter');
+          elm.removeEventListener('animationend', h);
+        });
+      }
+
+      // Fade a button's label swap (Copy → "Copied ✓"); instant under
+      // reduced motion. Relies on the gated opacity transition on .btn.
+      function kgSwapText(elm, text) {
+        if (!kgMotionOK()) { elm.textContent = text; return; }
+        elm.addEventListener('transitionend', function h(e) {
+          if (e.propertyName !== 'opacity') { return; }
+          elm.removeEventListener('transitionend', h);
+          elm.textContent = text;
+          elm.style.opacity = '';
+        });
+        elm.style.opacity = '0';
+      }
+
+      // Log accordion: button + region so the expand can animate while the
+      // closed panel stays display:none-equivalent (hidden attr) for screen
+      // readers. Cleanup rides transitionend; reduced motion is instant.
+      (function () {
+        var toggle = el('kg-log-toggle');
+        var panel = el('kg-log-panel');
+        toggle.addEventListener('click', function () {
+          var isOpen = toggle.getAttribute('aria-expanded') === 'true';
+          if (isOpen) {
+            toggle.setAttribute('aria-expanded', 'false');
+            if (!kgMotionOK()) { panel.classList.remove('open'); panel.hidden = true; return; }
+            panel.addEventListener('transitionend', function h(e) {
+              if (e.propertyName !== 'grid-template-rows') { return; }
+              panel.removeEventListener('transitionend', h);
+              if (toggle.getAttribute('aria-expanded') === 'false') { panel.hidden = true; }
+            });
+            panel.classList.remove('open');
+          } else {
+            toggle.setAttribute('aria-expanded', 'true');
+            panel.hidden = false;
+            if (!kgMotionOK()) { panel.classList.add('open'); return; }
+            requestAnimationFrame(function () {
+              requestAnimationFrame(function () { panel.classList.add('open'); });
+            });
+          }
+        });
+      })();
+
+      function kgLogOpen() {
+        return el('kg-log-toggle').getAttribute('aria-expanded') === 'true';
+      }
+
+      // Hide + collapse the accordion instantly (removals never animate).
+      function kgLogReset() {
+        el('kg-log-details').style.display = 'none';
+        el('kg-log-toggle').setAttribute('aria-expanded', 'false');
+        var panel = el('kg-log-panel');
+        panel.classList.remove('open');
+        panel.hidden = true;
+      }
+
       // ── Config persistence: last-used values per tab ────────────────
       // element id -> stored key, per tab. Checkboxes detected by type.
       var CFG_FIELDS = {
@@ -643,8 +803,22 @@
                'guard will import the test split as images only (hidden ground truth stays hidden).</div>';
       }
 
+      // Entrance animates only when the OUTCOME TYPE transitions (none→green,
+      // green→error, …) — never on same-outcome debounce re-checks, and never
+      // for hint/checking (typing must feel instant).
+      var kgPreflightKind = 'idle';
+
       function kgRenderPreflight(data) {
         var box = el('kg-preflight');
+        var kind = !data ? 'idle'
+          : data.checking ? 'checking'
+          : data.error ? 'error'
+          : data.all_ok ? 'ok' : 'mismatch';
+        var entering = (kind !== kgPreflightKind &&
+                        (kind === 'ok' || kind === 'mismatch' || kind === 'error'))
+          ? ' kgl-enter' : '';
+        kgPreflightKind = kind;
+
         if (!data) {                       // State 1: empty / no path yet
           box.innerHTML = KG_HINT_HTML;
           kgSplitsPlaceholder();
@@ -655,7 +829,7 @@
           return;
         }
         if (data.error) {                  // parse failure / path not found
-          box.innerHTML = '<div class="kg-callout err">✕ ' + esc(data.error) + '</div>';
+          box.innerHTML = '<div class="kg-callout err' + entering + '">✕ ' + esc(data.error) + '</div>';
           kgSplitsPlaceholder();
           return;
         }
@@ -667,7 +841,7 @@
                      '12 classes (canonical order ✓) · ' + counts +
                      ' images — matches competition dataset.</div>';
           if (data.test_labels_on_disk) { html += kgTestLabelsNote(); }
-          box.innerHTML = html;
+          box.innerHTML = '<div class="' + (entering ? 'kgl-enter' : '') + '">' + html + '</div>';
           kgRenderSplitsLocked();
           return;
         }
@@ -695,7 +869,7 @@
         var mhtml = '<div class="kg-callout warn"><strong>Doesn’t match the competition dataset:</strong><br>' +
                     problems.map(function (p) { return '• ' + p; }).join('<br>') + '</div>';
         if (data.test_labels_on_disk) { mhtml += kgTestLabelsNote(); }
-        box.innerHTML = mhtml;
+        box.innerHTML = '<div class="' + (entering ? 'kgl-enter' : '') + '">' + mhtml + '</div>';
         kgSplitsPlaceholder();
       }
 
@@ -771,19 +945,23 @@
       // The 9 checks arrive in stable backend order: the first five are
       // dataset structure (yaml splits, canonical classes, three row
       // counts), the rest competition integrity (value maps, stems, GT).
-      function renderChecks(checks) {
+      // `animate` cascades the checks in — the payoff of a just-finished
+      // validation. Revisit (State 6) and ?kgdev renders pass false: no
+      // replay on page furniture. Columns cascade in parallel (per-column
+      // item index drives the stagger).
+      function renderChecks(checks, animate) {
         if (!checks || !checks.length) { el('kg-checks').innerHTML = ''; return; }
         var groups = [
           { title: 'Dataset structure', items: checks.slice(0, 5) },
           { title: 'Competition integrity', items: checks.slice(5) }
         ];
-        var html = '<div class="kg-checks-grid">';
+        var html = '<div class="kg-checks-grid' + (animate ? ' kgl-cascade' : '') + '">';
         groups.forEach(function (g) {
           if (!g.items.length) { return; }
           html += '<div><div class="kg-checks-head">' + g.title + '</div>';
-          g.items.forEach(function (c) {
+          g.items.forEach(function (c, i) {
             var remedy = c.ok ? '' : kgRemedyFor(c.label || '');
-            html += '<div class="kg-check">' +
+            html += '<div class="kg-check"' + (animate ? ' style="--kgl-i:' + i + '"' : '') + '>' +
                     (c.ok ? '<span class="ok">✓</span> ' : '<span class="bad">✕</span> ') + esc(c.label) +
                     (c.detail ? ' <span class="detail">(' + esc(c.detail) + ')</span>' : '') +
                     (remedy ? '<span class="remedy">' + esc(remedy) + '</span>' : '') +
@@ -809,8 +987,9 @@
             var p = (navigator.clipboard && navigator.clipboard.writeText)
               ? navigator.clipboard.writeText(text) : Promise.reject(new Error('no clipboard API'));
             p.then(function () {
-              b.textContent = 'Copied ✓';
-              setTimeout(function () { b.textContent = glyph; }, 1200);
+              kgSwapText(b, 'Copied ✓');
+              // 1200ms is the hold duration (UX timing), not an animation.
+              setTimeout(function () { kgSwapText(b, glyph); }, 1200);
             }).catch(function () { window.prompt('Copy the table path:', text); });
           });
         });
@@ -822,9 +1001,14 @@
         validate: 'Validate (9 checks)'
       };
 
+      // Previous render's per-stage status: a badge fades in only on the
+      // render where its status actually changed (rows are rebuilt every
+      // poll, so an unconditional animation would replay each second).
+      var kgPrevStageStatus = {};
+
       function kgRenderProgress(job) {
         var box = el('kg-import-progress');
-        if (!job || job.status !== 'running') { box.innerHTML = ''; return; }
+        if (!job || job.status !== 'running') { box.innerHTML = ''; kgPrevStageStatus = {}; return; }
         var p = job.progress || {};
         var stages = p.stages || ['train', 'val', 'test', 'validate'];
         var done = p.done || [];
@@ -835,11 +1019,14 @@
         stages.forEach(function (s) {
           var isDone = done.indexOf(s) !== -1;
           var isCur = p.current === s;
-          var badge = isDone ? '<span class="badge badge-status-completed">completed</span>'
-            : isCur ? '<span class="badge badge-status-running">running</span>'
-            : '<span class="badge badge-status-queued">queued</span>';
+          var status = isDone ? 'completed' : isCur ? 'running' : 'queued';
+          var fade = (kgPrevStageStatus[s] && kgPrevStageStatus[s] !== status) ? ' kgl-badge-in' : '';
+          kgPrevStageStatus[s] = status;
+          var badge = '<span class="badge badge-status-' + status + fade + '">' + status + '</span>';
           var elapsed = '';
           if (startedAt[s]) {
+            // Completed rows freeze on the server's finished_at — no final
+            // tick after the badge lands.
             var secs = ((isDone && finishedAt[s]) ? finishedAt[s] : now) - startedAt[s];
             elapsed = '<span class="kg-job-elapsed">' + fmtDur(secs) + '</span>';
           }
@@ -853,13 +1040,25 @@
         box.innerHTML = html;
       }
 
+      // Checkmark as inline SVG so success can draw its stroke in (the tab's
+      // single celebration beat). Without .kgl-draw it renders pre-drawn —
+      // used by revisit/forced states.
+      function kgCheckIcon(animate) {
+        return '<svg class="kgl-check-svg' + (animate ? ' kgl-draw' : '') + '" viewBox="0 0 16 16" aria-hidden="true">' +
+               '<path d="M2.5 8.5l4 4 7-9" pathLength="1" fill="none" stroke="currentColor" ' +
+               'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      }
+
       // ── State 4: success banner + table summary rows ────────────────
-      function renderResult(result) {
+      // `animate` = an import just completed live in this session: the
+      // banner enters and the checkmark draws. Revisit renders both static.
+      function renderResult(result, animate) {
         if (!result || !result.tables) { return; }
 
         // Green headline banner (stock .alert-success anatomy). This
         // supersedes the "Import complete" state chip — never show both.
-        var banner = '<div class="alert alert-success"><span class="alert-icon">✓</span>' +
+        var banner = '<div class="alert alert-success' + (animate ? ' kgl-enter' : '') + '">' +
+          '<span class="alert-icon">' + kgCheckIcon(animate) + '</span>' +
           '<div style="flex:1;min-width:0">' +
           '<strong>Imported &amp; validated — exdark_train · exdark_val · exdark_test</strong>' +
           '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
@@ -875,7 +1074,7 @@
         banner += '</div></div></div>';
         el('kg-import-banner').innerHTML = banner;
         el('kg-continue-train').addEventListener('click', function () { showTab('train'); });
-        el('kg-start-over').addEventListener('click', function () { kgEnterFormState(); });
+        el('kg-start-over').addEventListener('click', function () { kgEnterFormState(true); });
 
         // Summary rows: count · badge · middle-truncated path · actions.
         // Full untruncated paths live only in the log accordion / Copy.
@@ -951,10 +1150,11 @@
           });
       }
 
-      // ── State 5: red failure banner (headline; the chip stays empty) ──
-      function renderFailBanner(message) {
+      // ── State 5: red failure banner (headline; the chip stays empty).
+      // Standard entrance when live; plain ✕ — the draw is success-only.
+      function renderFailBanner(message, animate) {
         el('kg-import-banner').innerHTML =
-          '<div class="alert alert-error"><span class="alert-icon">✕</span>' +
+          '<div class="alert alert-error' + (animate ? ' kgl-enter' : '') + '"><span class="alert-icon">✕</span>' +
           '<div style="flex:1;min-width:0"><strong>Import failed</strong>' +
           '<div style="margin-top:4px;font-size:12.5px">' + esc(message) + '</div></div></div>';
       }
@@ -965,12 +1165,13 @@
           .then(function (job) {
             el('kg-log-details').style.display = 'block';
             el('kg-log').textContent = (job.log || []).join('\n');
-            if (el('kg-log-details').open) { el('kg-log').scrollTop = el('kg-log').scrollHeight; }
-            renderChecks(job.checks);
+            if (kgLogOpen()) { el('kg-log').scrollTop = el('kg-log').scrollHeight; }
             kgRenderProgress(job);
             if (job.status === 'running') {
               // Honest claim: the import runs as a disk-persisted background
-              // job and this UI reconnects to it on load.
+              // job and this UI reconnects to it on load. Checks render once
+              // at the end (the cascade is the validation payoff) — the
+              // progress rows carry the in-run story.
               el('kg-import-state').textContent = 'Importing… — safe to navigate away';
               return;
             }
@@ -979,14 +1180,15 @@
             el('kg-import-spinner').style.display = 'none';
             kgCheckReady();
             kgRenderProgress(null);
+            renderChecks(job.checks, true);
             if (job.status === 'completed') {
               el('kg-import-state').textContent = '';   // the banner is the headline
-              renderResult(job.result);
+              renderResult(job.result, true);
             } else {
               // State 5: red banner is the headline; the form stays
               // populated and the button invites a re-run.
               el('kg-import-state').textContent = '';
-              renderFailBanner(job.error || 'Import failed — see the checks below.');
+              renderFailBanner(job.error || 'Import failed — see the checks below.', true);
               el('kg-import-btn').innerHTML = '↻ Re-run Import &amp; Validate';
             }
             renderPipeline();
@@ -1027,6 +1229,7 @@
           return;
         }
         kgImporting = true;
+        kgPrevStageStatus = {};
         kgCheckReady();
         el('kg-import-btn').innerHTML = '↑ Import &amp; Validate';   // reset a Re-run label
         el('kg-import-spinner').style.display = 'inline-block';
@@ -1034,7 +1237,7 @@
         el('kg-import-banner').innerHTML = '';
         el('kg-checks').innerHTML = '';
         el('kg-result').innerHTML = '';
-        el('kg-log-details').style.display = 'none';
+        kgLogReset();
         API.authFetch(computeUrl + '/api/plugins/kaggle/import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1065,7 +1268,10 @@
       // verified revisit snapshot (State 4), then the form (State 1; a
       // saved path prefills and auto-preflights).
 
-      function kgEnterFormState() {
+      // `animate` = arriving via Start over (State 6 → State 1): the old
+      // view goes instantly, the incoming form gets the standard entrance.
+      // Initial page load passes nothing — page furniture doesn't animate.
+      function kgEnterFormState(animate) {
         kgRevisitSrc = null;
         el('kg-import-form').style.display = '';
         el('kg-import-banner').innerHTML = '';
@@ -1073,8 +1279,9 @@
         el('kg-result').innerHTML = '';
         el('kg-import-progress').innerHTML = '';
         el('kg-import-state').textContent = '';
-        el('kg-log-details').style.display = 'none';
+        kgLogReset();
         el('kg-import-btn').innerHTML = '↑ Import &amp; Validate';
+        if (animate) { kglEnter(el('kg-import-form')); }
         kgRenderPreflight(null);
         kgCheckReady();
         configLoaded.then(function () {

@@ -109,6 +109,62 @@ class names.
   `run_insights` reads any URL/query parameter — there is no clean deep-link
   scheme, so no Insights action is offered (per "skip rather than fake").
 
+## Motion vocabulary (applies to all four tabs)
+
+Piloted on the Import tab (2026-07-21). Future tab work references this
+section instead of re-deciding. House-style anchors: the stock plugin's
+`plugin-badge-in` entrance and `guide-pulse` — fast, subtle, ease-out. If an
+animation would be noticed as "an animation" on the third use, it's too much.
+
+**Tokens** — defined once on `.plugin-page-narrow`; every animated rule
+references them (no literal durations except the stock-copied guide-pulse
+2s cadence, which is house style outside the token scale):
+
+```css
+--kgl-motion-fast: 120ms;   /* button/hover feedback, badge swaps */
+--kgl-motion-base: 180ms;   /* content entrances */
+--kgl-motion-slow: 300ms;   /* accordion, checkmark draw */
+--kgl-stagger: 30ms;        /* per-item cascade offset */
+--kgl-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+--kgl-ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+```
+
+**Rules:**
+
+- **Motion is information.** Every animation announces a state change,
+  acknowledges a user action, or directs attention to the next step. Nothing
+  ambient, decorative, or page-level.
+- **No exit animations.** Removals and replacements are instant; only
+  arrivals animate. (Animating removals makes debounced re-checks feel
+  laggy.)
+- **No replay on revisit.** Entrances, cascades, and the checkmark draw play
+  only when the state change happens live in the session. State 6 revisit
+  and `?kgdev` forced states render everything static/pre-drawn. Same-type
+  re-renders (debounce cycles, poll ticks) never re-trigger an entrance —
+  animate on state-type *transitions*, tracked in JS.
+- **Reduced motion.** Every animated rule lives inside a single
+  `@media (prefers-reduced-motion: no-preference)` block; under `reduce`,
+  all states change instantly with zero functional difference. JS that waits
+  on `transitionend`/`animationend` must check `kgMotionOK()` first (a gated
+  transition never fires its end event).
+- **Performance.** Animate `opacity`/`transform` only; the accordion's
+  `grid-template-rows` is the sole exception. JS cleanup rides
+  `transitionend`/`animationend`, never timers; the one `offsetWidth` read
+  in `kglEnter` is the standard single-shot animation restart, not a loop.
+
+**Reusable pieces** (all in ui.html): `.kgl-enter` (entrance: fade +
+4px slide-up), `.kgl-badge-in` (fast badge fade), `.kg-checks-grid.kgl-cascade`
++ per-item `--kgl-i` (parallel-column stagger), `kgCheckIcon(animate)` +
+`.kgl-draw` (SVG stroke draw, success-only celebration beat, delayed one
+fast beat after its banner), `.kgl-acc`/`.kgl-acc-summary` (button+region
+accordion: `aria-expanded` + `hidden`, grid-rows expand, caret rotate),
+`kglEnter(elm)` (re-triggerable entrance for persistent elements),
+`kgSwapText(elm, text)` (fading label swap), `kgMotionOK()`.
+
+Known out-of-scope literal: the shared `.kg-tab` header transition
+(`all .15s`) predates the pass — tokenize it when the other tabs get their
+motion treatment.
+
 ## Small-button vocabulary (row actions)
 
 Matches the stock details strip: `btn btn-secondary btn-sm` for primary-ish
