@@ -1,16 +1,70 @@
-<div class="plugin-page-narrow" style="padding: 24px; max-width: 900px;">
-  <div class="plugin-hero" style="margin-bottom: 20px;">
+<style>
+/* ── Kaggle plugin styles (shared tokens from main.css / plugin-common.css) ── */
+.kg-chip {
+  display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--bg-card);
+  color: var(--text-secondary); white-space: nowrap;
+}
+
+/* Tab bar IS the pipeline stepper (importer csv-step-pill pattern, tabbed) */
+.kg-tabs { display: flex; gap: 0; margin: 16px 0 20px; border-bottom: 1px solid var(--border); }
+.kg-tab {
+  flex: 1; text-align: center; padding: 10px 6px 12px; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s;
+  user-select: none;
+}
+.kg-tab:hover { background: var(--accent-light, rgba(42,74,97,.04)); }
+.kg-tab.active { border-bottom-color: var(--accent); }
+.kg-tab-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.kg-tab.active .kg-tab-title { color: var(--accent); }
+.kg-tab-sub { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.kg-tab-state { display: inline-block; min-width: 14px; font-weight: 700; }
+.kg-tab-state.done { color: var(--success); }
+.kg-tab-state.current { color: var(--accent); }
+.kg-tab-state.pending { color: var(--text-muted); }
+
+.kg-panel { display: none; }
+.kg-panel.active { display: block; }
+</style>
+
+<div class="plugin-page-narrow" style="padding: 24px; max-width: 900px; margin: 0 auto;">
+  <!-- ── Hero ──────────────────────────────────────────────────────── -->
+  <div class="plugin-hero" style="margin-bottom: 4px;">
     <h1 style="margin: 0 0 4px 0;">🏁 Kaggle Competition</h1>
     <p style="margin: 0; opacity: .8;">
-      Import the dataset, train the fixed baseline, predict and submit.
-      <strong>Competition constraints: YOLOv11n from scratch · 640 px · 12 classes.</strong>
+      Import the dataset, train the fixed baseline, predict and submit — the whole
+      competition loop without leaving the Hub.
     </p>
-    <div id="kg-pipeline" style="margin-top: 10px; font-size: 14px; opacity: .9;">
-      <span>1 Import ○</span> → <span>2 Train ○</span> → <span>3 Submit ○</span> → <span>4 Status</span>
+    <div style="display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap;">
+      <span class="kg-chip">🔒 YOLOv11n from scratch</span>
+      <span class="kg-chip">🔒 640 px</span>
+      <span class="kg-chip">12 classes</span>
+      <span class="kg-chip">metric: mAP@0.5</span>
+    </div>
+  </div>
+
+  <!-- ── Tab bar / pipeline stepper ────────────────────────────────── -->
+  <div class="kg-tabs" id="kg-tabs">
+    <div class="kg-tab" data-tab="import">
+      <div class="kg-tab-title"><span class="kg-tab-state pending" id="kg-state-import">○</span> 1 Import</div>
+      <div class="kg-tab-sub">Starter kit → 3LC tables</div>
+    </div>
+    <div class="kg-tab" data-tab="train">
+      <div class="kg-tab-title"><span class="kg-tab-state pending" id="kg-state-train">○</span> 2 Train</div>
+      <div class="kg-tab-sub">YOLOv11n from scratch</div>
+    </div>
+    <div class="kg-tab" data-tab="submit">
+      <div class="kg-tab-title"><span class="kg-tab-state pending" id="kg-state-submit">○</span> 3 Submit</div>
+      <div class="kg-tab-sub">Predict → CSV → Kaggle</div>
+    </div>
+    <div class="kg-tab" data-tab="status">
+      <div class="kg-tab-title"><span class="kg-tab-state" id="kg-state-status"></span> 4 Status</div>
+      <div class="kg-tab-sub">History &amp; leaderboard</div>
     </div>
   </div>
 
   <!-- ── 1. Import ─────────────────────────────────────────────────── -->
+  <div class="kg-panel" id="kg-panel-import">
   <div class="card" style="padding: 16px; margin-bottom: 16px;">
     <h2 style="margin-top: 0;"><span class="plugin-section-number">1</span> Import</h2>
     <p style="opacity: .8; margin-top: 0;">
@@ -39,8 +93,10 @@
     <pre id="kg-log" style="margin-top: 12px; max-height: 220px; overflow: auto; display: none;
          font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
   </div>
+  </div>
 
   <!-- ── 2. Train ──────────────────────────────────────────────────── -->
+  <div class="kg-panel" id="kg-panel-train">
   <div class="card" style="padding: 16px; margin-bottom: 16px;">
     <h2 style="margin-top: 0;"><span class="plugin-section-number">2</span> Train</h2>
     <p style="opacity: .8; margin-top: 0;">
@@ -129,8 +185,10 @@
     <pre id="tr-log" style="margin-top: 12px; max-height: 220px; overflow: auto; display: none;
          font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
   </div>
+  </div>
 
   <!-- ── 3. Predict + Submit ───────────────────────────────────────── -->
+  <div class="kg-panel" id="kg-panel-submit">
   <div class="card" style="padding: 16px; margin-bottom: 16px;">
     <h2 style="margin-top: 0;"><span class="plugin-section-number">3</span> Predict + Submit</h2>
     <p style="opacity: .8; margin-top: 0;">
@@ -171,8 +229,10 @@
     <pre id="ps-log" style="margin-top: 12px; max-height: 220px; overflow: auto; display: none;
          font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
   </div>
+  </div>
 
   <!-- ── 4. Status ─────────────────────────────────────────────────── -->
+  <div class="kg-panel" id="kg-panel-status">
   <div class="card" style="padding: 16px; margin-bottom: 16px;">
     <h2 style="margin-top: 0;"><span class="plugin-section-number">4</span> Status</h2>
     <div class="plugin-action-bar" style="margin-bottom: 10px;">
@@ -184,6 +244,7 @@
     <h3 style="margin: 14px 0 6px 0;">Kaggle live</h3>
     <div id="st-kaggle" style="font-size: 13px;"><em style="opacity: .7;">Loading…</em></div>
   </div>
+  </div>
 
   <script>
     (function () {
@@ -194,6 +255,56 @@
       var pollTimer = null;
 
       var el = function (id) { return document.getElementById(id); };
+
+      // ── Tabs: the tab bar is the pipeline stepper ──────────────────
+      var TABS = ['import', 'train', 'submit', 'status'];
+      var TAB_KEY = 'kg.activeTab';
+
+      function showTab(name) {
+        if (TABS.indexOf(name) === -1) { name = 'import'; }
+        TABS.forEach(function (t) {
+          var tab = document.querySelector('#kg-tabs .kg-tab[data-tab="' + t + '"]');
+          if (tab) { tab.classList.toggle('active', t === name); }
+          var panel = el('kg-panel-' + t);
+          if (panel) { panel.classList.toggle('active', t === name); }
+        });
+        try { localStorage.setItem(TAB_KEY, name); } catch (e) { /* sandboxed */ }
+      }
+
+      Array.prototype.forEach.call(
+        document.querySelectorAll('#kg-tabs .kg-tab'),
+        function (tab) {
+          tab.addEventListener('click', function () { showTab(tab.getAttribute('data-tab')); });
+        }
+      );
+
+      var savedTab = null;
+      try { savedTab = localStorage.getItem(TAB_KEY); } catch (e) { /* sandboxed */ }
+      showTab(savedTab || 'import');
+
+      // Stepper states from the pipeline endpoint: ✓ done, ● current, ○ pending.
+      function renderPipeline() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/pipeline')
+          .then(function (r) { return r.json(); })
+          .then(function (p) {
+            var steps = ['import', 'train', 'submit'];
+            var currentSeen = false;
+            steps.forEach(function (s) {
+              var span = el('kg-state-' + s);
+              if (!span) { return; }
+              if (p[s]) {
+                span.textContent = '✓'; span.className = 'kg-tab-state done';
+              } else if (!currentSeen) {
+                span.textContent = '●'; span.className = 'kg-tab-state current';
+                currentSeen = true;
+              } else {
+                span.textContent = '○'; span.className = 'kg-tab-state pending';
+              }
+            });
+          })
+          .catch(function () { /* keep whatever is shown */ });
+      }
+      renderPipeline();
 
       function renderChecks(checks) {
         if (!checks || !checks.length) { el('kg-checks').innerHTML = ''; return; }
@@ -244,6 +355,7 @@
             } else {
               el('kg-import-state').textContent = '❌ ' + (job.error || 'Import failed');
             }
+            renderPipeline();
           })
           .catch(function (e) {
             clearInterval(pollTimer);
@@ -279,7 +391,7 @@
           });
       });
 
-      // ── Train card ─────────────────────────────────────────────────
+      // ── Train tab ──────────────────────────────────────────────────
       var trainJobId = null;
       var trainTimer = null;
 
@@ -353,6 +465,7 @@
               job.status === 'completed' ? '✅ Training complete'
               : job.status === 'cancelled' ? '⏹ Cancelled'
               : '❌ ' + (job.error || 'Training failed');
+            renderPipeline();
           })
           .catch(function () { /* transient poll error — keep trying */ });
       }
@@ -417,7 +530,7 @@
           .catch(function () {});
       });
 
-      // ── Predict + Submit card ──────────────────────────────────────
+      // ── Submit tab ─────────────────────────────────────────────────
       var psJobId = null;
       var psTimer = null;
 
@@ -441,7 +554,7 @@
           el('ps-run').options[0].textContent = '— could not load runs; paste a weights path below —';
         });
 
-      // Test table default from the same helper the Train card uses.
+      // Test table default from the same helper the Train tab uses.
       API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
         .then(function (r) { return r.json(); })
         .then(function (d) { if (d.test) { el('ps-test-url').value = d.test.url; } })
@@ -485,6 +598,7 @@
             el('ps-start-btn').disabled = false;
             el('ps-state').textContent =
               job.status === 'completed' ? '✅ Done' : '❌ ' + (job.error || 'Failed');
+            renderPipeline();
           })
           .catch(function () {});
       }
@@ -521,30 +635,14 @@
           });
       });
 
-      // ── Pipeline indicator ─────────────────────────────────────────
-      function renderPipeline() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/pipeline')
-          .then(function (r) { return r.json(); })
-          .then(function (p) {
-            var mark = function (done) { return done ? '✓' : '○'; };
-            el('kg-pipeline').innerHTML =
-              '<span>1 Import ' + mark(p.import) + '</span> → ' +
-              '<span>2 Train ' + mark(p.train) + '</span> → ' +
-              '<span>3 Submit ' + mark(p.submit) + '</span> → ' +
-              '<span>4 Status</span>';
-          })
-          .catch(function () { /* keep the static placeholder */ });
-      }
-      renderPipeline();
-
-      // ── Status card ────────────────────────────────────────────────
+      // ── Status tab ─────────────────────────────────────────────────
       function renderHistory() {
         API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=predict_submit')
           .then(function (r) { return r.json(); })
           .then(function (records) {
             if (!records.length) {
               el('st-history').innerHTML =
-                '<em style="opacity: .7;">No submissions yet — run Predict + Submit (card 3).</em>';
+                '<em style="opacity: .7;">No submissions yet — run Predict + Submit (tab 3).</em>';
               return;
             }
             var html = '<table style="border-collapse: collapse;">' +
