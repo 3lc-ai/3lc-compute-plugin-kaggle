@@ -363,6 +363,71 @@
         return dashboardUrl ? dashboardUrl + '?run=' + encodeURIComponent(runUrl) : '';
       }
 
+      function fmtDur(seconds) {
+        var s = Math.max(0, Math.round(seconds));
+        var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+        if (h) { return h + 'h ' + m + 'm'; }
+        if (m) { return m + 'm ' + (s % 60) + 's'; }
+        return s + 's';
+      }
+
+      // ── Config persistence: last-used values per tab ────────────────
+      // element id -> stored key, per tab. Checkboxes detected by type.
+      var CFG_FIELDS = {
+        import: { 'kg-yaml': 'dataset_yaml', 'kg-project': 'project_name', 'kg-table': 'table_name' },
+        train: {
+          'tr-train-url': 'train_table_url', 'tr-val-url': 'val_table_url', 'tr-latest': 'use_latest',
+          'tr-epochs': 'epochs', 'tr-batch': 'batch', 'tr-lr0': 'lr0', 'tr-lrf': 'lrf',
+          'tr-optimizer': 'optimizer', 'tr-patience': 'patience', 'tr-device': 'device',
+          'tr-workers': 'workers', 'tr-extra': 'extra_args', 'tr-project': 'project_name',
+          'tr-conf': 'conf_thres', 'tr-maxdet': 'max_det',
+          'tr-embdim': 'image_embeddings_dim', 'tr-embreducer': 'image_embeddings_reducer',
+          'tr-instdim': 'instance_embeddings_dim', 'tr-colstart': 'collection_epoch_start',
+          'tr-colint': 'collection_epoch_interval', 'tr-collectloss': 'collect_loss',
+          'tr-gtinst': 'ground_truth_instance_embeddings', 'tr-sampling': 'sampling_weights',
+          'tr-exclzero-train': 'exclude_zero_weight_training',
+          'tr-exclzero-col': 'exclude_zero_weight_collection',
+          'tr-valonly': 'collection_val_only', 'tr-coldisable': 'collection_disable'
+        },
+        submit: {
+          'ps-test-url': 'test_table_url', 'ps-conf': 'conf', 'ps-device': 'device',
+          'ps-slug': 'competition_slug', 'ps-csvonly': 'csv_only'
+        }
+      };
+
+      function saveTabConfig(tab) {
+        var values = {};
+        Object.keys(CFG_FIELDS[tab]).forEach(function (id) {
+          var node = el(id);
+          if (!node) { return; }
+          values[CFG_FIELDS[tab][id]] = node.type === 'checkbox' ? node.checked : node.value;
+        });
+        var body = {}; body[tab] = values;
+        API.authFetch(computeUrl + '/api/plugins/kaggle/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        }).catch(function () { /* persistence is best-effort */ });
+      }
+
+      function applyConfig(cfg) {
+        Object.keys(CFG_FIELDS).forEach(function (tab) {
+          var saved = cfg[tab] || {};
+          Object.keys(CFG_FIELDS[tab]).forEach(function (id) {
+            var key = CFG_FIELDS[tab][id];
+            var node = el(id);
+            if (!node || !(key in saved) || saved[key] === null) { return; }
+            if (node.type === 'checkbox') { node.checked = !!saved[key]; }
+            else if (saved[key] !== '') { node.value = saved[key]; }
+          });
+        });
+      }
+
+      var configLoaded = API.authFetch(computeUrl + '/api/plugins/kaggle/config')
+        .then(function (r) { return r.json(); })
+        .then(function (cfg) { applyConfig(cfg); })
+        .catch(function () { /* fresh install or route not mounted yet */ });
+
       // Stepper states from the pipeline endpoint: ✓ done, ● current, ○ pending.
       function renderPipeline() {
         API.authFetch(computeUrl + '/api/plugins/kaggle/pipeline')
@@ -448,6 +513,7 @@
       el('kg-import-btn').addEventListener('click', function () {
         var yaml = el('kg-yaml').value.trim();
         if (!yaml) { el('kg-import-state').textContent = 'Enter the dataset.yaml path first.'; return; }
+        saveTabConfig('import');
         el('kg-import-btn').disabled = true;
         el('kg-import-state').textContent = 'Starting…';
         el('kg-checks').innerHTML = '';
@@ -476,14 +542,16 @@
       var trainJobId = null;
       var trainTimer = null;
 
-      // Prefill table pickers with the canonical import outputs.
-      API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          if (d.train) { el('tr-train-url').value = d.train.url; }
-          if (d.val) { el('tr-val-url').value = d.val.url; }
-        })
-        .catch(function () { /* leave pickers empty */ });
+      // Prefill table pickers with the canonical import outputs — after the
+      // saved config applies, and only into fields it left empty.
+      configLoaded.then(function () {
+        return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d.train && !el('tr-train-url').value.trim()) { el('tr-train-url').value = d.train.url; }
+            if (d.val && !el('tr-val-url').value.trim()) { el('tr-val-url').value = d.val.url; }
+          });
+      }).catch(function () { /* leave pickers empty */ });
 
       function trainChecks(checks) {
         if (!checks || !checks.length) { el('tr-checks').innerHTML = ''; return; }
@@ -501,6 +569,11 @@
         if (p.total_epochs) {
           var pct = Math.round(100 * (p.epoch || 0) / p.total_epochs);
           html += '<strong>Epoch ' + (p.epoch || 0) + ' / ' + p.total_epochs + '</strong> (' + pct + '%)';
+          // ETA appears once epoch 1 completes, from measured epoch time.
+          if (typeof p.eta_s === 'number' && (p.epoch || 0) >= 1 && p.epoch < p.total_epochs) {
+            html += ' · ≈ ' + fmtDur(p.eta_s) + ' remaining' +
+                    ' <span style="opacity:.6">(' + fmtDur(p.avg_epoch_s || 0) + '/epoch measured)</span>';
+          }
           var m = p.metrics || {};
           var keys = Object.keys(m);
           if (keys.length) {
@@ -584,6 +657,7 @@
       el('tr-start-btn').addEventListener('click', function () {
         var boundsError = trBoundsError();
         if (boundsError) { el('tr-state').textContent = '❌ ' + boundsError; return; }
+        saveTabConfig('train');
         var body = {
           train_table_url: el('tr-train-url').value.trim(),
           val_table_url: el('tr-val-url').value.trim(),
@@ -717,7 +791,7 @@
               '(is the compute service running with the latest plugin routes?).</em>';
           });
       }
-      renderConnection();
+      configLoaded.then(renderConnection);
 
       function renderSanity(sanity) {
         if (!sanity) { return ''; }
@@ -761,11 +835,15 @@
           el('ps-run').options[0].textContent = '— could not load runs; paste a weights path below —';
         });
 
-      // Test table default from the same helper the Train tab uses.
-      API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
-        .then(function (r) { return r.json(); })
-        .then(function (d) { if (d.test) { el('ps-test-url').value = d.test.url; } })
-        .catch(function () { el('ps-test-url').placeholder = 'paste the exdark_test table URL (run Import first)'; });
+      // Test table default from the same helper the Train tab uses — saved
+      // config wins, defaults fill blanks only.
+      configLoaded.then(function () {
+        return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d.test && !el('ps-test-url').value.trim()) { el('ps-test-url').value = d.test.url; }
+          });
+      }).catch(function () { el('ps-test-url').placeholder = 'paste the exdark_test table URL (run Import first)'; });
 
       function psPoll() {
         API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + psJobId)
@@ -824,6 +902,7 @@
       }
 
       el('ps-start-btn').addEventListener('click', function () {
+        saveTabConfig('submit');
         var body = {
           train_job_id: el('ps-run').value,
           weights_path: el('ps-weights').value.trim(),
@@ -880,9 +959,10 @@
               '<tr style="opacity: .7;"><td style="padding: 2px 12px 2px 0;">run</td>' +
               '<td style="padding: 2px 12px 2px 0;">when</td>' +
               '<td style="padding: 2px 12px 2px 0;">local mAP@0.5</td>' +
+              '<td style="padding: 2px 12px 2px 0;">Δ</td>' +
               '<td style="padding: 2px 12px 2px 0;">submission</td>' +
               '<td style="padding: 2px 0;">csv</td></tr>';
-            records.forEach(function (job) {
+            records.forEach(function (job, idx) {
               var facts = job.facts || {};
               var result = job.result || {};
               var sub = facts.submission || {};
@@ -895,6 +975,23 @@
                       'title="Open the originating Run in the Dashboard">' + run + ' ↗</a>';
               }
               var score = typeof facts.local_score === 'number' ? facts.local_score.toFixed(4) : '—';
+              // Δ vs the previous (chronologically earlier) submission's score.
+              var prev = records[idx + 1];
+              var prevScore = prev && typeof (prev.facts || {}).local_score === 'number'
+                ? prev.facts.local_score : null;
+              var deltaCell = '—';
+              var dropped = false;
+              if (typeof facts.local_score === 'number' && prevScore !== null) {
+                var d = facts.local_score - prevScore;
+                if (d > 0) {
+                  deltaCell = '<span style="color: var(--success);">▲ +' + d.toFixed(4) + '</span>';
+                } else if (d < 0) {
+                  deltaCell = '<span style="color: var(--danger, #ef4444);">▼ ' + d.toFixed(4) + '</span>';
+                  dropped = true;
+                } else {
+                  deltaCell = '<span style="opacity: .6;">= 0.0000</span>';
+                }
+              }
               var subTxt = job.status === 'failed' ? '❌ failed'
                 : (sub.status || '—') + (sub.ref ? ' (' + sub.ref + ')' : '');
               var csvCell = facts.csv_path
@@ -905,8 +1002,24 @@
               html += '<tr><td style="padding: 2px 12px 2px 0;"><strong>' + run + '</strong></td>' +
                       '<td style="padding: 2px 12px 2px 0;">' + when + '</td>' +
                       '<td style="padding: 2px 12px 2px 0;">' + score + '</td>' +
+                      '<td style="padding: 2px 12px 2px 0;">' + deltaCell + '</td>' +
                       '<td style="padding: 2px 12px 2px 0;">' + subTxt + '</td>' +
                       '<td style="padding: 2px 0;">' + csvCell + '</td></tr>';
+              if (dropped) {
+                // Gentle hint on a score drop — link both Runs when known.
+                var prevOrigin = runsByJob[((prev || {}).params || {}).train_job_id];
+                var links = '';
+                if (origin && origin.run_url && dashboardUrl) {
+                  links += ' <a href="' + dashRunLink(origin.run_url) + '" target="_blank">this Run ↗</a>';
+                }
+                if (prevOrigin && prevOrigin.run_url && dashboardUrl) {
+                  links += (links ? ' · ' : ' ') +
+                           '<a href="' + dashRunLink(prevOrigin.run_url) + '" target="_blank">previous Run ↗</a>';
+                }
+                html += '<tr><td colspan="6" style="padding: 0 0 6px 0; font-size: 12px; opacity: .8;">' +
+                        '↳ Score dropped vs the previous submission — compare what changed ' +
+                        'between the two Runs in the Dashboard.' + links + '</td></tr>';
+              }
             });
             el('st-history').innerHTML = html + '</table>';
           })

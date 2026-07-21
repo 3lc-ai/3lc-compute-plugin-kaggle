@@ -227,6 +227,22 @@ class KaggleController(Controller):
             },
         )
 
+    @get("/config", sync_to_thread=True)
+    def get_config(self) -> dict[str, Any]:
+        """Last-used form values per tab (re-runs become one click)."""
+        from tlc_plugin_kaggle import config_store
+
+        return config_store.load()
+
+    @post("/config", sync_to_thread=True)
+    def save_config(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Merge per-tab form snapshots. Body: {"train": {...}} etc."""
+        from tlc_plugin_kaggle import config_store
+
+        if not isinstance(data, dict):
+            return {}
+        return config_store.save(data)
+
     @get("/pipeline", sync_to_thread=True)
     def pipeline_state(self, project: str = "exdark-competition") -> dict[str, Any]:
         """Where the participant is in the Import -> Train -> Submit loop.

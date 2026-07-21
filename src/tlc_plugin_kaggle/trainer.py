@@ -279,7 +279,7 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
 
     model = YOLO(LOCKED_TRAIN_ARGS["model"], task="detect")
 
-    state: dict[str, Any] = {"epoch": 0, "cancelled": False}
+    state: dict[str, Any] = {"epoch": 0, "cancelled": False, "train_start": time.time()}
 
     def _check_cancel(trainer: Any) -> None:
         if ctx.is_cancelled():
@@ -299,7 +299,17 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
             if isinstance(v, (int, float))
         }
         state["epoch"] = epoch
-        ctx.set_progress({"epoch": epoch, "total_epochs": total, "metrics": metrics})
+        # ETA from measured epoch time, available once epoch 1 completes.
+        elapsed = time.time() - state["train_start"]
+        avg_epoch = elapsed / max(epoch, 1)
+        progress = {
+            "epoch": epoch,
+            "total_epochs": total,
+            "metrics": metrics,
+            "avg_epoch_s": round(avg_epoch, 1),
+            "eta_s": round(avg_epoch * max(total - epoch, 0)),
+        }
+        ctx.set_progress(progress)
         ctx.log(f"epoch {epoch}/{total} — " + ", ".join(f"{k}={v}" for k, v in list(metrics.items())[:4]))
 
     model.add_callback("on_train_batch_end", on_train_batch_end)
