@@ -37,6 +37,7 @@ hot reload pick up changes (handlers resolve this module lazily).
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -268,7 +269,26 @@ def run_import(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     """
     log = ctx.log
     set_checks = ctx.set_checks
+    # Optional on ctx: the verification harness only guarantees log/set_checks.
+    set_progress = getattr(ctx, "set_progress", lambda p: None)
     checks: list[dict[str, Any]] = []
+
+    # Staged progress: ONE job drives the four per-split UI rows (train / val
+    # / test / validate). Kept as a single job on purpose — the 9 checks are
+    # cross-split and must stay together; only the reporting is staged.
+    STAGES = ["train", "val", "test", "validate"]
+    _stage_state: dict[str, Any] = {"current": None, "done": [], "started_at": {}, "finished_at": {}}
+
+    def stage(name: str | None) -> None:
+        now = time.time()
+        cur = _stage_state["current"]
+        if cur is not None:
+            _stage_state["done"] = _stage_state["done"] + [cur]
+            _stage_state["finished_at"] = {**_stage_state["finished_at"], cur: now}
+        _stage_state["current"] = name
+        if name is not None:
+            _stage_state["started_at"] = {**_stage_state["started_at"], name: now}
+        set_progress({"stages": STAGES, **_stage_state})
 
     def check(label: str, ok: bool, detail: str = "") -> bool:
         checks.append({"label": label, "ok": bool(ok), "detail": detail})
@@ -302,18 +322,21 @@ def run_import(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     mechanisms: dict[str, str] = {}
 
     for split in ("train", "val"):
+        stage(split)
         log(f"{split}: importing via Table.from_yolo ...")
         table, reused = _import_labeled_split(info, split, project, table_name)
         tables[split] = {"url": str(table.url), "rows": table.row_count, "reused": reused, "_table": table}
         mechanisms[split] = "from_yolo" + (" (reused existing)" if reused else "")
         log(f"{split}: {'reused' if reused else 'created'} {table.url} ({table.row_count} rows)")
 
+    stage("test")
     table, reused, mechanism = _import_test_split(info, project, table_name, log)
     tables["test"] = {"url": str(table.url), "rows": table.row_count, "reused": reused, "_table": table}
     mechanisms["test"] = mechanism + (" (reused existing)" if reused else "")
     log(f"test: {'reused' if reused else 'created'} {table.url} ({table.row_count} rows)")
 
     # ── Post-import validation ──────────────────────────────────────────
+    stage("validate")
     ok = True
     for split in SPLITS:
         ok &= check(
@@ -346,6 +369,7 @@ def run_import(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
 
     if not ok:
         raise RuntimeError(PARTICIPANT_FIX)
+    stage(None)  # closes "validate" with a finished_at timestamp
 
     for t in tables.values():
         t.pop("_table", None)
