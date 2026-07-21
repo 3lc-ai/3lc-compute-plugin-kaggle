@@ -31,11 +31,27 @@
 /* Buttons that carry an icon: flex-align icon and label */
 .kgi-btn { display: inline-flex; align-items: center; gap: 6px; }
 
+/* Header identity: icon + title + muted one-liner, three deliberate layers
+   (identity / constraints / loop) on a 14px rhythm. Static furniture — no
+   entrance motion; hover states on Loop links only. */
+.kg-id-row { display: flex; gap: 10px; align-items: flex-start; }
+.kg-id-icon { display: flex; margin-top: 2px; color: var(--accent); }
+.kg-id-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.25; }
+.kg-id-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--text-secondary); }
+
+.kg-constraints { margin-top: 14px; }
+.kg-micro-label {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .4px; color: var(--text-muted); margin-bottom: 6px;
+}
+.kg-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .kg-chip {
-  display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px;
-  border-radius: 999px; border: 1px solid var(--border); background: var(--bg-card);
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px;
+  font-size: 11px; font-weight: 500; border-radius: 999px;
+  border: 1px solid var(--border); background: transparent;
   color: var(--text-secondary); white-space: nowrap;
 }
+.kg-chip .kgi { color: var(--text-muted); }
 
 /* Tab bar IS the pipeline stepper (importer csv-step-pill pattern, tabbed) */
 .kg-tabs { display: flex; gap: 0; margin: 16px 0 20px; border-bottom: 1px solid var(--border); }
@@ -57,16 +73,26 @@
 .kg-panel { display: none; }
 .kg-panel.active { display: block; }
 
-/* "The Loop" banner — the pedagogy of the competition, always visible */
+/* "The Loop" — the competition's workflow as one quiet row. Muted chevron
+   separators; the step matching the active tab carries slightly more weight
+   (wayfinding, toggled in showTab). */
 .kg-loop {
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   margin-top: 14px; padding: 7px 12px; font-size: 12px;
-  border: 1px solid var(--border); border-radius: 6px;
-  background: var(--accent-light, rgba(42,74,97,.04)); color: var(--text-secondary);
+  border: 1px solid var(--border-light, rgba(0,0,0,.06)); border-radius: 6px;
+  color: var(--text-secondary);
 }
-.kg-loop a { color: var(--accent); font-weight: 600; text-decoration: none; cursor: pointer; }
-.kg-loop a:hover { text-decoration: underline; }
-.kg-loop .sep { opacity: .5; }
+.kg-loop-label {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .4px; color: var(--text-muted); margin-right: 2px;
+}
+.kg-loop a {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--text-secondary); font-weight: 500; text-decoration: none; cursor: pointer;
+}
+.kg-loop a:hover { color: var(--accent); }
+.kg-loop a.kg-loop-active { color: var(--text); font-weight: 600; }
+.kg-loop-sep { display: flex; color: var(--text-muted); opacity: .6; }
 
 /* Kaggle connection panel (Submit tab) */
 .kg-conn {
@@ -251,6 +277,9 @@
                 filter var(--kgl-motion-fast) var(--kgl-ease-out);
   }
 
+  /* Loop-link hover (header wayfinding) */
+  .kg-loop a { transition: color var(--kgl-motion-fast) var(--kgl-ease-out); }
+
   /* Accordion expand/collapse + disclosure caret */
   .kgl-acc { transition: grid-template-rows var(--kgl-motion-slow) var(--kgl-ease-inout); }
   .kgl-acc-caret { transition: transform var(--kgl-motion-slow) var(--kgl-ease-inout); }
@@ -285,26 +314,37 @@
 <div class="plugin-page-narrow" style="padding: 24px; max-width: 900px; margin: 0 auto;">
   <!-- ── Hero ──────────────────────────────────────────────────────── -->
   <div class="plugin-hero" style="margin-bottom: 4px;">
-    <h1 style="margin: 0 0 4px 0;">🏁 Kaggle Competition</h1>
-    <p style="margin: 0; opacity: .8;">
-      Import the dataset, train the fixed baseline, predict and submit — the whole
-      competition loop without leaving the Hub.
-    </p>
-    <div style="display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap;">
-      <span class="kg-chip">🔒 YOLOv11n from scratch</span>
-      <span class="kg-chip">🔒 640 px</span>
-      <span class="kg-chip">12 classes</span>
-      <span class="kg-chip">metric: mAP@0.5</span>
+    <div class="kg-id-row">
+      <span class="kg-id-icon"><svg class="kgi kgi-20" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 14V2.5"/><path d="M3.5 3h8.5l-1.8 2.5L12 8H3.5"/></svg></span>
+      <div>
+        <h1 class="kg-id-title">Kaggle Competition</h1>
+        <p class="kg-id-sub">Import the dataset, train the fixed baseline, predict and submit —
+          the whole competition loop without leaving the Hub.</p>
+      </div>
+    </div>
+    <div class="kg-constraints">
+      <div class="kg-micro-label">Competition constraints</div>
+      <div class="kg-chips">
+        <span class="kg-chip"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg> YOLOv11n from scratch</span>
+        <span class="kg-chip"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg> 640 px</span>
+        <span class="kg-chip">12 classes</span>
+        <span class="kg-chip">Scored by mAP@0.5</span>
+      </div>
     </div>
     <!-- The data-centric loop, surfaced in the tool. Inspect deep-links to
          the Dashboard (newest Run when one exists). -->
     <div class="kg-loop" id="kg-loop">
-      <strong>The Loop:</strong>
-      <a data-goto="import">import</a><span class="sep">→</span>
-      <a data-goto="train">train</a><span class="sep">→</span>
-      <a id="kg-loop-inspect" target="_blank">inspect ↗</a><span class="sep">→</span>
-      <span title="Edit labels in the Dashboard, then re-import / use latest revision">fix labels</span><span class="sep">→</span>
-      <a data-goto="train">retrain</a><span class="sep">→</span>
+      <span class="kg-loop-label">The Loop</span>
+      <a data-goto="import">import</a>
+      <span class="kg-loop-sep"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span>
+      <a data-goto="train">train</a>
+      <span class="kg-loop-sep"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span>
+      <a id="kg-loop-inspect" target="_blank">inspect <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h-2A1.5 1.5 0 0 0 3 5v6.5A1.5 1.5 0 0 0 4.5 13H11a1.5 1.5 0 0 0 1.5-1.5v-2"/><path d="M9.5 2.5H13.5V6.5"/><path d="M13.5 2.5L8 8"/></svg></a>
+      <span class="kg-loop-sep"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span>
+      <span title="Edit labels in the Dashboard, then re-import / use latest revision">fix labels</span>
+      <span class="kg-loop-sep"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span>
+      <a data-goto="train">retrain</a>
+      <span class="kg-loop-sep"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span>
       <a data-goto="submit">submit</a>
     </div>
   </div>
@@ -607,6 +647,12 @@
           var panel = el('kg-panel-' + t);
           if (panel) { panel.classList.toggle('active', t === name); }
         });
+        // Loop wayfinding: the step(s) pointing at the active tab read
+        // slightly stronger.
+        Array.prototype.forEach.call(
+          document.querySelectorAll('#kg-loop a[data-goto]'),
+          function (a) { a.classList.toggle('kg-loop-active', a.getAttribute('data-goto') === name); }
+        );
         try { localStorage.setItem(TAB_KEY, name); } catch (e) { /* sandboxed */ }
       }
 
