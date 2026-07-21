@@ -165,6 +165,47 @@ Known out-of-scope literal: the shared `.kg-tab` header transition
 (`all .15s`) predates the pass — tokenize it when the other tabs get their
 motion treatment.
 
+## Icons (applies to all four tabs)
+
+Piloted on the Import tab + header (2026-07-21). **Deliberate deviation from
+the stock plugin**: stock UIs use emoji (OS emoji font — colorful,
+inconsistently sized, outside the color system); we replace every emoji and
+typographic-symbol-as-icon with inline monochrome SVGs. No shared sprite
+exists in the Hub (verified — stock plugins inline their own SVGs), so the
+set lives in `ui.html` (`KG_ICONS` + `kgIcon(name, cls)` for JS-rendered
+markup; literal `<svg>` for static markup).
+
+- **Geometry**: 16px viewBox grid, 1.5px stroke, `stroke="currentColor"`,
+  round caps/joins, lucide/feather-style. Never multicolor, never hardcoded
+  hex — tint via the cascade or Hub CSS variables.
+- **Sizes**: `.kgi` 14px inline-with-text default · `.kgi-16` CTA
+  buttons/banner icons · `.kgi-12` micro contexts (chips, splits locks,
+  accordion caret, trailing arrows inside small buttons, Loop separators) ·
+  `.kgi-20` header identity. Note: small (`btn-sm`) buttons carry 14px/12px
+  icons, not 16px — optical fit overrides the one-size-per-context rule
+  there.
+- **Alignment**: flex containers (`.kgi-btn` for buttons, flex callouts/
+  checks/verdict rows), not baseline hacks.
+- **Lock semantics**: the lock is muted gray (`--text-muted`) everywhere —
+  locked is a calm fact, not a warning.
+- **Set**: lock, check, x, check-circle, x-circle, alert-triangle, info,
+  copy, arrow-right, upload, flag, refresh-cw, chevron-right, external-link.
+- **Still emoji (pending their own passes)**: Train/Submit/Status tab
+  internals (🔒 locked fields, ⚠, status emoji), the stepper's ✓/●/○ state
+  glyphs (shared `renderPipeline`), and the sidebar manifest icon
+  (host-rendered `icon_svg` already; the emoji `icon` is only a fallback).
+
+## Copy tone (applies to all four tabs)
+
+**Inform, don't instruct.** Help text and notes state facts and conventions
+("`initial` is the convention for a first import") rather than commands
+("leave as initial unless told otherwise"). Exceptions: remediation hints
+under failed checks are deliberately imperative — instructions are their
+job — and error chips may name the blocking fact ("the YAML path above
+hasn't validated yet"). Sentence case for labels/buttons/callouts; terminal
+periods on full sentences, none on fragments. "Import & Validate" keeps its
+capitalization as an established CTA name.
+
 ## Small-button vocabulary (row actions)
 
 Matches the stock details strip: `btn btn-secondary btn-sm` for primary-ish
