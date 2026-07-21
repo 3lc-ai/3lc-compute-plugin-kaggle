@@ -24,10 +24,20 @@ import time
 from pathlib import Path
 from typing import Any
 
+# ── SWAP AT PUBLIC LAUNCH ────────────────────────────────────────────────
+# Single source for the Submit tab's slug default and the join link. This is
+# the private test competition — the "comepetition" typo is real, it's in the
+# Kaggle URL. Replace the value with the public competition slug at launch.
+COMPETITION_SLUG = "the-3-lc-low-light-object-detection-comepetition-test"
+
 EXPECTED_TEST_ROWS = 715
 NUM_CLASSES = 12
 SUBMISSION_COLUMNS = ["id", "image_id", "prediction_string"]
 DEFAULT_SAVE_ROOT = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle-plugin"
+
+
+def competition_url(slug: str) -> str:
+    return f"https://www.kaggle.com/competitions/{slug.strip()}"
 
 # Host-machine convenience only: when the competition metric and solution file
 # exist locally (the organizer machine), each submission is also scored
@@ -63,6 +73,116 @@ def kaggle_credentials_present() -> bool:
         or bool(os.environ.get("KAGGLE_API_TOKEN"))
         or bool(os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY"))
     )
+
+
+def _authenticated_api() -> tuple[Any, str]:
+    """(api, "") on success, (None, reason) otherwise. kaggle 2.x
+    authenticates at import time — keep the import in here."""
+    if not kaggle_credentials_present():
+        return None, CREDENTIALS_HELP
+    try:
+        from kaggle.api.kaggle_api_extended import KaggleApi
+
+        api = KaggleApi()
+        api.authenticate()
+        return api, ""
+    except Exception as exc:
+        return None, f"Kaggle authentication failed: {exc}"
+
+
+def _api_username(api: Any) -> str:
+    """Username the client resolved during authenticate() — for KGAT access
+    tokens it is introspected from the token, so no extra API call here."""
+    try:
+        return str(api.config_values.get("username", "") or "")
+    except Exception:
+        return ""
+
+
+def get_competition_info(api: Any, slug: str) -> dict[str, Any]:
+    """One cheap GetCompetition call: joined-state + daily limit.
+
+    Verified against kaggle 2.2.3 / kagglesdk 0.1.34 (2026-07-20):
+    user_has_entered=True + max_daily_submissions=3 on the test competition,
+    user_has_entered=False on a not-joined competition.
+    """
+    from kagglesdk.competitions.types.competition_api_service import ApiGetCompetitionRequest
+
+    with api.build_kaggle_client() as client:
+        request = ApiGetCompetitionRequest()
+        request.competition_name = slug.strip()
+        comp = client.competitions.competition_api_client.get_competition(request)
+    return {
+        "user_has_entered": bool(comp.user_has_entered),
+        "max_daily_submissions": int(comp.max_daily_submissions or 0),
+        "title": str(comp.title or ""),
+    }
+
+
+def _submissions_used_today(api: Any, slug: str) -> int | None:
+    """Proactive 'X of N used today' counter, fully defensive.
+
+    LAUNCH-VERIFY: ListSubmissions 403s on the private test competition even
+    for a joined user, so this returns None there and the counter simply
+    doesn't render. Verify it comes alive on the public competition.
+    Kaggle submission timestamps are UTC; the daily limit resets midnight UTC.
+    """
+    try:
+        from datetime import datetime, timezone
+
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        subs = api.competition_submissions(slug)
+        return sum(1 for s in subs if str(getattr(s, "date", "")).startswith(today))
+    except Exception:
+        return None
+
+
+def kaggle_connection(slug: str = "") -> dict[str, Any]:
+    """Three-state connection panel for the Submit tab, checked in order:
+    no_credentials -> not_joined -> ready."""
+    slug = (slug or COMPETITION_SLUG).strip()
+    out: dict[str, Any] = {
+        "default_slug": COMPETITION_SLUG,
+        "slug": slug,
+        "competition_url": competition_url(slug),
+    }
+    api, reason = _authenticated_api()
+    if api is None:
+        return {**out, "state": "no_credentials", "help": reason}
+    out["username"] = _api_username(api)
+    try:
+        info = get_competition_info(api, slug)
+    except Exception as exc:
+        # Probe failed (bad slug, network, permission) — the credential itself
+        # works, so stay usable and let the submit path report specifics.
+        return {**out, "state": "ready", "probe_error": str(exc)}
+    out["daily_limit"] = info["max_daily_submissions"]
+    out["competition_title"] = info["title"]
+    if not info["user_has_entered"]:
+        return {**out, "state": "not_joined"}
+    used = _submissions_used_today(api, slug)
+    if used is not None:
+        out["submissions_used_today"] = used
+    return {**out, "state": "ready"}
+
+
+def classify_kaggle_error(exc: Exception) -> str:
+    """'daily_limit' | 'not_joined' | 'error' from a submit-call exception.
+
+    kagglesdk surfaces Kaggle's own JSON 'message' verbatim as the HTTPError
+    text, so substring matching on the participant-facing phrasing is the
+    available signal. LAUNCH-VERIFY: exercise the daily-limit branch live on
+    the public competition (the private test comp allows 3/day and burning
+    them for a test isn't worth it).
+    """
+    low = str(exc).lower()
+    if ("daily" in low and ("limit" in low or "submission" in low)) or "submission limit" in low or (
+        "maximum" in low and ("per day" in low or "today" in low)
+    ):
+        return "daily_limit"
+    if ("rules" in low and "accept" in low) or "must accept" in low or "not accepted" in low:
+        return "not_joined"
+    return "error"
 
 
 # ── Step 1: inference ────────────────────────────────────────────────────
@@ -137,6 +257,42 @@ def build_submission_df(pred_map: dict[str, str]) -> Any:
             "prediction_string": [pred_map[i] for i in image_ids],
         }
     )
+
+
+def build_sanity_summary(pred_map: dict[str, str]) -> dict[str, Any]:
+    """Pre-submit sanity numbers: totals, boxes/image, per-class counts, and
+    a soft degenerate-output warning. Informational only — never blocks."""
+    from tlc_plugin_kaggle.importer import CANONICAL_CLASSES
+
+    per_class = {name: 0 for name in CANONICAL_CLASSES}
+    total = 0
+    empty_images = 0
+    for pred in pred_map.values():
+        s = str(pred).strip()
+        if s == "" or s.lower() == "no box":
+            empty_images += 1
+            continue
+        values = s.split()
+        for i in range(0, len(values) - 5, 6):
+            cls = int(float(values[i]))
+            if 0 <= cls < len(CANONICAL_CLASSES):
+                per_class[CANONICAL_CLASSES[cls]] += 1
+                total += 1
+    n_images = max(len(pred_map), 1)
+    mean = total / n_images
+    summary: dict[str, Any] = {
+        "total_boxes": total,
+        "images": len(pred_map),
+        "empty_images": empty_images,
+        "boxes_per_image_mean": round(mean, 2),
+        "per_class": per_class,
+    }
+    if mean < 1.0:
+        summary["warning"] = (
+            f"{total} boxes across {len(pred_map)} images — unusually low; "
+            "are these fully-trained weights? (Submitting is still fine.)"
+        )
+    return summary
 
 
 # ── Step 3: pre-flight validation (mirrors metric_exdark.py exactly) ────
@@ -254,28 +410,65 @@ def try_local_score(csv_path: str, ctx: Any) -> float | None:
 
 
 def submit_to_kaggle(csv_path: str, message: str, slug: str, ctx: Any) -> dict[str, Any]:
-    """Submit via the kaggle package. Credentials from ~/.kaggle/kaggle.json ONLY."""
-    if not slug or slug.strip() in ("", "[SLUG]"):
-        return {
-            "status": "skipped",
-            "reason": "No competition slug configured — set it on the card once the competition is live.",
-        }
-    if not kaggle_credentials_present():
-        return {"status": "skipped", "reason": CREDENTIALS_HELP}
-    try:
-        # kaggle 2.x authenticates at import time — keep the import in here.
-        from kaggle.api.kaggle_api_extended import KaggleApi
+    """Submit via the kaggle package. Credentials are read by the kaggle
+    client from its own sources only — the plugin never stores them.
 
-        api = KaggleApi()
-        api.authenticate()
-    except Exception as exc:
-        return {"status": "skipped", "reason": f"{CREDENTIALS_HELP} (auth error: {exc})"}
+    Non-fatal outcomes are friendly states, not failures: missing credentials
+    and the daily submission limit both leave the validated CSV on disk for a
+    later or manual upload.
+    """
+    slug = (slug or COMPETITION_SLUG).strip()
+    if slug == "[SLUG]":
+        slug = COMPETITION_SLUG
+    api, reason = _authenticated_api()
+    if api is None:
+        return {"status": "skipped", "reason": reason}
+
+    # Cheap pre-probe: a submit against a not-joined competition can't
+    # succeed, so report the friendly state without burning the attempt.
+    # Probe failure is not a verdict — fall through and let Kaggle answer.
+    daily_limit = None
     try:
-        response = api.competition_submit(file_name=csv_path, message=message, competition=slug.strip())
+        info = get_competition_info(api, slug)
+        daily_limit = info["max_daily_submissions"] or None
+        if not info["user_has_entered"]:
+            return {
+                "status": "not_joined",
+                "reason": (
+                    "Join the competition on Kaggle first (accept the rules on the "
+                    f"competition page), then submit again: {competition_url(slug)}"
+                ),
+            }
+    except Exception:
+        pass
+
+    try:
+        response = api.competition_submit(file_name=csv_path, message=message, competition=slug)
         ref = getattr(response, "ref", None) or str(response)
         ctx.log(f"Kaggle accepted the submission: {ref}")
         return {"status": "submitted", "response": str(response), "ref": str(ref)}
     except Exception as exc:
+        kind = classify_kaggle_error(exc)
+        if kind == "daily_limit":
+            limit_txt = f" ({daily_limit}/day)" if daily_limit else ""
+            return {
+                "status": "limit_reached",
+                "reason": (
+                    f"Daily submission limit reached{limit_txt}, resets midnight UTC. "
+                    "Your CSV is saved and validated — submit it tomorrow from here, "
+                    "or upload it manually on the competition's Submit page."
+                ),
+                "detail": str(exc),
+            }
+        if kind == "not_joined":
+            return {
+                "status": "not_joined",
+                "reason": (
+                    "Kaggle rejected the submission because the competition rules are "
+                    f"not accepted yet. Join here, then submit again: {competition_url(slug)}"
+                ),
+                "detail": str(exc),
+            }
         return {"status": "failed", "reason": f"Kaggle rejected the submission: {exc}"}
 
 
@@ -293,21 +486,13 @@ def kaggle_live_status(slug: str) -> dict[str, Any]:
             '-Value "KGAT_<your token>" -NoNewline -Encoding ascii. '
             "(Or set KAGGLE_API_TOKEN; legacy ~/.kaggle/kaggle.json also works.)",
         }
-    slug = (slug or "").strip()
-    if not slug or slug == "[SLUG]":
-        return {
-            "connected": True,
-            "configured": False,
-            "reason": "Set the competition slug (card 3) once the competition is live.",
-        }
+    slug = (slug or COMPETITION_SLUG).strip()
+    if slug == "[SLUG]":
+        slug = COMPETITION_SLUG
     out: dict[str, Any] = {"connected": True, "configured": True, "slug": slug}
-    try:
-        from kaggle.api.kaggle_api_extended import KaggleApi  # import-time auth: keep in here
-
-        api = KaggleApi()
-        api.authenticate()
-    except Exception as exc:
-        return {"connected": False, "reason": f"Kaggle authentication failed: {exc}"}
+    api, reason = _authenticated_api()
+    if api is None:
+        return {"connected": False, "reason": reason}
 
     try:
         subs = api.competition_submissions(slug)
@@ -335,14 +520,7 @@ def kaggle_live_status(slug: str) -> dict[str, Any]:
         out["submissions_error"] = str(exc)
 
     try:
-        import json as _json
-
-        username = ""
-        try:
-            creds = _json.loads((Path.home() / ".kaggle" / "kaggle.json").read_text(encoding="utf-8"))
-            username = str(creds.get("username", ""))
-        except Exception:
-            pass
+        username = _api_username(api)
         board = api.competition_leaderboard_view(slug)
         top = []
         rank = None
@@ -411,6 +589,16 @@ def run_predict_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     ctx.set_field("csv_path", str(csv_path))
     ctx.log(f"submission.csv written: {csv_path}")
 
+    # Pre-submit sanity summary — after validation, before any upload.
+    sanity = build_sanity_summary(pred_map)
+    ctx.set_field("sanity", sanity)
+    ctx.log(
+        f"Sanity: {sanity['total_boxes']} boxes over {sanity['images']} images "
+        f"(mean {sanity['boxes_per_image_mean']}/image, {sanity['empty_images']} empty)"
+    )
+    if sanity.get("warning"):
+        ctx.log(f"WARNING: {sanity['warning']}")
+
     local_score = try_local_score(str(csv_path), ctx)
     if local_score is not None:
         ctx.set_field("local_score", local_score)
@@ -432,6 +620,7 @@ def run_predict_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
         "csv_path": str(csv_path),
         "rows": len(df),
         "total_boxes": n_boxes,
+        "sanity": sanity,
         "conf": conf,
         "local_score": local_score,
         "submission": submission,

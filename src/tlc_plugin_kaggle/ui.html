@@ -25,6 +25,21 @@
 
 .kg-panel { display: none; }
 .kg-panel.active { display: block; }
+
+/* Kaggle connection panel (Submit tab) */
+.kg-conn {
+  padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border);
+  margin-bottom: 12px; font-size: 12.5px; line-height: 1.5;
+}
+.kg-conn.ok { background: rgba(5,150,105,.08); border-color: rgba(5,150,105,.25); }
+.kg-conn.warn { background: rgba(217,119,6,.08); border-color: rgba(217,119,6,.3); }
+.kg-conn.err { background: rgba(239,68,68,.06); border-color: rgba(239,68,68,.2); }
+
+/* Soft (never blocking) sanity warning */
+.kg-soft-warn {
+  padding: 8px 10px; border-radius: 6px; margin-top: 6px; font-size: 12px;
+  background: rgba(217,119,6,.08); border: 1px solid rgba(217,119,6,.3);
+}
 </style>
 
 <div class="plugin-page-narrow" style="padding: 24px; max-width: 900px; margin: 0 auto;">
@@ -227,6 +242,7 @@
       validation (the metric's exact rules, so a bad file never burns a Kaggle
       submission) → optional Kaggle upload.
     </p>
+    <div id="ps-conn" class="kg-conn"><em style="opacity:.7;">Checking Kaggle connection…</em></div>
     <div class="plugin-form-grid" style="display: grid; gap: 8px; max-width: 720px;">
       <label>Run (trained via this plugin)
         <select id="ps-run" style="width: 100%;"><option value="">— select a run —</option></select>
@@ -241,7 +257,7 @@
     <div style="display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 8px; max-width: 720px; margin-top: 8px;">
       <label>Conf threshold <input id="ps-conf" type="number" value="0.25" step="0.01" min="0" max="1" style="width: 100%;"></label>
       <label>Device <input id="ps-device" type="text" value="0" style="width: 100%;"></label>
-      <label>Competition slug <input id="ps-slug" type="text" placeholder="[SLUG] — set at launch" style="width: 100%;"></label>
+      <label>Competition slug <input id="ps-slug" type="text" placeholder="loading default…" style="width: 100%;"></label>
     </div>
     <label style="display: block; margin-top: 8px; max-width: 720px;">Submission message
       <input id="ps-message" type="text" style="width: 100%;" placeholder="<run_name> via 3LC plugin">
@@ -592,6 +608,96 @@
       var psJobId = null;
       var psTimer = null;
 
+      // Download a job's submission CSV through the authenticated API
+      // (a plain <a href> would miss the Authorization header).
+      function downloadCsv(jobId) {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/submissions/' + jobId + '/download')
+          .then(function (r) {
+            if (!r.ok) { throw new Error('HTTP ' + r.status); }
+            var name = 'submission.csv';
+            var cd = r.headers.get('Content-Disposition') || '';
+            var m = cd.match(/filename="([^"]+)"/);
+            if (m) { name = m[1]; }
+            return r.blob().then(function (blob) {
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = url; a.download = name;
+              document.body.appendChild(a); a.click();
+              document.body.removeChild(a);
+              setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+            });
+          })
+          .catch(function (e) { alert('Download failed: ' + e.message); });
+      }
+      // renderHistory builds rows as strings — expose for onclick handlers.
+      window.kgDownloadCsv = downloadCsv;
+
+      // Three-state connection panel: no credential / not joined / ready.
+      function renderConnection() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/kaggle/connection?slug=' +
+                      encodeURIComponent(el('ps-slug').value.trim()))
+          .then(function (r) { return r.json(); })
+          .then(function (s) {
+            // Hardcoded competition default (server constant), still editable.
+            if (!el('ps-slug').value.trim() && s.default_slug) {
+              el('ps-slug').value = s.default_slug;
+            }
+            var box = el('ps-conn');
+            if (s.state === 'no_credentials') {
+              box.className = 'kg-conn err';
+              box.innerHTML = '<strong>🔌 Kaggle account not connected.</strong><br>' +
+                '<span style="opacity:.85">' + (s.help || '') + '</span>';
+            } else if (s.state === 'not_joined') {
+              box.className = 'kg-conn warn';
+              box.innerHTML = '<strong>🚪 Join the competition on Kaggle first.</strong> ' +
+                'Your account (<strong>' + (s.username || '?') + '</strong>) has not accepted the ' +
+                'competition rules yet — submissions would be rejected.<br>' +
+                '<a class="btn btn-secondary btn-sm" style="margin-top:6px; display:inline-block;" ' +
+                'href="' + s.competition_url + '" target="_blank">Open competition page →</a>';
+            } else if (s.state === 'ready') {
+              box.className = 'kg-conn ok';
+              var extra = '';
+              if (s.daily_limit) {
+                // LAUNCH-VERIFY: submissions_used_today only renders when
+                // ListSubmissions is permitted (403s on the private test comp).
+                extra = typeof s.submissions_used_today === 'number'
+                  ? ' · ' + s.submissions_used_today + ' of ' + s.daily_limit + ' submissions used today'
+                  : ' · ' + s.daily_limit + ' submissions/day';
+              }
+              box.innerHTML = '<strong>🟢 Connected to Kaggle</strong>' +
+                (s.username ? ' as <strong>' + s.username + '</strong>' : '') + extra +
+                (s.probe_error ? '<br><span style="opacity:.7">(competition probe failed: ' + s.probe_error + ')</span>' : '');
+            } else {
+              box.className = 'kg-conn';
+              box.innerHTML = '<em style="opacity:.7">Connection state unknown.</em>';
+            }
+          })
+          .catch(function () {
+            el('ps-conn').className = 'kg-conn';
+            el('ps-conn').innerHTML = '<em style="opacity:.7">Could not check the Kaggle connection ' +
+              '(is the compute service running with the latest plugin routes?).</em>';
+          });
+      }
+      renderConnection();
+
+      function renderSanity(sanity) {
+        if (!sanity) { return ''; }
+        var html = '<div style="margin-top:6px; font-size:12.5px;">' +
+          '<strong>Pre-submit sanity:</strong> ' + sanity.total_boxes + ' boxes over ' +
+          sanity.images + ' images · mean ' + sanity.boxes_per_image_mean + '/image · ' +
+          sanity.empty_images + ' images with no boxes';
+        var pc = sanity.per_class || {};
+        var parts = Object.keys(pc).map(function (k) { return k + ' ' + pc[k]; });
+        if (parts.length) {
+          html += '<div style="opacity:.75; font-size:11.5px; margin-top:2px;">' + parts.join(' · ') + '</div>';
+        }
+        html += '</div>';
+        if (sanity.warning) {
+          html += '<div class="kg-soft-warn">⚠ ' + sanity.warning + '</div>';
+        }
+        return html;
+      }
+
       // Run selector: plugin-trained runs with weights, newest first.
       API.authFetch(computeUrl + '/api/plugins/kaggle/runs')
         .then(function (r) { return r.json(); })
@@ -643,12 +749,24 @@
               out += 'CSV: <code style="font-size: 11px;">' + facts.csv_path + '</code>' +
                      (typeof facts.local_score === 'number'
                        ? ' — local mAP@0.5: <strong>' + facts.local_score.toFixed(4) + '</strong>'
-                       : '') + '<br>';
+                       : '') +
+                     ' <button class="btn btn-secondary btn-sm" onclick="kgDownloadCsv(\'' +
+                     job.id + '\')">⬇ Download CSV</button><br>';
             }
+            out += renderSanity(facts.sanity);
             if (facts.submission) {
-              out += 'Submission: <strong>' + facts.submission.status + '</strong>' +
-                     (facts.submission.ref ? ' — ' + facts.submission.ref : '') +
-                     (facts.submission.reason ? ' <span style="opacity:.7">' + facts.submission.reason + '</span>' : '');
+              var sub = facts.submission;
+              if (sub.status === 'limit_reached') {
+                out += '<div class="kg-soft-warn">🕛 ' + sub.reason +
+                       ' <button class="btn btn-secondary btn-sm" onclick="kgDownloadCsv(\'' +
+                       job.id + '\')">⬇ Download CSV</button></div>';
+              } else if (sub.status === 'not_joined') {
+                out += '<div class="kg-soft-warn">🚪 ' + sub.reason + '</div>';
+              } else {
+                out += '<div style="margin-top:4px;">Submission: <strong>' + sub.status + '</strong>' +
+                       (sub.ref ? ' — ' + sub.ref : '') +
+                       (sub.reason ? ' <span style="opacity:.7">' + sub.reason + '</span>' : '') + '</div>';
+              }
             }
             el('ps-result').innerHTML = out;
             if (job.status === 'running') { el('ps-state').textContent = 'Working…'; return; }
@@ -657,6 +775,7 @@
             el('ps-state').textContent =
               job.status === 'completed' ? '✅ Done' : '❌ ' + (job.error || 'Failed');
             renderPipeline();
+            renderConnection();
           })
           .catch(function () {});
       }
@@ -718,11 +837,16 @@
               var score = typeof facts.local_score === 'number' ? facts.local_score.toFixed(4) : '—';
               var subTxt = job.status === 'failed' ? '❌ failed'
                 : (sub.status || '—') + (sub.ref ? ' (' + sub.ref + ')' : '');
+              var csvCell = facts.csv_path
+                ? '<code style="font-size: 11px;">' + facts.csv_path + '</code> ' +
+                  '<button class="btn btn-secondary btn-sm" onclick="kgDownloadCsv(\'' +
+                  job.id + '\')">⬇</button>'
+                : '—';
               html += '<tr><td style="padding: 2px 12px 2px 0;"><strong>' + run + '</strong></td>' +
                       '<td style="padding: 2px 12px 2px 0;">' + when + '</td>' +
                       '<td style="padding: 2px 12px 2px 0;">' + score + '</td>' +
                       '<td style="padding: 2px 12px 2px 0;">' + subTxt + '</td>' +
-                      '<td style="padding: 2px 0;"><code style="font-size: 11px;">' + (facts.csv_path || '—') + '</code></td></tr>';
+                      '<td style="padding: 2px 0;">' + csvCell + '</td></tr>';
             });
             el('st-history').innerHTML = html + '</table>';
           })

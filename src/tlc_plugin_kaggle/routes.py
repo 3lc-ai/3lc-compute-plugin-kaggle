@@ -198,6 +198,35 @@ class KaggleController(Controller):
 
         return predictor.kaggle_live_status(slug)
 
+    @get("/kaggle/connection", sync_to_thread=True)
+    def kaggle_connection(self, slug: str = "") -> dict[str, Any]:
+        """Submit tab connection panel: no_credentials / not_joined / ready."""
+        from tlc_plugin_kaggle import predictor
+
+        return predictor.kaggle_connection(slug)
+
+    @get("/submissions/{job_id:str}/download", sync_to_thread=True)
+    def download_submission(self, job_id: str) -> Response:
+        """Stream a predict job's generated submission.csv to the browser."""
+        from pathlib import Path
+
+        from tlc_plugin_kaggle import jobs
+
+        job = jobs.get_job(job_id)
+        if job is None:
+            raise NotFoundException(detail=f"No such job: {job_id}")
+        csv_path = str((job.get("facts") or {}).get("csv_path", ""))
+        if not csv_path or not Path(csv_path).is_file():
+            raise NotFoundException(detail=f"Job {job_id} has no submission CSV on disk.")
+        return Response(
+            content=Path(csv_path).read_bytes(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{Path(csv_path).name}"',
+                "Cache-Control": "no-store",
+            },
+        )
+
     @get("/pipeline", sync_to_thread=True)
     def pipeline_state(self, project: str = "exdark-competition") -> dict[str, Any]:
         """Where the participant is in the Import -> Train -> Submit loop.
