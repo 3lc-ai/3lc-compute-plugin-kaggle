@@ -106,6 +106,10 @@ def start_job(kind: str, params: dict[str, Any], target: Callable[[dict[str, Any
         "id": job_id,
         "kind": kind,
         "status": "running",
+        # Owning-process stamp for orphan detection (_mark_if_orphaned):
+        # worker threads survive hot reloads (same pid) but never a service
+        # restart (new pid).
+        "pid": os.getpid(),
         "created_at": time.time(),
         "finished_at": None,
         "cancelled": False,
@@ -180,6 +184,32 @@ def cancel_job(job_id: str) -> dict[str, Any] | None:
     return None
 
 
+def _mark_if_orphaned(job: dict[str, Any]) -> dict[str, Any]:
+    """Mark a 'running' record owned by a dead process as stale.
+
+    A worker thread survives plugin hot reloads (module purge keeps the
+    process, and both module generations flush to the same file) but never a
+    service restart. So a running record whose recorded pid is not the
+    current process is PROOF of orphanhood, not a timing heuristic — a slow
+    participant disk can never be misclassified. Records without a pid
+    predate this stamp and are equally orphaned (deploying it required a
+    restart). The decision is logged into the record and persisted once.
+    """
+    if job.get("status") != "running" or job.get("pid") == os.getpid():
+        return job
+    job["status"] = "stale"
+    job["error"] = "Interrupted: the compute service restarted while this job was running."
+    job.setdefault("log", []).append(
+        f"Marked stale on read: recorded owner pid {job.get('pid')} is not the current "
+        f"service process ({os.getpid()}) — the worker thread did not survive a restart."
+    )
+    if job.get("finished_at") is None:
+        job["finished_at"] = time.time()
+    with _lock:
+        _flush_locked(job)
+    return job
+
+
 def _normalize_record(job: dict[str, Any]) -> dict[str, Any]:
     """Display-time correction for records persisted before the session-2
     cancel-status fix: their terminal flush clobbered the cancelled flag, but
@@ -205,7 +235,7 @@ def get_job(job_id: str) -> dict[str, Any] | None:
     path = _job_path(job_id)
     if path.is_file():
         try:
-            return _normalize_record(json.loads(path.read_text(encoding="utf-8")))
+            return _normalize_record(_mark_if_orphaned(json.loads(path.read_text(encoding="utf-8"))))
         except Exception:
             return None
     return None
@@ -228,6 +258,7 @@ def list_jobs(kind: str | None = None) -> list[dict[str, Any]]:
             seen[job_id] = job
     out = []
     for job in sorted(seen.values(), key=lambda j: j.get("created_at", 0), reverse=True):
+        job = _mark_if_orphaned(job)  # no-op for records owned by this process
         slim = {k: v for k, v in job.items() if k not in ("log", "checks")}
         if kind is None or slim.get("kind") == kind:
             out.append(_normalize_record(dict(slim)))
