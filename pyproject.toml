@@ -1,6 +1,6 @@
 [project]
 name = "3lc-compute-plugin-kaggle"
-version = "0.1.0"
+version = "1.1.0"
 description = "End-to-end Kaggle competition workflow for the 3LC Hub: import, train the fixed baseline, predict, submit."
 requires-python = ">=3.10"
 # Installed host (tlc_compute 0.1.1.47) imports in-process: deps must already
@@ -16,8 +16,8 @@ dependencies = []
 [tool.tlc-compute]
 id = "kaggle"
 name = "Kaggle Competition"
-description = "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n from scratch @ 640), predict and submit."
-version = "0.1.0"
+description = "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit."
+version = "1.1.0"
 min_service_version = "0.1.0"
 icon = "🏁"
 repository_url = "https://github.com/3lc-ai/3lc-compute-plugin-kaggle"

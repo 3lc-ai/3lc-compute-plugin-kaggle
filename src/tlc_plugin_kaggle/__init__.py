@@ -25,10 +25,10 @@ class KagglePlugin(ComputePlugin):
     name = "Kaggle"
     description = (
         "Kaggle Competition: import the dataset, train the fixed baseline "
-        "(YOLOv11n from scratch @ 640), predict and submit. The whole "
-        "competition loop without leaving the Hub."
+        "(YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit. "
+        "The whole competition loop without leaving the Hub."
     )
-    version = "1.0.0"
+    version = "1.1.0"
     min_service_version = "0.1.0"
     icon = "🏁"  # host fallback when icon_svg is unsupported
     # Same flag as the fragment's header identity icon (16px grid, 1.5px
