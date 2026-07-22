@@ -552,7 +552,7 @@
     <div class="kg-constraints">
       <div class="kg-micro-label">Competition constraints</div>
       <div class="kg-chips">
-        <span class="kg-chip" title="Fixed so all participants compete on identical architecture and resolution. Training from random init is the competition’s core rule; the Run’s provenance proves it."><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg> YOLOv11n from scratch · 640px</span>
+        <span class="kg-chip" title="Identical architecture, starting weights, and resolution for every participant. Everyone trains from the same official checkpoint; the Run’s provenance records its sha256 as proof."><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg> YOLOv11n · COCO-pretrained · 640px</span>
         <span class="kg-chip" title="The canonical ExDark class list, fixed so every submission scores against the same label map.">12 classes</span>
         <span class="kg-chip" title="The leaderboard metric. The local preview uses the identical implementation.">Scored by mAP@0.5</span>
       </div>
@@ -583,7 +583,7 @@
     </div>
     <div class="kg-tab" data-tab="train" role="tab" tabindex="0" aria-selected="false">
       <div class="kg-tab-title"><span class="kg-tab-state pending" id="kg-state-train"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.25"/></svg></span> 2 Train</div>
-      <div class="kg-tab-sub">YOLOv11n from scratch</div>
+      <div class="kg-tab-sub">YOLOv11n, pinned init</div>
     </div>
     <div class="kg-tab" data-tab="submit" role="tab" tabindex="0" aria-selected="false">
       <div class="kg-tab-title"><span class="kg-tab-state pending" id="kg-state-submit"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.25"/></svg></span> 3 Predict + Submit</div>
@@ -680,23 +680,27 @@
     <div class="card-header"><div>
       <div class="card-title"><span class="plugin-section-number">2</span> Train</div>
       <div class="card-subtitle">Trains the competition baseline on your imported tables and
-        records from-scratch provenance on the 3LC Run.</div>
+        records verified provenance (the pinned official init) on the 3LC Run.</div>
     </div></div>
     <div class="card-body">
       <!-- Locked contract: same geometry as Import's format banner -->
-      <div class="format-selected-banner" title="Fixed so all participants compete on identical architecture and resolution. Extra args naming a locked key are rejected server-side.">
+      <div class="format-selected-banner" title="Identical architecture, starting weights, and resolution for every participant. The leaderboard measures your data work, not your compute. Extra args naming a locked key are rejected server-side.">
         <span class="fmt-icon"><svg class="kgi kgi-16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></span>
         <div style="flex: 1;">
-          <div class="fmt-name">YOLOv11n from scratch · 640px · no pretrained weights</div>
-          <div class="fmt-desc">Enforced server-side and cannot be overridden, including via extra args.</div>
+          <div class="fmt-name">YOLOv11n from the official COCO-pretrained checkpoint · 640px</div>
+          <div class="fmt-desc">Enforced server-side; identical starting weights for every participant.</div>
         </div>
       </div>
       <!-- Locked parameters: read-only rows, never fake-editable inputs.
            No ids, never collected into the POST body; the lock is enforced
-           server-side (LOCKED_TRAIN_ARGS + extra-args guard). -->
+           server-side (LOCKED_TRAIN_ARGS + extra-args guard + the pinned
+           checkpoint hash). -->
       <div class="kg-locked-rows">
-        <div class="kg-locked-row" title="Locked: yolo11n.yaml builds the architecture from scratch with random init. No checkpoint is ever loaded."><span class="lbl">Model</span>
-          <span class="val">yolo11n.yaml (from scratch, random init)</span>
+        <div class="kg-locked-row" title="Identical architecture for every participant. The leaderboard measures your data work, not your compute."><span class="lbl">Model</span>
+          <span class="val">YOLOv11n</span>
+          <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></div>
+        <div class="kg-locked-row" title="The official COCO-pretrained checkpoint, downloaded and cached by the plugin and verified by sha256. Everyone starts from byte-identical weights; the hash is recorded on the Run as proof."><span class="lbl">Init</span>
+          <span class="val">yolo11n.pt · sha256 0ebbc80d4a76&hellip;</span>
           <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></div>
         <div class="kg-locked-row" title="Locked at 640px so results are comparable across participants."><span class="lbl">Image size</span>
           <span class="val">640</span>
@@ -745,9 +749,10 @@
         <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;">
           <div class="form-group">
             <label class="form-label" for="tr-epochs">Epochs</label>
-            <input id="tr-epochs" type="number" class="form-control" value="100" min="1" max="300" step="1">
-            <div class="form-help">Passes over the training data. 50 to 150 is the productive range
-              for this dataset; returns diminish late. Range 1 to 300.</div>
+            <input id="tr-epochs" type="number" class="form-control" value="20" min="1" max="300" step="1">
+            <div class="form-help">Passes over the training data. The pretrained start converges
+              fast: a plain run reaches about 0.70 val mAP50 by epoch 10. 10 to 50 is the
+              productive range; use Patience to stop early. Range 1 to 300.</div>
             <div id="tr-duration"></div>
             <div class="kg-field-slot" data-for="tr-epochs"></div>
           </div>
@@ -807,7 +812,7 @@
                   <label class="form-label" for="tr-device">Device</label>
                   <input id="tr-device" type="text" class="form-control" value="0">
                   <div class="form-help">GPU index (0 for the first GPU) or <code>cpu</code>.
-                    From-scratch training on CPU is very slow; use the GPU.</div>
+                    Training on CPU is very slow; use the GPU.</div>
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="tr-workers">Workers</label>
@@ -971,10 +976,16 @@
         <form id="ps-form" onsubmit="return false;">
           <div class="form-group">
             <label class="form-label required">Weights source</label>
-            <div class="kg-seg" role="group" aria-label="Weights source">
+            <!-- The Weights-file side is host-only (same gate as local
+                 scoring): participants predict from plugin runs so every
+                 submission carries verified provenance. Hidden until the
+                 config _meta.host flag confirms an organizer machine. -->
+            <div class="kg-seg" role="group" aria-label="Weights source" id="ps-src-seg" hidden>
               <button type="button" id="ps-src-run-btn" aria-pressed="true">Plugin run</button>
               <button type="button" id="ps-src-weights-btn" aria-pressed="false">Weights file</button>
             </div>
+            <div class="form-help">Predictions come from runs trained in this plugin, so every
+              submission carries verified provenance.</div>
             <div id="ps-src-run">
               <div class="kg-url-row">
                 <div class="kg-select-wrap" style="flex: 1; min-width: 0;">
@@ -1716,6 +1727,8 @@
         });
       }
 
+      var kgHost = false;   // organizer machine (config _meta.host): host-only UI
+
       var configLoaded = API.authFetch(computeUrl + '/api/plugins/kaggle/config')
         .then(function (r) { return r.json(); })
         .then(function (cfg) {
@@ -1725,6 +1738,11 @@
             // (previously only after an Import preflight had run).
             kgPluginVersion = String(cfg._meta.version || '');
             kgRenderFooters(cfg._meta);
+            // Host-only: the Weights-file source toggle. Participants keep
+            // the single Plugin-run source (also enforced server-side).
+            kgHost = !!cfg._meta.host;
+            var seg = el('ps-src-seg');
+            if (seg) { seg.hidden = !kgHost; }
           }
         })
         .catch(function () { /* fresh install or route not mounted yet */ });
@@ -2493,6 +2511,7 @@
       function kgDevForce(mode) {
         if (mode && mode.indexOf('train-') === 0) { trDevForce(mode); return; }
         if (mode && mode.indexOf('submit-') === 0) { psDevForce(mode); return; }
+        if (mode && mode.indexOf('predict-') === 0) { psDevForce(mode); return; }
         if (mode && mode.indexOf('status-') === 0) { stDevForce(mode); return; }
         var devYaml = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\competition_exdark\\package_build\\starter_kit\\dataset.yaml';
         var base = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
@@ -2643,7 +2662,9 @@
         var runUrl = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/runs/' + devRun;
 
         // Deterministic improving curve with a mild wobble — fixtures must
-        // render identically on every load (no randomness).
+        // render identically on every load (no randomness). Shape matches
+        // the pretrained contract: fast early rise, flattening around 0.72
+        // (the 2026-07-22 control run hit 0.53 by epoch 2, 0.71 by epoch 10).
         function HIST(n) {
           var h = [];
           for (var e = 1; e <= n; e++) {
@@ -2651,28 +2672,33 @@
             var w = ((e * 37) % 11) / 11;
             h.push({
               e: e,
-              m50: +(0.44 * Math.pow(f, 0.55) + 0.02 * w).toFixed(4),
-              m95: +(0.26 * Math.pow(f, 0.6) + 0.012 * w).toFixed(4),
-              p: +(0.58 * Math.pow(f, 0.35) + 0.03 * w).toFixed(4),
-              r: +(0.5 * Math.pow(f, 0.5) + 0.025 * w).toFixed(4)
+              m50: +(0.72 - 0.58 * Math.pow(1 - f, 4) + 0.008 * w).toFixed(4),
+              m95: +(0.46 - 0.38 * Math.pow(1 - f, 4) + 0.006 * w).toFixed(4),
+              p: +(0.75 - 0.4 * Math.pow(1 - f, 3) + 0.012 * w).toFixed(4),
+              r: +(0.62 - 0.38 * Math.pow(1 - f, 3) + 0.01 * w).toFixed(4)
             });
           }
           return h;
         }
+        var devSha = '0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1';
+        var devCkpt = 'C:\\Users\\Owner\\.3lc-kaggle-plugin\\checkpoints\\yolo11n.pt';
         var PROV = [
-          { label: 'run records model == yolo11n.yaml (from scratch)', ok: true, detail: "model='yolo11n.yaml'" },
+          { label: 'run records model == yolo11n.pt (official checkpoint)', ok: true,
+            detail: "model='" + devCkpt + "'" },
           { label: 'run records imgsz == 640', ok: true, detail: 'imgsz=640' },
-          { label: 'run records pretrained == False', ok: true, detail: 'pretrained=False' }
+          { label: 'run records pretrained == True (official init)', ok: true, detail: 'pretrained=True' },
+          { label: 'run records the official checkpoint sha256', ok: true,
+            detail: 'checkpoint_sha256=' + devSha.slice(0, 12) + '...' }
         ];
         var LOG = [
           'train: ' + trainUrl + ' (5910 rows)',
           'val: ' + valUrl + ' (733 rows)',
-          'Locked: model=yolo11n.yaml (from scratch) · imgsz=640 · pretrained=False. ' +
-            'Training 50 epochs, batch 16, device 0.',
-          'epoch 1/50 — metrics/precision(B)=0.31427, metrics/recall(B)=0.10553, ' +
-            'metrics/mAP50(B)=0.09409, metrics/mAP50-95(B)=0.04116',
-          'epoch 2/50 — metrics/precision(B)=0.38112, metrics/recall(B)=0.16881, ' +
-            'metrics/mAP50(B)=0.14213, metrics/mAP50-95(B)=0.06632'
+          'Locked: model=yolo11n.pt (official COCO-pretrained, sha256 ' + devSha.slice(0, 12) +
+            '...) · imgsz=640 · pretrained=True. Training 50 epochs, batch 16, device 0.',
+          'epoch 1/50 — metrics/precision(B)=0.35211, metrics/recall(B)=0.24387, ' +
+            'metrics/mAP50(B)=0.19342, metrics/mAP50-95(B)=0.09815',
+          'epoch 2/50 — metrics/precision(B)=0.44876, metrics/recall(B)=0.31292, ' +
+            'metrics/mAP50(B)=0.28861, metrics/mAP50-95(B)=0.15423'
         ];
 
         function JOB(status, epoch, total, extra) {
@@ -2705,8 +2731,10 @@
         var doneJob = function () {
           return JOB('completed', 50, 50, {
             checks: PROV,
-            facts: { run_name: devRun, run_url: runUrl, weights: weights },
-            result: { run_name: devRun, weights: weights, epochs_completed: 50, provenance: PROV }
+            facts: { run_name: devRun, run_url: runUrl, weights: weights,
+                     checkpoint_sha256: devSha },
+            result: { run_name: devRun, weights: weights, epochs_completed: 50,
+                      provenance: PROV, checkpoint_sha256: devSha }
           });
         };
 
@@ -2760,9 +2788,11 @@
             gateGreen();
             trRenderTerminal(doneJob(), false, false);
             el('tr-log').textContent = LOG.concat([
-              "PASS run records model == yolo11n.yaml (from scratch) — model='yolo11n.yaml'",
+              "PASS run records model == yolo11n.pt (official checkpoint) — model='" + devCkpt + "'",
               'PASS run records imgsz == 640 — imgsz=640',
-              'PASS run records pretrained == False — pretrained=False',
+              'PASS run records pretrained == True (official init) — pretrained=True',
+              'PASS run records the official checkpoint sha256 — checkpoint_sha256=' +
+                devSha.slice(0, 12) + '...',
               'best.pt: ' + weights + ' (exists: True)'
             ]).join('\n');
             el('tr-log-details').style.display = 'block';
@@ -2785,9 +2815,9 @@
         configLoaded.then(function () { setTimeout(apply, 0); });
       }
 
-      // Predict + Submit forced states (?kgdev=submit-...): static
-      // fixtures, no fetches, no job side effects. Documented in
-      // docs/ui-notes.md.
+      // Predict + Submit forced states (?kgdev=submit-... and
+      // ?kgdev=predict-legacy-run): static fixtures, no fetches, no job
+      // side effects. Documented in docs/ui-notes.md.
       function psDevForce(mode) {
         var base = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
         var testUrl = base + 'exdark_test/tables/initial';
@@ -2796,14 +2826,24 @@
                       devRun + '\\submissions\\submission_20260721_141530.csv';
         var now = Date.now() / 1000;
 
+        var devSha = '0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1';
         var RUNS = [
           { job_id: 'devtrain1', run_name: devRun, usable: true, provenance_ok: true,
-            epochs_completed: 50, best_map50: 0.312, created_at: now - 86400,
+            contract: 'pretrained', checkpoint_sha256: devSha,
+            epochs_completed: 50, best_map50: 0.7241, created_at: now - 86400,
             weights: 'C:\\...\\weights\\best.pt', run_url: '' },
           { job_id: 'devtrain0', run_name: 'kaggle_run_20260720_183000', usable: false,
-            provenance_ok: false, created_at: now - 172800,
+            provenance_ok: false, contract: null, created_at: now - 172800,
             reason: 'failed: CUDA out of memory' }
         ];
+        // A pre-repositioning run: verified under the old from-scratch
+        // contract, truthfully tagged, still selectable and submittable.
+        var LEGACY_RUN = {
+          job_id: 'devtrainlegacy', run_name: 'kaggle_run_20260722_130606', usable: true,
+          provenance_ok: true, contract: 'legacy_scratch', checkpoint_sha256: '',
+          epochs_completed: 10, best_map50: 0.0045, created_at: now - 259200,
+          weights: 'C:\\...\\weights\\best.pt', run_url: ''
+        };
         var CHECKS_OK = [
           { label: 'columns are id, image_id, prediction_string', ok: true, detail: "got ['id', 'image_id', 'prediction_string']" },
           { label: 'exactly 715 rows (one per test image)', ok: true, detail: 'got 715' },
@@ -2850,11 +2890,11 @@
           psRenderGate(psGate);
         }
 
-        function loadDevRuns(selectFirst) {
-          psRuns = RUNS;
+        function loadDevRuns(selectFirst, runs) {
+          psRuns = runs || RUNS;
           var sel = el('ps-run');
           sel.innerHTML = '<option value="">Select a run…</option>';
-          RUNS.forEach(function (run) {
+          psRuns.forEach(function (run) {
             var opt = document.createElement('option');
             opt.value = run.job_id;
             opt.textContent = (run.run_name || run.job_id) + ' · ' +
@@ -2862,7 +2902,7 @@
             if (!run.usable) { opt.disabled = true; }
             sel.appendChild(opt);
           });
-          if (selectFirst) { sel.value = 'devtrain1'; }
+          if (selectFirst) { sel.value = psRuns[0] ? psRuns[0].job_id : ''; }
           psRenderRunNote();
         }
 
@@ -2894,11 +2934,24 @@
 
           if (mode === 'submit-state1') {
             psRuns = [];
-            el('ps-run').innerHTML = '<option value="">No plugin runs yet. Train first, or use a weights file.</option>';
+            el('ps-run').innerHTML = '<option value="">No plugin runs yet. Train first (tab 2).</option>';
             el('ps-test-url').value = '';
             psGate = null;
             psRenderGate(null);
             psRenderRunNote();
+            psCheckPredictReady();
+          } else if (mode === 'submit-participant') {
+            // Participant view: no Weights-file toggle (host=false), single
+            // Plugin-run source. Everything else is the gated-ready state.
+            el('ps-src-seg').hidden = true;
+            loadDevRuns(true);
+            gateGreen();
+            psCheckPredictReady();
+          } else if (mode === 'predict-legacy-run') {
+            // A pre-repositioning from-scratch run selected: summary and
+            // note carry the truthful "from-scratch · legacy" tag.
+            loadDevRuns(true, [LEGACY_RUN].concat(RUNS));
+            gateGreen();
             psCheckPredictReady();
           } else if (mode === 'submit-gated') {
             loadDevRuns(true);
@@ -3222,7 +3275,8 @@
             '<span id="tr-run-elapsed"></span><span id="tr-run-eta"></span></span></div>' +
             '<div class="plugin-progress-wrap" id="tr-run-track">' +
             '<div class="plugin-progress-bar" id="tr-run-bar" style="width:0%"></div></div>' +
-            '<div class="kg-metric-strip" id="tr-metric-strip"></div>';
+            '<div class="kg-metric-strip" id="tr-metric-strip"></div>' +
+            '<div id="tr-run-note"></div>';
         }
         el('tr-run-name').textContent = name;
         var badgeCls = TR_BADGE_CLASS[status] || 'queued';
@@ -3250,12 +3304,24 @@
             (total ? Math.min(100, Math.round(100 * (epoch + within) / total)) : 0) + '%';
         }
         trRenderMetricStrip(p.history || []);
+        // Pre-flight stage note: a first-ever train fetches the pinned
+        // official checkpoint before epoch 1, which would otherwise read as
+        // a silent stall under an indeterminate bar. Backend sets
+        // progress.stage_note during the fetch; it clears itself when real
+        // epoch progress replaces the payload.
+        var noteBox = el('tr-run-note');
+        if (noteBox) {
+          var showNote = status === 'running' && epoch === 0 && p.stage_note;
+          noteBox.innerHTML = showNote
+            ? '<div class="form-help">' + esc(p.stage_note) + '</div>'
+            : '';
+        }
       }
 
       // ── Provenance panel: the product's whole point, promoted ────────
-      // The Run's own record proves from-scratch (model / imgsz /
-      // pretrained). Import's verdict + checks pattern, one group.
-      // `animate` = the assertions just arrived live in this session.
+      // The Run's own record proves the locked contract (model / imgsz /
+      // pretrained / checkpoint sha256). Import's verdict + checks pattern,
+      // one group. `animate` = the assertions just arrived live.
       function trRenderProvenance(checks, animate) {
         var box = el('tr-checks');
         if (!checks || !checks.length) { box.innerHTML = ''; return; }
@@ -3264,7 +3330,7 @@
         var html = '<div class="kg-verdict">' +
           (allOk ? '<span class="ok">' + kgIcon('check-circle') + '</span>'
                  : '<span class="bad">' + kgIcon('x-circle') + '</span>') +
-          '<span>' + (allOk ? 'From-scratch provenance recorded'
+          '<span>' + (allOk ? 'Verified provenance recorded'
                             : 'Provenance check failed') + '</span></div>' +
           '<div class="kg-checks-grid' + (animate ? ' kgl-cascade' : '') + '"><div>' +
           '<div class="kg-checks-head">Provenance verified</div>';
@@ -3899,6 +3965,8 @@
         var run = psSelectedRun();
         var weights = psSource === 'weights' ? el('ps-weights').value.trim() : (run ? run.weights : '');
         if (weights) { head.push('weights: ' + weights); }
+        if (run && run.checkpoint_sha256) { head.push('init sha256: ' + run.checkpoint_sha256); }
+        if (run && run.contract) { head.push('contract: ' + run.contract); }
         head.push('conf: ' + el('ps-conf').value);
         if (psPredictJobId) { head.push('predict job: ' + psPredictJobId); }
         if (psSubmitJobId) { head.push('submit job: ' + psSubmitJobId); }
@@ -3937,7 +4005,12 @@
       }
 
       function psRunSummary(run) {
-        var bits = [run.provenance_ok ? 'from-scratch' : 'provenance unverified'];
+        // The contract is uniform now, so conforming runs carry no badge;
+        // pre-repositioning runs are truthfully tagged, and unverified
+        // provenance is still called out.
+        var bits = [];
+        if (run.contract === 'legacy_scratch') { bits.push('from-scratch · legacy'); }
+        else if (!run.provenance_ok) { bits.push('provenance unverified'); }
         if (run.epochs_completed) { bits.push(run.epochs_completed + ' epochs'); }
         if (typeof run.best_map50 === 'number') { bits.push('best mAP50 ' + run.best_map50.toFixed(4)); }
         var d = psFmtDate(run.created_at);
@@ -3952,9 +4025,18 @@
 
       function psRenderRunNote() {
         var run = psSelectedRun();
+        var okText;
+        if (run && run.contract === 'legacy_scratch') {
+          okText = 'From-scratch provenance verified (legacy contract). Still submittable.';
+        } else if (run && run.checkpoint_sha256) {
+          okText = 'Verified provenance on this run’s record · init sha256 ' +
+                   esc(String(run.checkpoint_sha256).slice(0, 12)) + '…';
+        } else {
+          okText = 'Verified provenance on this run’s record.';
+        }
         el('ps-run-note').innerHTML = (run && run.provenance_ok)
           ? '<div class="kg-preflight-ok">' + kgIcon('check') +
-            '<span>From-scratch provenance verified on this run’s record.</span></div>'
+            '<span>' + okText + '</span></div>'
           : (run ? '<div class="kg-callout warn">' + kgIcon('alert-triangle') +
             '<span>This run has no recorded provenance checks.</span></div>' : '');
       }
@@ -3973,7 +4055,7 @@
             var ph = document.createElement('option');
             ph.value = '';
             ph.textContent = psRuns.length ? 'Select a run…'
-              : 'No plugin runs yet. Train first, or use a weights file.';
+              : 'No plugin runs yet. Train first (tab 2).';
             sel.appendChild(ph);
             psRuns.forEach(function (run) {
               var opt = document.createElement('option');
@@ -3994,7 +4076,7 @@
           })
           .catch(function (e) {
             kgConn.fail(e, psLoadRuns);
-            el('ps-run').options[0].textContent = 'Could not load runs. Use a weights file, or retry.';
+            el('ps-run').options[0].textContent = 'Could not load runs. Retry.';
           })
           .then(settle, settle);
       }
