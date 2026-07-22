@@ -58,7 +58,7 @@
 .kg-tabs { display: flex; gap: 0; margin: 16px 0 20px; border-bottom: 1px solid var(--border); }
 .kg-tab {
   flex: 1; text-align: center; padding: 10px 6px 12px; cursor: pointer;
-  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
   user-select: none;
 }
 .kg-tab:hover { background: var(--accent-light, rgba(42,74,97,.04)); }
@@ -66,7 +66,7 @@
 .kg-tab-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
 .kg-tab.active .kg-tab-title { color: var(--accent); }
 .kg-tab-sub { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
-.kg-tab-state { display: inline-block; min-width: 14px; font-weight: 700; }
+.kg-tab-state { display: inline-flex; min-width: 14px; vertical-align: -1px; }
 .kg-tab-state.done { color: var(--success); }
 .kg-tab-state.current { color: var(--accent); }
 .kg-tab-state.pending { color: var(--text-muted); }
@@ -281,6 +281,12 @@
   /* Loop-link hover (header wayfinding) */
   .kg-loop a { transition: color var(--kgl-motion-fast) var(--kgl-ease-out); }
 
+  /* Tab-bar hover/active feedback (tokenized; was a literal all .15s) */
+  .kg-tab {
+    transition: background-color var(--kgl-motion-fast) var(--kgl-ease-out),
+                border-color var(--kgl-motion-fast) var(--kgl-ease-out);
+  }
+
   /* Stat-value swaps (kgSwapText): fade out, swap, fade back */
   .kg-metric .val, .kg-run-meta .epoch, .kg-hero .num, .kg-hero .val, .kg-stat .val {
     transition: opacity var(--kgl-motion-fast) var(--kgl-ease-out);
@@ -395,6 +401,14 @@
 .kg-spark { display: block; margin-top: 3px; color: var(--accent); opacity: .8; }
 .kg-spark polyline { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .kg-spark circle { fill: currentColor; stroke: none; }
+
+/* Version footer: one muted line per tab */
+.kg-footer {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-muted); margin: -6px 2px 16px;
+}
+.kg-footer a { color: inherit; text-decoration: none; }
+.kg-footer a:hover { color: var(--text-secondary); }
 
 /* ── Status tab: hero strip + history table ───────────────────────────
    Three questions at a glance: how good is my best, what happened last,
@@ -556,20 +570,20 @@
   </div>
 
   <!-- ── Tab bar / pipeline stepper ────────────────────────────────── -->
-  <div class="kg-tabs" id="kg-tabs">
-    <div class="kg-tab" data-tab="import">
-      <div class="kg-tab-title"><span class="kg-tab-state pending" id="kg-state-import">○</span> 1 Import</div>
+  <div class="kg-tabs" id="kg-tabs" role="tablist" aria-label="Competition pipeline">
+    <div class="kg-tab" data-tab="import" role="tab" tabindex="0" aria-selected="false">
+      <div class="kg-tab-title"><span class="kg-tab-state pending" id="kg-state-import"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.25"/></svg></span> 1 Import</div>
       <div class="kg-tab-sub">Starter kit → 3LC tables</div>
     </div>
-    <div class="kg-tab" data-tab="train">
-      <div class="kg-tab-title"><span class="kg-tab-state pending" id="kg-state-train">○</span> 2 Train</div>
+    <div class="kg-tab" data-tab="train" role="tab" tabindex="0" aria-selected="false">
+      <div class="kg-tab-title"><span class="kg-tab-state pending" id="kg-state-train"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.25"/></svg></span> 2 Train</div>
       <div class="kg-tab-sub">YOLOv11n from scratch</div>
     </div>
-    <div class="kg-tab" data-tab="submit">
-      <div class="kg-tab-title"><span class="kg-tab-state pending" id="kg-state-submit">○</span> 3 Predict + Submit</div>
+    <div class="kg-tab" data-tab="submit" role="tab" tabindex="0" aria-selected="false">
+      <div class="kg-tab-title"><span class="kg-tab-state pending" id="kg-state-submit"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.25"/></svg></span> 3 Predict + Submit</div>
       <div class="kg-tab-sub">Predict → CSV → Kaggle</div>
     </div>
-    <div class="kg-tab" data-tab="status">
+    <div class="kg-tab" data-tab="status" role="tab" tabindex="0" aria-selected="false">
       <div class="kg-tab-title"><span class="kg-tab-state" id="kg-state-status"></span> 4 Status</div>
       <div class="kg-tab-sub">History &amp; leaderboard</div>
     </div>
@@ -651,6 +665,7 @@
       </form>
     </div>
   </div>
+  <div class="kg-footer" data-kg-footer></div>
   </div>
 
   <!-- ── 2. Train ──────────────────────────────────────────────────── -->
@@ -927,6 +942,7 @@
       </div>
     </div>
   </div>
+  <div class="kg-footer" data-kg-footer></div>
   </div>
 
   <!-- ── 3. Predict + Submit ───────────────────────────────────────── -->
@@ -1048,6 +1064,7 @@
       </div>
     </div>
   </div>
+  <div class="kg-footer" data-kg-footer></div>
   </div>
 
   <!-- ── 4. Status ─────────────────────────────────────────────────── -->
@@ -1073,6 +1090,7 @@
       <div id="st-kaggle"><div class="form-help">Checking Kaggle…</div></div>
     </div>
   </div>
+  <div class="kg-footer" data-kg-footer></div>
   </div>
 
   <script>
@@ -1093,7 +1111,10 @@
         if (TABS.indexOf(name) === -1) { name = 'import'; }
         TABS.forEach(function (t) {
           var tab = document.querySelector('#kg-tabs .kg-tab[data-tab="' + t + '"]');
-          if (tab) { tab.classList.toggle('active', t === name); }
+          if (tab) {
+            tab.classList.toggle('active', t === name);
+            tab.setAttribute('aria-selected', String(t === name));
+          }
           var panel = el('kg-panel-' + t);
           if (panel) { panel.classList.toggle('active', t === name); }
         });
@@ -1117,6 +1138,12 @@
         document.querySelectorAll('#kg-tabs .kg-tab'),
         function (tab) {
           tab.addEventListener('click', function () { showTab(tab.getAttribute('data-tab')); });
+          tab.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              showTab(tab.getAttribute('data-tab'));
+            }
+          });
         }
       );
 
@@ -1192,6 +1219,11 @@
         'upload': '<path d="M8 10.5v-8"/><path d="M4.5 6L8 2.5 11.5 6"/><path d="M2.5 13.5h11"/>',
         'download': '<path d="M8 2.5v8"/><path d="M4.5 7L8 10.5 11.5 7"/><path d="M2.5 13.5h11"/>',
         'layers': '<path d="M8 2.5l6 3-6 3-6-3z"/><path d="M2 8.75l6 3 6-3"/><path d="M2 11.75l6 3 6-3"/>',
+        'git-branch': '<circle cx="4.5" cy="3.75" r="1.75"/><circle cx="4.5" cy="12.25" r="1.75"/><circle cx="11.5" cy="3.75" r="1.75"/><path d="M4.5 5.5v5"/><path d="M11.5 5.5c0 3.25-7 2-7 5"/>',
+        // Stepper glyphs: the dot is deliberately filled (like the
+        // sparkline point) — the one sanctioned fill in the stroke set.
+        'circle': '<circle cx="8" cy="8" r="6.25"/>',
+        'dot': '<circle cx="8" cy="8" r="4" fill="currentColor" stroke="none"/>',
         'flag': '<path d="M3.5 14V2.5"/><path d="M3.5 3h8.5l-1.8 2.5L12 8H3.5"/>',
         'refresh-cw': '<path d="M13.5 8a5.5 5.5 0 1 1-1.7-3.97"/><path d="M13.5 2.5V6H10"/>',
         'chevron-right': '<path d="M6 3.5L10.5 8 6 12.5"/>',
@@ -1375,6 +1407,23 @@
           }
         };
       })();
+
+      // ── Document-title progress nudge ────────────────────────────────
+      // Non-fighting: the prefix is only added when absent and only our
+      // own prefix is ever stripped — if the host frontend rewrites the
+      // title, ours simply disappears instead of fighting it.
+      var KG_TITLE_RE = /^⟳ \d+% — /;
+
+      function kgSetTitleProgress(pct) {
+        var base = document.title.replace(KG_TITLE_RE, '');
+        document.title = '⟳ ' + Math.max(0, Math.min(100, Math.round(pct))) + '% — ' + base;
+      }
+
+      function kgClearTitleProgress() {
+        if (KG_TITLE_RE.test(document.title)) {
+          document.title = document.title.replace(KG_TITLE_RE, '');
+        }
+      }
 
       // ── Motion helpers (see docs/ui-notes.md § Motion) ──────────────
       function kgMotionOK() {
@@ -1626,12 +1675,38 @@
         });
       }
 
+      // Version footer on every tab, from the config _meta block. The
+      // GitHub icon is the set's git-branch glyph (no brand marks in a
+      // stroke set); Docs is the repository README.
+      function kgRenderFooters(meta) {
+        var repo = String(meta.repository_url || '');
+        var link = function (href, label, icon) {
+          return '<a href="' + esc(href) + '" target="_blank" class="kgi-btn" ' +
+                 'style="display:inline-flex;gap:4px;color:inherit">' +
+                 (icon ? kgIcon(icon, 'kgi-12') : '') + '<span>' + label + '</span></a>';
+        };
+        document.querySelectorAll('[data-kg-footer]').forEach(function (f) {
+          f.innerHTML = '3LC Kaggle Competition plugin v' + esc(meta.version || '?') +
+            (repo ? ' · ' + link(repo, 'GitHub', 'git-branch') +
+                    ' · ' + link(repo + '#readme', 'Docs') : '');
+        });
+      }
+
       var configLoaded = API.authFetch(computeUrl + '/api/plugins/kaggle/config')
         .then(function (r) { return r.json(); })
-        .then(function (cfg) { applyConfig(cfg); })
+        .then(function (cfg) {
+          applyConfig(cfg);
+          if (cfg._meta) {
+            // Diagnostics on every tab carry the version from here on
+            // (previously only after an Import preflight had run).
+            kgPluginVersion = String(cfg._meta.version || '');
+            kgRenderFooters(cfg._meta);
+          }
+        })
         .catch(function () { /* fresh install or route not mounted yet */ });
 
-      // Stepper states from the pipeline endpoint: ✓ done, ● current, ○ pending.
+      // Stepper states from the pipeline endpoint, in icon-set glyphs:
+      // check-circle done, filled dot active, outline circle upcoming.
       function renderPipeline() {
         API.authFetch(computeUrl + '/api/plugins/kaggle/pipeline')
           .then(function (r) { return r.json(); })
@@ -1642,12 +1717,15 @@
               var span = el('kg-state-' + s);
               if (!span) { return; }
               if (p[s]) {
-                span.textContent = '✓'; span.className = 'kg-tab-state done';
+                span.innerHTML = kgIcon('check-circle', 'kgi-12');
+                span.className = 'kg-tab-state done';
               } else if (!currentSeen) {
-                span.textContent = '●'; span.className = 'kg-tab-state current';
+                span.innerHTML = kgIcon('dot', 'kgi-12');
+                span.className = 'kg-tab-state current';
                 currentSeen = true;
               } else {
-                span.textContent = '○'; span.className = 'kg-tab-state pending';
+                span.innerHTML = kgIcon('circle', 'kgi-12');
+                span.className = 'kg-tab-state pending';
               }
             });
           })
@@ -3085,7 +3163,7 @@
         var last = history[history.length - 1];
         TR_METRICS.forEach(function (mdef) {
           var v = last[mdef[0]];
-          kgSwapText(el('tr-m-' + mdef[0]), typeof v === 'number' ? v.toFixed(3) : '?');
+          kgSwapText(el('tr-m-' + mdef[0]), typeof v === 'number' ? v.toFixed(4) : '?');
           el('tr-s-' + mdef[0]).innerHTML = kgSparkline(
             history.slice(-TR_SPARK_N).map(function (hrow) { return hrow[mdef[0]]; }));
         });
@@ -3305,11 +3383,18 @@
                 trRenderProvenance(job.checks, !trHadChecks);
                 trHadChecks = true;
               }
+              var tp = job.progress || {};
+              var tTotal = tp.total_epochs || parseInt((job.params || {}).epochs, 10) || 0;
+              if (tTotal) {
+                var tWithin = (tp.batch_n && tp.batch_i) ? Math.min(1, tp.batch_i / tp.batch_n) : 0;
+                kgSetTitleProgress(100 * ((tp.epoch || 0) + tWithin) / tTotal);
+              }
               el('tr-state').textContent = job.cancelled
                 ? 'Cancelling… (stops at the next checkpoint)'
                 : 'Training… (safe to navigate away)';
               return;
             }
+            kgClearTitleProgress();
             clearInterval(trainTimer);
             trainTimer = null;
             trRunning = false;
@@ -3782,7 +3867,7 @@
       function psRunSummary(run) {
         var bits = [run.provenance_ok ? 'from-scratch' : 'provenance unverified'];
         if (run.epochs_completed) { bits.push(run.epochs_completed + ' epochs'); }
-        if (typeof run.best_map50 === 'number') { bits.push('best mAP50 ' + run.best_map50.toFixed(3)); }
+        if (typeof run.best_map50 === 'number') { bits.push('best mAP50 ' + run.best_map50.toFixed(4)); }
         var d = psFmtDate(run.created_at);
         if (d) { bits.push(d); }
         return bits.join(' · ');
@@ -4114,9 +4199,14 @@
             if (psLogOpen()) { el('ps-log').scrollTop = el('ps-log').scrollHeight; }
             if (job.status === 'running') {
               psRenderProgress(job);
+              var pp = job.progress || {};
+              if (pp.total_images) {
+                kgSetTitleProgress(100 * (pp.images || 0) / pp.total_images);
+              }
               el('ps-state').textContent = 'Predicting… (safe to navigate away)';
               return;
             }
+            kgClearTitleProgress();
             clearInterval(psPredictTimer);
             psPredictTimer = null;
             psPredicting = false;
