@@ -131,12 +131,12 @@
 .form-control.guide-next { border-color: var(--warning, #d97706); }
 
 /* Overflow containment: long table paths / log lines must never push the
-   card past its container. Scoped to the Import panel (other tabs restyle
-   in their own sessions). */
-#kg-panel-import .card { min-width: 0; }
-#kg-panel-import .card-body { min-width: 0; }
-#kg-panel-import code { word-break: break-all; }
-#kg-panel-import pre { white-space: pre-wrap; word-break: break-all; overflow-x: auto; max-width: 100%; }
+   card past its container. Scoped to the finished panels (Submit/Status
+   restyle in their own sessions). */
+#kg-panel-import .card, #kg-panel-train .card { min-width: 0; }
+#kg-panel-import .card-body, #kg-panel-train .card-body { min-width: 0; }
+#kg-panel-import code, #kg-panel-train code { word-break: break-all; }
+#kg-panel-import pre, #kg-panel-train pre { white-space: pre-wrap; word-break: break-all; overflow-x: auto; max-width: 100%; }
 
 /* Per-split job rows (stock importer queue-panel anatomy) */
 .kg-job-row {
@@ -269,7 +269,7 @@
   }
 
   /* Button feedback: smooth whatever the shared hover styles change */
-  #kg-panel-import .btn {
+  #kg-panel-import .btn, #kg-panel-train .btn {
     transition: background-color var(--kgl-motion-fast) var(--kgl-ease-out),
                 border-color var(--kgl-motion-fast) var(--kgl-ease-out),
                 color var(--kgl-motion-fast) var(--kgl-ease-out),
@@ -300,6 +300,7 @@
 @media (max-width: 720px) {
   .kg-form-cols { grid-template-columns: 1fr !important; }
   .kg-checks-grid { grid-template-columns: 1fr; }
+  .kg-check-cols { grid-template-columns: 1fr; }
   .kg-table-row { flex-wrap: wrap; row-gap: 4px; }
   .kg-table-row .path { flex-basis: 100%; order: 10; }
 }
@@ -318,6 +319,51 @@
   font-size: 10.5px; padding: 1px 7px; border: 1px solid var(--border-light, rgba(0,0,0,.08));
   border-radius: 999px; color: var(--text-muted); white-space: nowrap;
 }
+
+/* ── Train tab (playbook application) ─────────────────────────────────
+   Staged sections replace the flat field wall: uppercase micro-heads,
+   locked read-only rows under the contract banner, advanced disclosures
+   on the accordion pattern, form-control geometry on every input. */
+.kg-sec-head {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .3px; color: var(--text-muted); margin: 0 0 10px;
+}
+/* Locked parameters: read-only rows, not fake-editable inputs. Calm facts:
+   muted lock trailing each row (icon semantics: gray, never a warning). */
+.kg-locked-rows { margin: -4px 0 14px; }
+.kg-locked-row {
+  display: flex; align-items: center; gap: 10px; padding: 5px 2px;
+  border-bottom: 1px solid var(--border-light, rgba(0,0,0,.06)); font-size: 12.5px;
+}
+.kg-locked-row .lbl { color: var(--text-muted); font-size: 11px; min-width: 84px; }
+.kg-locked-row .val { color: var(--text); font-weight: 500; }
+.kg-locked-row .kgi { color: var(--text-muted); margin-left: auto; }
+/* Native selects in the Hub input language: appearance stripped, custom
+   chevron overlaid (pointer-events: none) — still a native select for
+   keyboard and screen readers. */
+.kg-select-wrap { position: relative; }
+.kg-select-wrap select {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  padding-right: 28px; width: 100%; cursor: pointer;
+}
+.kg-select-wrap select::-ms-expand { display: none; }
+.kg-select-caret {
+  position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+  pointer-events: none; color: var(--text-muted); display: flex;
+}
+/* Checkboxes: the Import splits treatment codified — label wraps input,
+   flex alignment, whole row is the click target. */
+.kg-check-label {
+  display: flex; align-items: center; gap: 6px; font-size: 12.5px;
+  color: var(--text); cursor: pointer; padding: 3px 0;
+}
+.kg-check-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; }
+/* Inline bounds error under a field (client mirror of the server bounds) */
+.kg-field-err {
+  display: flex; gap: 6px; align-items: flex-start; margin-top: 4px;
+  color: var(--danger, #ef4444); font-size: 11px; line-height: 1.4;
+}
+.kg-field-err .kgi { margin-top: 1px; }
 
 /* Inline preflight feedback under the YAML path field. Callouts share one
    internal geometry: icon column + text, same padding/radius everywhere. */
@@ -477,123 +523,261 @@
 
   <!-- ── 2. Train ──────────────────────────────────────────────────── -->
   <div class="kg-panel" id="kg-panel-train">
-  <div class="card" style="padding: 16px; margin-bottom: 16px;">
-    <h2 style="margin-top: 0;"><span class="plugin-section-number">2</span> Train</h2>
-    <p style="opacity: .8; margin-top: 0;">
-      <strong>Locked for the competition: YOLOv11n from scratch (yolo11n.yaml, random init) ·
-      640 px · no pretrained weights.</strong> These are enforced server-side and cannot be
-      overridden — not even via extra args.
-    </p>
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-header"><div>
+      <div class="card-title"><span class="plugin-section-number">2</span> Train</div>
+      <div class="card-subtitle">Trains the competition baseline on your imported tables and
+        records from-scratch provenance on the 3LC Run.</div>
+    </div></div>
+    <div class="card-body">
+      <!-- Locked contract: same geometry as Import's format banner -->
+      <div class="format-selected-banner">
+        <span class="fmt-icon"><svg class="kgi kgi-16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></span>
+        <div style="flex: 1;">
+          <div class="fmt-name">YOLOv11n from scratch · 640px · no pretrained weights</div>
+          <div class="fmt-desc">Enforced server-side and cannot be overridden, including via extra args.</div>
+        </div>
+      </div>
+      <!-- Locked parameters: read-only rows, never fake-editable inputs.
+           No ids, never collected into the POST body; the lock is enforced
+           server-side (LOCKED_TRAIN_ARGS + extra-args guard). -->
+      <div class="kg-locked-rows">
+        <div class="kg-locked-row"><span class="lbl">Model</span>
+          <span class="val">yolo11n.yaml (from scratch, random init)</span>
+          <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></div>
+        <div class="kg-locked-row"><span class="lbl">Image size</span>
+          <span class="val">640</span>
+          <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></div>
+      </div>
 
-    <h3 style="margin-bottom: 6px;">Tables</h3>
-    <div class="plugin-form-grid" style="display: grid; gap: 8px; max-width: 720px;">
-      <label>Train table URL
-        <input id="tr-train-url" type="text" style="width: 100%;">
-      </label>
-      <label>Val table URL
-        <input id="tr-val-url" type="text" style="width: 100%;">
-      </label>
-      <label><input id="tr-latest" type="checkbox" checked>
-        Use latest revision (<code>.latest()</code>) — train on your newest label edits
-      </label>
-    </div>
+      <!-- Connection guard banner (network-level failures only) -->
+      <div id="tr-conn-banner" role="status" aria-live="polite"></div>
 
-    <h3 style="margin-bottom: 6px;">Model (locked)</h3>
-    <div style="display: grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 8px; max-width: 720px;">
-      <!-- Display-only: no id, never collected into the POST body. The lock is
-           enforced server-side (LOCKED_TRAIN_ARGS + extra-args guard). -->
-      <label title="Locked by competition rules.">Model 🔒
-        <input type="text" value="yolo11n.yaml (from scratch)" disabled
-               title="Locked by competition rules." style="width: 100%; opacity: .7;">
-      </label>
-      <label title="Locked by competition rules.">Image size 🔒
-        <input type="text" value="640" disabled
-               title="Locked by competition rules." style="width: 100%; opacity: .7;">
-      </label>
-    </div>
+      <!-- Success / failure banner (rendered by JS) -->
+      <div id="tr-banner"></div>
 
-    <h3 style="margin: 12px 0 6px;">Training</h3>
-    <div style="display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 10px 14px; max-width: 720px;">
-      <label>Epochs <input id="tr-epochs" type="number" value="100" min="1" max="300" step="1" style="width: 100%;">
-        <div class="form-help" style="font-size: 11px; opacity: .7;">Passes over the training data — more epochs, more learning time, diminishing returns late. 50–150 is the productive range for this dataset. (1–300)</div>
-      </label>
-      <label>Batch <input id="tr-batch" type="number" value="16" min="1" max="128" step="1" style="width: 100%;">
-        <div class="form-help" style="font-size: 11px; opacity: .7;">Images per training step. Raise it until GPU memory runs out; lower it if you hit CUDA out-of-memory. 16 fits comfortably on an 8 GB card at 640 px. (1–128)</div>
-      </label>
-      <label>lr0 <input id="tr-lr0" type="number" value="0.01" min="0.0001" max="0.1" step="0.001" style="width: 100%;">
-        <div class="form-help" style="font-size: 11px; opacity: .7;">Initial learning rate. Higher learns faster but can diverge; lower is safer but slower. 0.01 is a solid start with SGD/auto. (0.0001–0.1)</div>
-      </label>
-      <label>lrf <input id="tr-lrf" type="number" value="0.01" min="0.01" max="1.0" step="0.01" style="width: 100%;">
-        <div class="form-help" style="font-size: 11px; opacity: .7;">Final learning rate as a fraction of lr0 — the schedule decays toward lr0 × lrf. Lower = stronger decay late in training. (0.01–1.0)</div>
-      </label>
-      <label>Optimizer
-        <select id="tr-optimizer" style="width: 100%;">
-          <option value="auto" selected>Auto</option>
-          <option value="SGD">SGD</option>
-          <option value="Adam">Adam</option>
-          <option value="AdamW">AdamW</option>
-        </select>
-        <div class="form-help" style="font-size: 11px; opacity: .7;">Auto picks SGD or AdamW from the setup — a good default. Adam variants adapt per-parameter and can converge faster on short runs.</div>
-      </label>
-      <label>Patience <input id="tr-patience" type="number" value="100" min="0" max="100" step="1" style="width: 100%;">
-        <div class="form-help" style="font-size: 11px; opacity: .7;">Stop early after this many epochs with no val improvement — saves time on plateaued runs. Set it near your epoch count to effectively disable. (0–100)</div>
-      </label>
-      <label>Device <input id="tr-device" type="text" value="0" style="width: 100%;">
-        <div class="form-help" style="font-size: 11px; opacity: .7;">GPU index (0 for the first GPU) or <code>cpu</code>. From-scratch training on CPU is very slow — use the GPU.</div>
-      </label>
-      <label>Workers <input id="tr-workers" type="number" value="0" min="0" max="16" step="1" style="width: 100%;">
-        <div class="form-help" style="font-size: 11px; opacity: .7;">Dataloader worker processes. Keep 0 on Windows (the safe default); raise on Linux for faster data loading. (0–16)</div>
-      </label>
-    </div>
-    <label style="display: block; margin-top: 8px; max-width: 720px;">Extra args (key=value …; locked keys are rejected)
-      <input id="tr-extra" type="text" style="width: 100%;" placeholder="e.g. mosaic=0.5 cos_lr=true">
-      <div class="form-help" style="font-size: 11px; opacity: .7;">Any other ultralytics train argument. Locked keys (model, imgsz, pretrained, weights, resume) are rejected, and bounded keys keep their bounds here too.</div>
-    </label>
+      <form id="tr-form" onsubmit="return false;">
+        <div class="kg-sec-head">Tables</div>
+        <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;">
+          <div class="form-group">
+            <label class="form-label required" for="tr-train-url">Train table URL</label>
+            <input id="tr-train-url" type="text" class="form-control" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="form-group">
+            <label class="form-label required" for="tr-val-url">Val table URL</label>
+            <input id="tr-val-url" type="text" class="form-control" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+        <div id="tr-tables-gate"></div>
+        <div class="form-group" style="margin-top: 10px;">
+          <label class="kg-check-label"><input id="tr-latest" type="checkbox" checked> Use latest revision</label>
+          <div class="form-help">Trains on each table's newest revision (<code>.latest()</code>),
+            picking up your label edits from the Dashboard.</div>
+        </div>
 
-    <h3 style="margin-bottom: 6px;">3LC settings</h3>
-    <div style="display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; max-width: 720px;">
-      <label>Project <input id="tr-project" type="text" value="exdark-competition" style="width: 100%;"></label>
-      <label>Run name <input id="tr-runname" type="text" placeholder="kaggle_run_<timestamp>" style="width: 100%;"></label>
-      <label>Conf threshold <input id="tr-conf" type="number" value="0.1" step="0.01" min="0" max="1" style="width: 100%;"></label>
-      <label>Max detections <input id="tr-maxdet" type="number" value="300" min="1" style="width: 100%;"></label>
-      <label>Image emb. dim
-        <select id="tr-embdim" style="width: 100%;">
-          <option value="0" selected>off</option><option value="2">2</option><option value="3">3</option>
-        </select>
-      </label>
-      <label>Emb. reducer
-        <select id="tr-embreducer" style="width: 100%;">
-          <option value="pacmap" selected>pacmap</option><option value="umap">umap</option>
-        </select>
-      </label>
-      <label>Instance emb. dim
-        <select id="tr-instdim" style="width: 100%;">
-          <option value="0" selected>off</option><option value="2">2</option><option value="3">3</option>
-        </select>
-      </label>
-      <label>Collection start <input id="tr-colstart" type="number" placeholder="default" style="width: 100%;"></label>
-      <label>Collection interval <input id="tr-colint" type="number" value="1" min="1" style="width: 100%;"></label>
-    </div>
-    <div style="display: grid; grid-template-columns: repeat(2, minmax(200px, 1fr)); gap: 4px; max-width: 720px; margin-top: 8px;">
-      <label><input id="tr-collectloss" type="checkbox"> Collect loss</label>
-      <label><input id="tr-gtinst" type="checkbox"> Ground-truth instance embeddings</label>
-      <label><input id="tr-sampling" type="checkbox"> Use sampling weights</label>
-      <label><input id="tr-exclzero-train" type="checkbox"> Exclude zero-weight (training)</label>
-      <label><input id="tr-exclzero-col" type="checkbox"> Exclude zero-weight (collection)</label>
-      <label><input id="tr-valonly" type="checkbox"> Collection: val only</label>
-      <label><input id="tr-coldisable" type="checkbox"> Disable collection</label>
-    </div>
+        <hr class="divider">
+        <div class="kg-sec-head">Training parameters</div>
+        <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;">
+          <div class="form-group">
+            <label class="form-label" for="tr-epochs">Epochs</label>
+            <input id="tr-epochs" type="number" class="form-control" value="100" min="1" max="300" step="1">
+            <div class="form-help">Passes over the training data. 50 to 150 is the productive range
+              for this dataset; returns diminish late. Range 1 to 300.</div>
+            <div class="kg-field-slot" data-for="tr-epochs"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tr-batch">Batch</label>
+            <input id="tr-batch" type="number" class="form-control" value="16" min="1" max="128" step="1">
+            <div class="form-help">Images per training step. Raise it until GPU memory runs out;
+              lower it on CUDA out-of-memory. 16 fits an 8 GB card at 640px. Range 1 to 128.</div>
+            <div class="kg-field-slot" data-for="tr-batch"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tr-lr0">lr0</label>
+            <input id="tr-lr0" type="number" class="form-control" value="0.01" min="0.0001" max="0.1" step="0.001">
+            <div class="form-help">Initial learning rate. Higher learns faster but can diverge;
+              0.01 is a solid start with SGD/auto. Range 0.0001 to 0.1.</div>
+            <div class="kg-field-slot" data-for="tr-lr0"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tr-lrf">lrf</label>
+            <input id="tr-lrf" type="number" class="form-control" value="0.01" min="0.01" max="1.0" step="0.01">
+            <div class="form-help">Final learning rate as a fraction of lr0. The schedule decays
+              toward lr0 × lrf; lower means stronger late decay. Range 0.01 to 1.0.</div>
+            <div class="kg-field-slot" data-for="tr-lrf"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tr-optimizer">Optimizer</label>
+            <div class="kg-select-wrap">
+              <select id="tr-optimizer" class="form-control">
+                <option value="auto" selected>Auto</option>
+                <option value="SGD">SGD</option>
+                <option value="Adam">Adam</option>
+                <option value="AdamW">AdamW</option>
+              </select>
+              <span class="kg-select-caret"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6L8 10.5 12.5 6"/></svg></span>
+            </div>
+            <div class="form-help">Auto picks SGD or AdamW from the setup, a good default. Adam
+              variants adapt per-parameter and can converge faster on short runs.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tr-patience">Patience</label>
+            <input id="tr-patience" type="number" class="form-control" value="100" min="0" max="100" step="1">
+            <div class="form-help">Stop early after this many epochs with no val improvement. Set
+              it near your epoch count to effectively disable early stopping. Range 0 to 100.</div>
+            <div class="kg-field-slot" data-for="tr-patience"></div>
+          </div>
+        </div>
 
-    <div class="plugin-action-bar" style="margin-top: 12px;">
-      <button id="tr-start-btn" class="btn btn-primary">Start Training</button>
-      <button id="tr-cancel-btn" class="btn btn-secondary" disabled>Cancel</button>
-      <span id="tr-state" style="margin-left: 10px; opacity: .8;"></span>
+        <div class="kg-log-details" style="margin-top: 2px;">
+          <button type="button" class="kgl-acc-summary" id="tr-adv-toggle"
+                  aria-expanded="false" aria-controls="tr-adv-panel">
+            <span class="kgl-acc-caret" aria-hidden="true"><svg class="kgi kgi-12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span> Advanced
+          </button>
+          <div class="kgl-acc" id="tr-adv-panel" hidden>
+            <div class="kgl-acc-inner">
+              <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; margin-top: 10px;">
+                <div class="form-group">
+                  <label class="form-label" for="tr-device">Device</label>
+                  <input id="tr-device" type="text" class="form-control" value="0">
+                  <div class="form-help">GPU index (0 for the first GPU) or <code>cpu</code>.
+                    From-scratch training on CPU is very slow; use the GPU.</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="tr-workers">Workers</label>
+                  <input id="tr-workers" type="number" class="form-control" value="0" min="0" max="16" step="1">
+                  <div class="form-help">Dataloader worker processes. Keep 0 on Windows (the safe
+                    default); raise on Linux for faster loading. Range 0 to 16.</div>
+                  <div class="kg-field-slot" data-for="tr-workers"></div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="tr-extra">Extra args</label>
+                <input id="tr-extra" type="text" class="form-control" placeholder="e.g. mosaic=0.5 cos_lr=true">
+                <div class="form-help">Any other ultralytics train argument as key=value pairs.
+                  Locked keys (model, imgsz, pretrained, weights, resume) are rejected, and bounded
+                  keys keep their bounds here too.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div class="kg-sec-head">3LC settings</div>
+        <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;">
+          <div class="form-group">
+            <label class="form-label" for="tr-project">Project</label>
+            <input id="tr-project" type="text" class="form-control" value="exdark-competition">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tr-runname">Run name</label>
+            <input id="tr-runname" type="text" class="form-control" placeholder="kaggle_run_<timestamp>">
+            <div class="form-help">Blank generates a timestamped name.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tr-conf">Conf threshold</label>
+            <input id="tr-conf" type="number" class="form-control" value="0.1" step="0.01" min="0" max="1">
+            <div class="form-help">Confidence cutoff for collected predictions.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tr-maxdet">Max detections</label>
+            <input id="tr-maxdet" type="number" class="form-control" value="300" min="1">
+          </div>
+        </div>
+
+        <div class="kg-log-details" style="margin-top: 2px;">
+          <button type="button" class="kgl-acc-summary" id="tr-mc-toggle"
+                  aria-expanded="false" aria-controls="tr-mc-panel">
+            <span class="kgl-acc-caret" aria-hidden="true"><svg class="kgi kgi-12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span> Metrics collection (advanced)
+          </button>
+          <div class="kgl-acc" id="tr-mc-panel" hidden>
+            <div class="kgl-acc-inner">
+              <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; margin-top: 10px;">
+                <div class="form-group">
+                  <label class="form-label" for="tr-embdim">Image embeddings</label>
+                  <div class="kg-select-wrap">
+                    <select id="tr-embdim" class="form-control">
+                      <option value="0" selected>off</option><option value="2">2D</option><option value="3">3D</option>
+                    </select>
+                    <span class="kg-select-caret"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6L8 10.5 12.5 6"/></svg></span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="tr-embreducer">Embeddings reducer</label>
+                  <div class="kg-select-wrap">
+                    <select id="tr-embreducer" class="form-control">
+                      <option value="pacmap" selected>pacmap</option><option value="umap">umap</option>
+                    </select>
+                    <span class="kg-select-caret"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6L8 10.5 12.5 6"/></svg></span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="tr-instdim">Instance embeddings</label>
+                  <div class="kg-select-wrap">
+                    <select id="tr-instdim" class="form-control">
+                      <option value="0" selected>off</option><option value="2">2D</option><option value="3">3D</option>
+                    </select>
+                    <span class="kg-select-caret"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6L8 10.5 12.5 6"/></svg></span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px;">
+                    <div>
+                      <label class="form-label" for="tr-colstart">Collection start</label>
+                      <input id="tr-colstart" type="number" class="form-control" placeholder="default">
+                    </div>
+                    <div>
+                      <label class="form-label" for="tr-colint">Interval</label>
+                      <input id="tr-colint" type="number" class="form-control" value="1" min="1">
+                    </div>
+                  </div>
+                  <div class="form-help">First collection epoch (blank uses the trainer default)
+                    and how often to collect, in epochs.</div>
+                </div>
+              </div>
+              <div class="kg-check-cols" style="margin-top: 4px;">
+                <div>
+                  <div class="kg-checks-head">Collection</div>
+                  <label class="kg-check-label"><input id="tr-collectloss" type="checkbox"> Collect loss</label>
+                  <label class="kg-check-label"><input id="tr-gtinst" type="checkbox"> Ground-truth instance embeddings</label>
+                  <label class="kg-check-label"><input id="tr-valonly" type="checkbox"> Val split only</label>
+                  <label class="kg-check-label"><input id="tr-exclzero-col" type="checkbox"> Exclude zero-weight rows</label>
+                  <label class="kg-check-label"><input id="tr-coldisable" type="checkbox"> Disable collection</label>
+                </div>
+                <div>
+                  <div class="kg-checks-head">Training</div>
+                  <label class="kg-check-label"><input id="tr-sampling" type="checkbox"> Use sampling weights</label>
+                  <label class="kg-check-label"><input id="tr-exclzero-train" type="checkbox"> Exclude zero-weight rows</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button type="button" id="tr-start-btn" class="btn btn-primary btn-lg kgi-btn">Start Training</button>
+          <button type="button" id="tr-cancel-btn" class="btn btn-secondary" disabled>Cancel</button>
+          <span class="spinner" id="tr-spinner" style="display: none;"></span>
+          <span id="tr-state" aria-live="polite" style="font-size: 12px; color: var(--text-muted);"></span>
+        </div>
+      </form>
+
+      <div id="tr-progress" style="margin-top: 12px;"></div>
+      <div id="tr-checks"></div>
+      <div id="tr-result"></div>
+      <div class="kg-log-details" id="tr-log-details" style="display: none;">
+        <button type="button" class="kgl-acc-summary" id="tr-log-toggle"
+                aria-expanded="false" aria-controls="tr-log-panel">
+          <span class="kgl-acc-caret" aria-hidden="true"><svg class="kgi kgi-12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span> Show log
+        </button>
+        <div class="kgl-acc" id="tr-log-panel" hidden>
+          <div class="kgl-acc-inner">
+            <pre id="tr-log"></pre>
+          </div>
+        </div>
+      </div>
     </div>
-    <div id="tr-progress" style="margin-top: 10px;"></div>
-    <div id="tr-checks" style="margin-top: 8px;"></div>
-    <div id="tr-result" style="margin-top: 8px;"></div>
-    <pre id="tr-log" style="margin-top: 12px; max-height: 220px; overflow: auto; display: none;
-         font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
   </div>
   </div>
 
@@ -746,6 +930,8 @@
         'flag': '<path d="M3.5 14V2.5"/><path d="M3.5 3h8.5l-1.8 2.5L12 8H3.5"/>',
         'refresh-cw': '<path d="M13.5 8a5.5 5.5 0 1 1-1.7-3.97"/><path d="M13.5 2.5V6H10"/>',
         'chevron-right': '<path d="M6 3.5L10.5 8 6 12.5"/>',
+        'chevron-down': '<path d="M3.5 6L8 10.5 12.5 6"/>',
+        'play': '<path d="M5.5 3.5L12 8l-6.5 4.5V3.5z"/>',
         'external-link': '<path d="M6.5 3.5h-2A1.5 1.5 0 0 0 3 5v6.5A1.5 1.5 0 0 0 4.5 13H11a1.5 1.5 0 0 0 1.5-1.5v-2"/><path d="M9.5 2.5H13.5V6.5"/><path d="M13.5 2.5L8 8"/>'
       };
 
@@ -951,12 +1137,14 @@
         elm.style.opacity = '0';
       }
 
-      // Log accordion: button + region so the expand can animate while the
+      // Accordions: button + region so the expand can animate while the
       // closed panel stays display:none-equivalent (hidden attr) for screen
       // readers. Cleanup rides transitionend; reduced motion is instant.
-      (function () {
-        var toggle = el('kg-log-toggle');
-        var panel = el('kg-log-panel');
+      // One binder serves the log accordions and the Train tab's advanced
+      // disclosures — identical mechanics, different content.
+      function kgBindAccordion(toggleId, panelId) {
+        var toggle = el(toggleId);
+        var panel = el(panelId);
         toggle.addEventListener('click', function () {
           var isOpen = toggle.getAttribute('aria-expanded') === 'true';
           if (isOpen) {
@@ -977,7 +1165,19 @@
             });
           }
         });
-      })();
+      }
+      kgBindAccordion('kg-log-toggle', 'kg-log-panel');
+      kgBindAccordion('tr-adv-toggle', 'tr-adv-panel');
+      kgBindAccordion('tr-mc-toggle', 'tr-mc-panel');
+      kgBindAccordion('tr-log-toggle', 'tr-log-panel');
+
+      // Open a disclosure without animation (page furniture on load —
+      // transitions don't run while the panel carries `hidden`).
+      function kgAccOpenInstant(toggleId, panelId) {
+        el(toggleId).setAttribute('aria-expanded', 'true');
+        el(panelId).classList.add('open');
+        el(panelId).hidden = false;
+      }
 
       function kgLogOpen() {
         return el('kg-log-toggle').getAttribute('aria-expanded') === 'true';
@@ -1945,6 +2145,22 @@
       var trainJobId = null;
       var trainTimer = null;
 
+      var KG_BTN_TRAIN = kgIcon('play', 'kgi-16') + '<span>Start Training</span>';
+      var KG_BTN_TRAIN_RERUN = kgIcon('refresh-cw', 'kgi-16') + '<span>Re-run Training</span>';
+      el('tr-start-btn').innerHTML = KG_BTN_TRAIN;
+
+      function trLogOpen() {
+        return el('tr-log-toggle').getAttribute('aria-expanded') === 'true';
+      }
+
+      function trLogReset() {
+        el('tr-log-details').style.display = 'none';
+        el('tr-log-toggle').setAttribute('aria-expanded', 'false');
+        var panel = el('tr-log-panel');
+        panel.classList.remove('open');
+        panel.hidden = true;
+      }
+
       // Prefill table pickers with the canonical import outputs — after the
       // saved config applies, and only into fields it left empty.
       configLoaded.then(function () {
@@ -1956,14 +2172,35 @@
           });
       }).catch(function () { /* leave pickers empty */ });
 
+      // Disclosures default collapsed; a saved config that customized an
+      // advanced field reopens its disclosure so nothing saved is invisible.
+      configLoaded.then(function () {
+        if (el('tr-device').value !== '0' || el('tr-workers').value !== '0' ||
+            el('tr-extra').value.trim() !== '') {
+          kgAccOpenInstant('tr-adv-toggle', 'tr-adv-panel');
+        }
+        var mcIds = ['tr-collectloss', 'tr-gtinst', 'tr-valonly', 'tr-exclzero-col',
+                     'tr-coldisable', 'tr-sampling', 'tr-exclzero-train'];
+        if (el('tr-embdim').value !== '0' || el('tr-embreducer').value !== 'pacmap' ||
+            el('tr-instdim').value !== '0' || el('tr-colstart').value !== '' ||
+            el('tr-colint').value !== '1' ||
+            mcIds.some(function (id) { return el(id).checked; })) {
+          kgAccOpenInstant('tr-mc-toggle', 'tr-mc-panel');
+        }
+      });
+
       function trainChecks(checks) {
         if (!checks || !checks.length) { el('tr-checks').innerHTML = ''; return; }
-        var html = '<ul style="list-style: none; padding-left: 0; margin: 0;">';
+        var html = '';
         checks.forEach(function (c) {
-          html += '<li>' + (c.ok ? '✅' : '❌') + ' ' + c.label +
-                  (c.detail ? ' <span style="opacity:.7">(' + c.detail + ')</span>' : '') + '</li>';
+          html += '<div class="kg-check">' +
+                  (c.ok ? '<span class="ok">' + kgIcon('check') + '</span>'
+                        : '<span class="bad">' + kgIcon('x') + '</span>') +
+                  '<span class="kg-check-body">' + esc(c.label) +
+                  (c.detail ? ' <span class="detail">(' + esc(c.detail) + ')</span>' : '') +
+                  '</span></div>';
         });
-        el('tr-checks').innerHTML = html + '</ul>';
+        el('tr-checks').innerHTML = html;
       }
 
       function trainProgress(job) {
@@ -1993,15 +2230,17 @@
         if (facts.run_url) {
           var link = dashRunLink(facts.run_url);
           out += '<div style="margin: 6px 0;">' +
-                 (link ? '<a class="btn btn-primary btn-sm" href="' + link +
-                         '" target="_blank">Open Run in Dashboard →</a> ' : '') +
-                 '<code style="font-size: 11px;">' + facts.run_url + '</code></div>' +
-                 '<div style="opacity: .75; font-size: 12px; margin-bottom: 4px;">💡 Review ' +
-                 'per-sample losses and embeddings to find label issues, then re-import ' +
-                 'your fixed tables.</div>';
+                 (link ? '<a class="btn btn-primary btn-sm kgi-btn" href="' + link +
+                         '" target="_blank"><span>Open Run in Dashboard</span>' +
+                         kgIcon('external-link', 'kgi-12') + '</a> ' : '') +
+                 '<code style="font-size: 11px;">' + esc(facts.run_url) + '</code></div>' +
+                 '<div class="kg-callout info">' + kgIcon('info') + '<span>Review per-sample ' +
+                 'losses and embeddings in the Dashboard to find label issues, then retrain ' +
+                 'with "Use latest revision" on.</span></div>';
         }
         if (facts.weights) {
-          out += 'Weights: <code style="font-size: 11px;">' + facts.weights + '</code>';
+          out += '<div style="margin-top: 6px;">Weights: <code style="font-size: 11px;">' +
+                 esc(facts.weights) + '</code></div>';
         }
         el('tr-result').innerHTML = out;
       }
@@ -2010,9 +2249,9 @@
         API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + trainJobId)
           .then(function (r) { return r.json(); })
           .then(function (job) {
-            el('tr-log').style.display = 'block';
+            el('tr-log-details').style.display = 'block';
             el('tr-log').textContent = (job.log || []).join('\n');
-            el('tr-log').scrollTop = el('tr-log').scrollHeight;
+            if (trLogOpen()) { el('tr-log').scrollTop = el('tr-log').scrollHeight; }
             trainChecks(job.checks);
             trainProgress(job);
             if (job.status === 'running') {
@@ -2022,10 +2261,11 @@
             clearInterval(trainTimer);
             el('tr-start-btn').disabled = false;
             el('tr-cancel-btn').disabled = true;
+            el('tr-spinner').style.display = 'none';
             el('tr-state').textContent =
-              job.status === 'completed' ? '✅ Training complete'
-              : job.status === 'cancelled' ? '⏹ Cancelled'
-              : '❌ ' + (job.error || 'Training failed');
+              job.status === 'completed' ? 'Training complete'
+              : job.status === 'cancelled' ? 'Cancelled'
+              : (job.error || 'Training failed');
             renderPipeline();
           })
           .catch(function () { /* transient poll error — keep trying */ });
@@ -2059,7 +2299,7 @@
 
       el('tr-start-btn').addEventListener('click', function () {
         var boundsError = trBoundsError();
-        if (boundsError) { el('tr-state').textContent = '❌ ' + boundsError; return; }
+        if (boundsError) { el('tr-state').textContent = boundsError; return; }
         saveTabConfig('train');
         var body = {
           train_table_url: el('tr-train-url').value.trim(),
@@ -2092,9 +2332,12 @@
           collection_disable: el('tr-coldisable').checked
         };
         el('tr-start-btn').disabled = true;
+        el('tr-spinner').style.display = 'inline-block';
         el('tr-state').textContent = 'Starting…';
+        el('tr-banner').innerHTML = '';
         el('tr-checks').innerHTML = '';
         el('tr-result').innerHTML = '';
+        trLogReset();
         API.authFetch(computeUrl + '/api/plugins/kaggle/train', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2109,7 +2352,8 @@
           })
           .catch(function (e) {
             el('tr-start-btn').disabled = false;
-            el('tr-state').textContent = '❌ ' + e.message;
+            el('tr-spinner').style.display = 'none';
+            el('tr-state').textContent = e.message;
           });
       });
 
