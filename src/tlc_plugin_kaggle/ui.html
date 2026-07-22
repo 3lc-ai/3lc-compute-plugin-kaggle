@@ -13,6 +13,7 @@
   --kgl-motion-fast: 120ms;   /* button/hover feedback, badge swaps */
   --kgl-motion-base: 180ms;   /* content entrances */
   --kgl-motion-slow: 300ms;   /* accordion, checkmark draw */
+  --kgl-motion-spin: 800ms;   /* refresh-button rotation period (in flight) */
   --kgl-stagger: 30ms;        /* per-item cascade offset */
   --kgl-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --kgl-ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
@@ -281,9 +282,13 @@
   .kg-loop a { transition: color var(--kgl-motion-fast) var(--kgl-ease-out); }
 
   /* Stat-value swaps (kgSwapText): fade out, swap, fade back */
-  .kg-metric .val, .kg-run-meta .epoch, .kg-hero .num, .kg-stat .val {
+  .kg-metric .val, .kg-run-meta .epoch, .kg-hero .num, .kg-hero .val, .kg-stat .val {
     transition: opacity var(--kgl-motion-fast) var(--kgl-ease-out);
   }
+
+  /* Refresh buttons: rotation while a fetch is in flight (class-gated) */
+  @keyframes kg-rot { to { transform: rotate(360deg); } }
+  .kg-spin .kgi { animation: kg-rot var(--kgl-motion-spin) linear infinite; }
 
   /* Connection guard: "Reconnected" holds ~2s then fades (a deliberate
      exception to the no-exit-animation rule — the banner is transient
@@ -390,6 +395,35 @@
 .kg-spark { display: block; margin-top: 3px; color: var(--accent); opacity: .8; }
 .kg-spark polyline { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .kg-spark circle { fill: currentColor; stroke: none; }
+
+/* ── Status tab: hero strip + history table ───────────────────────────
+   Three questions at a glance: how good is my best, what happened last,
+   what can I do now. Paths never render in the table (actions carry
+   them); relative times carry absolute titles. */
+.kg-hero-strip { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.kg-hero-strip .kg-hero { flex: 1 1 150px; }
+.kg-hero .val { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.35; margin-top: 1px; }
+.kg-updated-row {
+  display: flex; align-items: center; gap: 2px; justify-content: flex-end;
+  margin: 0 0 10px; font-size: 11px; color: var(--text-muted);
+}
+.kg-st-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.kg-st-table th {
+  text-align: left; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .3px; color: var(--text-muted); padding: 4px 10px 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.kg-st-table td {
+  padding: 6px 10px 6px 0; border-bottom: 1px solid var(--border-light, rgba(0,0,0,.06));
+  vertical-align: middle;
+}
+.kg-st-table .when { color: var(--text-secondary); white-space: nowrap; }
+.kg-st-table .score { font-weight: 600; white-space: nowrap; }
+.kg-st-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.kg-delta-up { color: var(--success); white-space: nowrap; }
+.kg-delta-down { color: var(--danger, #ef4444); white-space: nowrap; }
+.kg-delta-flat { color: var(--text-muted); white-space: nowrap; }
+.kg-outcome-bad { color: var(--danger, #ef4444); }
 
 /* ── Revision picker (table URL fields, Train + Predict) ──────────────
    Small trailing button opens a popover of the project's tables and
@@ -1014,16 +1048,26 @@
 
   <!-- ── 4. Status ─────────────────────────────────────────────────── -->
   <div class="kg-panel" id="kg-panel-status">
-  <div class="card" style="padding: 16px; margin-bottom: 16px;">
-    <h2 style="margin-top: 0;"><span class="plugin-section-number">4</span> Status</h2>
-    <div class="plugin-action-bar" style="margin-bottom: 10px;">
-      <button id="st-refresh-btn" class="btn btn-secondary">Refresh</button>
-      <span id="st-state" style="margin-left: 10px; opacity: .8;"></span>
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-header"><div>
+      <div class="card-title"><span class="plugin-section-number">4</span> Status</div>
+      <div class="card-subtitle">Your best score, latest activity, and submission history.</div>
+    </div></div>
+    <div class="card-body">
+      <!-- Connection guard banner (network-level failures only) -->
+      <div id="st-conn-banner" role="status" aria-live="polite"></div>
+      <div class="kg-hero-strip" id="st-hero"></div>
+      <div class="kg-updated-row">
+        <span id="st-updated" aria-live="off"></span>
+        <button type="button" id="st-refresh-btn" class="btn btn-ghost btn-sm kgi-btn"
+                title="Refresh" aria-label="Refresh status"><svg class="kgi" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-3.97"/><path d="M13.5 2.5V6H10"/></svg></button>
+      </div>
+      <div class="kg-sec-head">History</div>
+      <div id="st-history"><div class="form-help">Loading…</div></div>
+      <hr class="divider">
+      <div class="kg-sec-head">Kaggle live</div>
+      <div id="st-kaggle"><div class="form-help">Checking Kaggle…</div></div>
     </div>
-    <h3 style="margin-bottom: 6px;">Local submission history</h3>
-    <div id="st-history" style="font-size: 13px;"><em style="opacity: .7;">Loading…</em></div>
-    <h3 style="margin: 14px 0 6px 0;">Kaggle live</h3>
-    <div id="st-kaggle" style="font-size: 13px;"><em style="opacity: .7;">Loading…</em></div>
   </div>
   </div>
 
@@ -1101,6 +1145,28 @@
 
       function fmtCount(n) {
         return (n === null || n === undefined) ? '?' : Number(n).toLocaleString('en-US');
+      }
+
+      // Shared relative-time formatting: "2 hours ago" style, absolute on
+      // hover via the title attribute (kgWhenSpan). One formatter for
+      // Status, Train summaries, and the Submit revisit basis.
+      function kgFmtAgo(ts) {
+        if (!ts) { return ''; }
+        var mins = Math.round((Date.now() / 1000 - ts) / 60);
+        if (mins < 1) { return 'just now'; }
+        if (mins === 1) { return '1 minute ago'; }
+        if (mins < 60) { return mins + ' minutes ago'; }
+        var hours = Math.round(mins / 60);
+        if (hours === 1) { return '1 hour ago'; }
+        if (hours < 48) { return hours + ' hours ago'; }
+        return Math.round(hours / 24) + ' days ago';
+      }
+
+      function kgWhenSpan(ts, cls) {
+        if (!ts) { return ''; }
+        var abs = new Date(ts * 1000).toLocaleString();
+        return '<span' + (cls ? ' class="' + cls + '"' : '') + ' title="' + esc(abs) + '">' +
+               esc(kgFmtAgo(ts)) + '</span>';
       }
 
       // ── Icon system (see docs/ui-notes.md § Icons) ──────────────────
@@ -2317,6 +2383,7 @@
       function kgDevForce(mode) {
         if (mode && mode.indexOf('train-') === 0) { trDevForce(mode); return; }
         if (mode && mode.indexOf('submit-') === 0) { psDevForce(mode); return; }
+        if (mode && mode.indexOf('status-') === 0) { stDevForce(mode); return; }
         var devYaml = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\competition_exdark\\package_build\\starter_kit\\dataset.yaml';
         var base = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
         function T(s, rows, reused) {
@@ -2787,6 +2854,103 @@
           }
         }
         showTab('submit');
+        apply();
+        configLoaded.then(function () { setTimeout(apply, 0); });
+      }
+
+      // Status forced states (?kgdev=status-...): static fixtures, no
+      // fetches, no job side effects. Documented in docs/ui-notes.md.
+      function stDevForce(mode) {
+        var now = Date.now() / 1000;
+        var csvBase = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\runs\\kaggle-plugin\\';
+
+        function REC(i, opts) {
+          return {
+            id: 'devp' + i, kind: 'predict', status: opts.status || 'completed',
+            created_at: opts.at, finished_at: opts.at + 180,
+            params: { train_job_id: opts.train || '' },
+            error: opts.error,
+            facts: {
+              run_name: opts.run,
+              local_score: opts.score,
+              csv_path: opts.nocsv ? '' : csvBase + opts.run + '\\submissions\\submission_x.csv',
+              submission: opts.sub
+            },
+            result: { run_name: opts.run }
+          };
+        }
+        var RECORDS = [
+          REC(6, { run: 'kaggle_run_20260721_1500', at: now - 7200, score: 0.6402,
+                   sub: { status: 'submitted', ref: '54886321' }, train: 'devtrain1' }),
+          REC(5, { run: 'kaggle_run_20260721_1500', at: now - 10800, score: 0.6371,
+                   sub: { status: 'limit_reached', reason: 'Daily submission limit reached (3/day), resets midnight UTC.' },
+                   train: 'devtrain1' }),
+          REC(4, { run: 'kaggle_run_20260721_0900', at: now - 86400, score: 0.6448, train: 'devtrain0' }),
+          REC(3, { run: 'kaggle_run_20260720_1830', at: now - 172800, status: 'failed', nocsv: true,
+                   error: 'Submission must contain exactly 715 rows; got 713.' }),
+          REC(2, { run: 'kaggle_run_20260720_1830', at: now - 176400, score: 0.5511,
+                   sub: { status: 'submitted', ref: '54861736' } }),
+          REC(1, { run: 'smoke_run', at: now - 340000,
+                   sub: { status: 'skipped', reason: 'CSV-only mode.' } })
+        ];
+        var RUNSBYJOB = {
+          devtrain1: { job_id: 'devtrain1', run_url: 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/runs/kaggle_run_20260721_1500' },
+          devtrain0: { job_id: 'devtrain0', run_url: 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/runs/kaggle_run_20260721_0900' }
+        };
+        var LIVE_TRAIN = { id: 'devlive', kind: 'train', status: 'running', created_at: now - 2400,
+                           progress: { epoch: 12, total_epochs: 50 } };
+        var KAGGLE_LIVE = {
+          connected: true, configured: true,
+          best_public_score: 0.6389,
+          my_rank: { rank: 4, team: 'rishikeshjadhav', score: '0.6389' },
+          submissions: [
+            { date: '2026-07-21 15:04', status: 'complete', public_score: '0.6389', message: 'kaggle_run_20260721_1500 via 3LC plugin' },
+            { date: '2026-07-20 18:52', status: 'complete', public_score: '0.5488', message: 'kaggle_run_20260720_1830 via 3LC plugin' }
+          ]
+        };
+        var KAGGLE_403 = {
+          connected: true, configured: true,
+          submissions_error: '403 Client Error: Forbidden for url: ' +
+            'https://www.kaggle.com/api/v1/competitions/submissions/list/... ' +
+            '{"code":403,"message":"Forbidden"}',
+          leaderboard_error: '403 Client Error: Forbidden for url: ' +
+            'https://www.kaggle.com/api/v1/competitions/.../leaderboard/view'
+        };
+
+        function apply() {
+          stLastUpdated = Date.now();
+          stRenderUpdated();
+          // Budget hero block reads the connection state: counted on the
+          // simulated-success fixture, plain-limit degrade elsewhere.
+          psConnState = mode === 'status-empty' ? null
+            : mode === 'status-kaggle-live'
+              ? { state: 'ready', daily_limit: 3, submissions_used_today: 1,
+                  competition_url: 'https://www.kaggle.com/competitions/dev' }
+              : { state: 'ready', daily_limit: 3,
+                  competition_url: 'https://www.kaggle.com/competitions/dev' };
+          if (mode === 'status-empty') {
+            stRenderHero([], []);
+            renderHistoryFrom([], {});
+            renderKaggleFrom({ connected: false, reason: 'Kaggle is not connected yet. Create an API token on kaggle.com and save it to ~/.kaggle/access_token.' });
+          } else if (mode === 'status-history') {
+            stRenderHero(RECORDS, []);
+            renderHistoryFrom(RECORDS, RUNSBYJOB);
+            renderKaggleFrom(KAGGLE_403);
+          } else if (mode === 'status-live-running') {
+            stRenderHero(RECORDS.slice(2), [LIVE_TRAIN]);
+            renderHistoryFrom(RECORDS.slice(2), RUNSBYJOB);
+            renderKaggleFrom(KAGGLE_403);
+          } else if (mode === 'status-kaggle-live') {
+            stRenderHero(RECORDS, []);
+            renderHistoryFrom(RECORDS, RUNSBYJOB);
+            renderKaggleFrom(KAGGLE_LIVE);
+          } else if (mode === 'status-kaggle-403') {
+            stRenderHero(RECORDS.slice(0, 2), []);
+            renderHistoryFrom(RECORDS.slice(0, 2), RUNSBYJOB);
+            renderKaggleFrom(KAGGLE_403);
+          }
+        }
+        showTab('status');
         apply();
         configLoaded.then(function () { setTimeout(apply, 0); });
       }
@@ -3600,12 +3764,7 @@
       }
 
       function psFmtAgo(ts) {
-        if (!ts) { return ''; }
-        var mins = Math.round((Date.now() / 1000 - ts) / 60);
-        if (mins < 1) { return 'just now'; }
-        if (mins < 60) { return mins + 'm ago'; }
-        if (mins < 60 * 24) { return Math.round(mins / 60) + 'h ago'; }
-        return psFmtDate(ts);
+        return kgFmtAgo(ts);   // shared formatter (see utilities)
       }
 
       function psRunSummary(run) {
@@ -4370,164 +4529,311 @@
         });
       }
 
-      // ── Status tab ─────────────────────────────────────────────────
-      function renderHistory() {
-        // /runs first: maps train job_id -> run_url so each submission row
-        // links back to its originating Run in the Dashboard.
-        var runsByJob = {};
-        API.authFetch(computeUrl + '/api/plugins/kaggle/runs')
-          .then(function (r) { return r.json(); })
-          .then(function (runs) {
-            runs.forEach(function (run) { runsByJob[run.job_id] = run; });
-          })
-          .catch(function () { /* rows render without run links */ })
-          .then(function () {
-            // Two-step era rows are kind=predict (submission stamped back
-            // onto them by the submit job); legacy single-job records are
-            // kind=predict_submit. Merge both, newest first.
-            return Promise.all([
-              API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=predict')
-                .then(function (r) { return r.json(); }).catch(function () { return []; }),
-              API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=predict_submit')
-                .then(function (r) { return r.json(); }).catch(function () { return []; })
-            ]);
-          })
-          .then(function (lists) {
-            var records = (lists[0] || []).concat(lists[1] || []).sort(function (a, b) {
-              return (b.created_at || 0) - (a.created_at || 0);
-            });
-            if (!records.length) {
-              el('st-history').innerHTML =
-                '<em style="opacity: .7;">No submissions yet — run Predict + Submit (tab 3).</em>';
-              return;
-            }
-            var html = '<table style="border-collapse: collapse;">' +
-              '<tr style="opacity: .7;"><td style="padding: 2px 12px 2px 0;">run</td>' +
-              '<td style="padding: 2px 12px 2px 0;">when</td>' +
-              '<td style="padding: 2px 12px 2px 0;">local mAP@0.5</td>' +
-              '<td style="padding: 2px 12px 2px 0;">Δ</td>' +
-              '<td style="padding: 2px 12px 2px 0;">submission</td>' +
-              '<td style="padding: 2px 0;">csv</td></tr>';
-            records.forEach(function (job, idx) {
-              var facts = job.facts || {};
-              var result = job.result || {};
-              var sub = facts.submission || {};
-              var when = job.created_at ? new Date(job.created_at * 1000).toLocaleString() : '—';
-              var run = result.run_name || (job.params || {}).run_name || '—';
-              // Link the row back to its originating Run in the Dashboard.
-              var origin = runsByJob[(job.params || {}).train_job_id];
-              if (origin && origin.run_url && dashboardUrl) {
-                run = '<a href="' + dashRunLink(origin.run_url) + '" target="_blank" ' +
-                      'title="Open the originating Run in the Dashboard">' + run + ' ↗</a>';
-              }
-              var score = typeof facts.local_score === 'number' ? facts.local_score.toFixed(4) : '—';
-              // Δ vs the previous (chronologically earlier) submission's score.
-              var prev = records[idx + 1];
-              var prevScore = prev && typeof (prev.facts || {}).local_score === 'number'
-                ? prev.facts.local_score : null;
-              var deltaCell = '—';
-              var dropped = false;
-              if (typeof facts.local_score === 'number' && prevScore !== null) {
-                var d = facts.local_score - prevScore;
-                if (d > 0) {
-                  deltaCell = '<span style="color: var(--success);">▲ +' + d.toFixed(4) + '</span>';
-                } else if (d < 0) {
-                  deltaCell = '<span style="color: var(--danger, #ef4444);">▼ ' + d.toFixed(4) + '</span>';
-                  dropped = true;
-                } else {
-                  deltaCell = '<span style="opacity: .6;">= 0.0000</span>';
-                }
-              }
-              var subTxt = job.status === 'failed' ? '❌ failed'
-                : (sub.status || '—') + (sub.ref ? ' (' + sub.ref + ')' : '');
-              var csvCell = facts.csv_path
-                ? '<code style="font-size: 11px;">' + facts.csv_path + '</code> ' +
-                  '<button class="btn btn-secondary btn-sm" onclick="kgDownloadCsv(\'' +
-                  job.id + '\')">⬇</button>'
-                : '—';
-              html += '<tr><td style="padding: 2px 12px 2px 0;"><strong>' + run + '</strong></td>' +
-                      '<td style="padding: 2px 12px 2px 0;">' + when + '</td>' +
-                      '<td style="padding: 2px 12px 2px 0;">' + score + '</td>' +
-                      '<td style="padding: 2px 12px 2px 0;">' + deltaCell + '</td>' +
-                      '<td style="padding: 2px 12px 2px 0;">' + subTxt + '</td>' +
-                      '<td style="padding: 2px 0;">' + csvCell + '</td></tr>';
-              if (dropped) {
-                // Gentle hint on a score drop — link both Runs when known.
-                var prevOrigin = runsByJob[((prev || {}).params || {}).train_job_id];
-                var links = '';
-                if (origin && origin.run_url && dashboardUrl) {
-                  links += ' <a href="' + dashRunLink(origin.run_url) + '" target="_blank">this Run ↗</a>';
-                }
-                if (prevOrigin && prevOrigin.run_url && dashboardUrl) {
-                  links += (links ? ' · ' : ' ') +
-                           '<a href="' + dashRunLink(prevOrigin.run_url) + '" target="_blank">previous Run ↗</a>';
-                }
-                html += '<tr><td colspan="6" style="padding: 0 0 6px 0; font-size: 12px; opacity: .8;">' +
-                        '↳ Score dropped vs the previous submission — compare what changed ' +
-                        'between the two Runs in the Dashboard.' + links + '</td></tr>';
-              }
-            });
-            el('st-history').innerHTML = html + '</table>';
-          })
-          .catch(function (e) {
-            el('st-history').innerHTML = '<em style="opacity: .7;">Could not load history: ' + e + '</em>';
+      // ── Status tab: from dump to answer ──────────────────────────────
+      // Three questions at a glance: how good is my best (hero), what
+      // happened last (history, outcome vocabulary), what can I do now
+      // (budget, live jobs, actions). Renderers take data so ?kgdev
+      // fixtures can drive them without fetches.
+      var stLastUpdated = null;
+      var stBusy = false;
+
+      function stHeroBlock(lbl, mainHtml, noteHtml, big) {
+        return '<div class="kg-hero"><div class="lbl">' + lbl + '</div>' +
+               '<div class="' + (big ? 'num' : 'val') + '">' + mainHtml + '</div>' +
+               (noteHtml ? '<div class="note">' + noteHtml + '</div>' : '') + '</div>';
+      }
+
+      function stRunName(job) {
+        return (job.result || {}).run_name || (job.facts || {}).run_name ||
+               (job.params || {}).run_name || 'run';
+      }
+
+      // Outcome vocabulary: participant language, never job-state jargon.
+      function stOutcome(job) {
+        var sub = (job.facts || {}).submission || {};
+        if (job.status === 'failed') {
+          var msg = String(job.error || '');
+          var validation = /submission|prediction_string|rows|columns|image_id/i.test(msg);
+          return { html: '<span class="kg-outcome-bad">' + (validation ? 'Validation failed' : 'Failed') + '</span>',
+                   title: msg, short: validation ? 'validation failed' : 'failed' };
+        }
+        if (job.status === 'stale') {
+          return { html: 'Interrupted', title: job.error || '', short: 'interrupted' };
+        }
+        if (job.status === 'running') {
+          return { html: 'Running…', title: '', short: 'running' };
+        }
+        if (sub.status === 'submitted') {
+          return { html: 'Submitted' + (sub.ref ? ' · <code style="font-size:11px">#' + esc(sub.ref) + '</code>' : ''),
+                   title: '', short: 'submitted' + (sub.ref ? ' #' + sub.ref : '') };
+        }
+        if (sub.status === 'limit_reached') {
+          return { html: 'CSV generated (daily limit reached)', title: sub.reason || '', short: 'CSV generated' };
+        }
+        if (sub.status === 'not_joined') {
+          return { html: 'CSV generated (not joined on Kaggle)', title: sub.reason || '', short: 'CSV generated' };
+        }
+        if (sub.status === 'failed') {
+          return { html: '<span class="kg-outcome-bad">Submission rejected</span>',
+                   title: sub.reason || '', short: 'submission rejected' };
+        }
+        return { html: 'CSV generated (not submitted)', title: '', short: 'CSV generated' };
+      }
+
+      // Hero strip. `live` is omitted entirely when nothing is running —
+      // no empty placeholder blocks.
+      function stRenderHero(records, liveJobs) {
+        var best = null;
+        records.forEach(function (job) {
+          var s = (job.facts || {}).local_score;
+          if (typeof s === 'number' && (!best || s > best.score)) {
+            best = { score: s, run: stRunName(job) };
+          }
+        });
+        var html = stHeroBlock('Best local mAP@0.5',
+          best ? best.score.toFixed(4) : '<span style="color:var(--text-muted)">no scores yet</span>',
+          best ? esc(best.run) : 'Local scoring runs on the host machine only.', !!best);
+
+        var latest = records[0];
+        if (latest) {
+          var o = stOutcome(latest);
+          var badgeCls = TR_BADGE_CLASS[latest.status] || 'queued';
+          html += stHeroBlock('Latest activity',
+            kgWhenSpan(latest.finished_at || latest.created_at) +
+            ' <span class="badge badge-status-' + badgeCls + '">' + esc(latest.status) + '</span>',
+            esc(stRunName(latest)) + ' · ' + esc(o.short), false);
+        } else {
+          html += stHeroBlock('Latest activity',
+            '<span style="color:var(--text-muted)">no activity yet</span>',
+            'Predictions and submissions land here.', false);
+        }
+
+        var b = psBudget();
+        if (psConnState && psConnState.state === 'ready' && b) {
+          // LAUNCH-VERIFY: the used-today counter needs ListSubmissions;
+          // on the private competition it degrades to the plain limit.
+          html += stHeroBlock('Kaggle budget',
+            b.left === null ? b.limit + '/day limit'
+                            : (b.limit - b.left) + ' of ' + b.limit + ' today',
+            b.left === null ? 'Per-day counter unavailable on this competition.'
+                            : 'Resets 00:00 UTC.', false);
+        }
+
+        (liveJobs || []).slice(0, 1).forEach(function (lj) {
+          var p = lj.progress || {};
+          var detail, tab;
+          if (lj.kind === 'train') {
+            detail = 'Epoch ' + (p.epoch || 0) + '/' + (p.total_epochs || '?');
+            tab = 'train';
+          } else if (lj.kind === 'predict') {
+            detail = 'Inference: ' + fmtCount(p.images || 0) + ' / ' + fmtCount(p.total_images || 0) + ' images';
+            tab = 'submit';
+          } else {
+            detail = 'Submitting to Kaggle';
+            tab = 'submit';
+          }
+          html += stHeroBlock('Live now',
+            lj.kind === 'train' ? 'Training' : lj.kind === 'predict' ? 'Predicting' : 'Submitting',
+            esc(detail) + ' · <a data-goto="' + tab + '" tabindex="0" role="button" style="cursor:pointer">Open tab</a>', false);
+        });
+
+        el('st-hero').innerHTML = html;
+        el('st-hero').querySelectorAll('a[data-goto]').forEach(function (a) {
+          a.addEventListener('click', function () { showTab(a.getAttribute('data-goto')); });
+          a.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showTab(a.getAttribute('data-goto')); }
           });
+        });
+      }
+
+      function renderHistoryFrom(records, runsByJob) {
+        var box = el('st-history');
+        if (!records.length) {
+          box.innerHTML = '<div class="kg-callout info">' + kgIcon('info') +
+            '<span>No predictions yet. Train a model and predict on the test set to see ' +
+            'history here.<div style="margin-top:8px"><button type="button" ' +
+            'class="btn btn-secondary btn-sm kgi-btn" id="st-goto-train"><span>Go to Train</span>' +
+            kgIcon('arrow-right', 'kgi-12') + '</button></div></span></div>';
+          el('st-goto-train').addEventListener('click', function () { showTab('train'); });
+          return;
+        }
+        // Δ vs the previous SCORED row (unscored rows are skipped), walked
+        // oldest -> newest.
+        var deltas = {};
+        var lastScore = null;
+        for (var i = records.length - 1; i >= 0; i--) {
+          var s = ((records[i].facts || {}).local_score);
+          if (typeof s === 'number') {
+            deltas[records[i].id] = lastScore === null ? null : s - lastScore;
+            lastScore = s;
+          }
+        }
+        var html = '<table class="kg-st-table"><thead><tr>' +
+          '<th>Run</th><th>When</th><th>Local mAP@0.5</th><th>Δ</th><th>Outcome</th>' +
+          '<th style="text-align:right">Actions</th></tr></thead><tbody>';
+        records.forEach(function (job) {
+          var facts = job.facts || {};
+          var runName = stRunName(job);
+          var origin = runsByJob[(job.params || {}).train_job_id];
+          var runCell = (origin && origin.run_url && dashboardUrl)
+            ? '<a href="' + dashRunLink(origin.run_url) + '" target="_blank" ' +
+              'title="Open the originating Run in the Dashboard"><strong>' + esc(runName) + '</strong></a>'
+            : '<strong>' + esc(runName) + '</strong>';
+          var score = typeof facts.local_score === 'number'
+            ? '<span class="score">' + facts.local_score.toFixed(4) + '</span>'
+            : '<span class="kg-delta-flat">–</span>';
+          var d = deltas[job.id];
+          var deltaCell;
+          if (typeof facts.local_score !== 'number' || d === undefined) {
+            deltaCell = '<span class="kg-delta-flat"></span>';
+          } else if (d === null) {
+            deltaCell = '<span class="kg-delta-flat" title="First scored prediction">–</span>';
+          } else if (d > 0.00005) {
+            deltaCell = '<span class="kg-delta-up">▲ +' + d.toFixed(4) + '</span>';
+          } else if (d < -0.00005) {
+            deltaCell = '<span class="kg-delta-down">▼ ' + d.toFixed(4) + '</span>';
+          } else {
+            deltaCell = '<span class="kg-delta-flat">– 0.0000</span>';
+          }
+          var o = stOutcome(job);
+          var actions = facts.csv_path
+            ? '<button type="button" class="btn btn-ghost btn-sm kgi-btn" data-copy="' + esc(facts.csv_path) +
+              '" title="Copy CSV path" aria-label="Copy CSV path">' + kgIcon('copy') + '</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm kgi-btn" data-download="' + esc(job.id) +
+              '" title="Download CSV" aria-label="Download CSV">' + kgIcon('download') + '</button>'
+            : '';
+          html += '<tr><td>' + runCell + '</td>' +
+                  '<td>' + kgWhenSpan(job.created_at, 'when') + '</td>' +
+                  '<td>' + score + '</td>' +
+                  '<td>' + deltaCell + '</td>' +
+                  '<td' + (o.title ? ' title="' + esc(o.title) + '"' : '') + '>' + o.html + '</td>' +
+                  '<td><span class="kg-st-actions">' + actions + '</span></td></tr>';
+        });
+        box.innerHTML = html + '</tbody></table>';
+        kgBindCopy(box);
+        box.querySelectorAll('[data-download]').forEach(function (b) {
+          b.addEventListener('click', function () { downloadCsv(b.getAttribute('data-download')); });
+        });
+      }
+
+      // ── Kaggle live: friendly degradation for third-party API limits ─
+      function renderKaggleFrom(s) {
+        var box = el('st-kaggle');
+        if (!s.connected || s.configured === false) {
+          box.innerHTML = '<div class="kg-callout info">' + kgIcon('info') +
+            '<span>' + esc(s.reason || 'Kaggle is not connected yet.') + '</span></div>';
+          return;
+        }
+        var html = '';
+        if (typeof s.best_public_score === 'number') {
+          html += '<div style="font-size:12.5px;margin-bottom:4px">Best public score so far: ' +
+                  '<strong>' + esc(String(s.best_public_score)) + '</strong></div>';
+        }
+        if (s.my_rank) {
+          html += '<div style="font-size:12.5px;margin-bottom:4px">Leaderboard: rank <strong>' +
+                  esc(String(s.my_rank.rank)) + '</strong> (' + esc(String(s.my_rank.score)) + ')</div>';
+        }
+        if (s.submissions && s.submissions.length) {
+          html += '<table class="kg-st-table" style="margin-top:4px"><thead><tr>' +
+                  '<th>When</th><th>Status</th><th>Public score</th><th>Message</th></tr></thead><tbody>';
+          s.submissions.forEach(function (x) {
+            html += '<tr><td class="when">' + esc(x.date || '') + '</td>' +
+                    '<td>' + esc(x.status || '') + '</td>' +
+                    '<td>' + (x.public_score ? '<span class="score">' + esc(String(x.public_score)) + '</span>'
+                                             : '<span class="kg-delta-flat">–</span>') + '</td>' +
+                    '<td>' + esc(x.message || '') + '</td></tr>';
+          });
+          html += '</tbody></table>';
+        } else if (!s.submissions_error) {
+          html += '<div class="form-help">No Kaggle submissions yet.</div>';
+        }
+        var rawErrors = [];
+        if (s.submissions_error) { rawErrors.push('[submissions]\n' + s.submissions_error); }
+        if (s.leaderboard_error) { rawErrors.push('[leaderboard]\n' + s.leaderboard_error); }
+        if (rawErrors.length) {
+          // The private competition 403s these endpoints even for a joined
+          // user (LAUNCH-VERIFY: self-heals when the API succeeds at public
+          // launch — the success path above renders instead).
+          var lbUrl = ((psConnState || {}).competition_url ||
+                       'https://www.kaggle.com/competitions/' + encodeURIComponent(el('ps-slug').value.trim())) +
+                      '/leaderboard';
+          html += '<div class="kg-callout info" style="margin-top:8px">' + kgIcon('info') +
+            '<span>Kaggle’s submission list isn’t available for this private competition ' +
+            '(a known Kaggle API limitation). Your submissions still score normally on the ' +
+            'web leaderboard.' +
+            '<div style="margin-top:8px"><a class="btn btn-secondary btn-sm kgi-btn" target="_blank" href="' +
+            esc(lbUrl) + '"><span>View leaderboard on Kaggle</span>' + kgIcon('external-link', 'kgi-12') +
+            '</a></div></span></div>' +
+            '<div class="kg-log-details" style="display:block">' +
+            '<button type="button" class="kgl-acc-summary" id="st-kerr-toggle" aria-expanded="false" ' +
+            'aria-controls="st-kerr-panel"><span class="kgl-acc-caret" aria-hidden="true">' +
+            kgIcon('chevron-right', 'kgi-12') + '</span> Show details</button>' +
+            '<div class="kgl-acc" id="st-kerr-panel" hidden><div class="kgl-acc-inner">' +
+            '<pre>' + esc(rawErrors.join('\n\n')) + '</pre></div></div></div>';
+        }
+        box.innerHTML = html || '<div class="form-help">Nothing to show yet.</div>';
+        if (rawErrors.length) { kgBindAccordion('st-kerr-toggle', 'st-kerr-panel'); }
       }
 
       function renderKaggleLive() {
         var slug = el('ps-slug').value.trim();
         API.authFetch(computeUrl + '/api/plugins/kaggle/kaggle/status?slug=' + encodeURIComponent(slug))
           .then(function (r) { return r.json(); })
-          .then(function (s) {
-            if (!s.connected) {
-              el('st-kaggle').innerHTML = '<em style="opacity: .8;">🔌 ' + s.reason + '</em>';
-              return;
-            }
-            if (s.configured === false) {
-              el('st-kaggle').innerHTML = '<em style="opacity: .8;">🏷 ' + s.reason + '</em>';
-              return;
-            }
-            var html = '';
-            if (typeof s.best_public_score === 'number') {
-              html += 'Best public score so far: <strong>' + s.best_public_score + '</strong><br>';
-            }
-            if (s.my_rank) {
-              html += 'Leaderboard: rank <strong>' + s.my_rank.rank + '</strong> (' + s.my_rank.score + ')<br>';
-            }
-            if (s.submissions && s.submissions.length) {
-              html += '<table style="border-collapse: collapse; margin-top: 4px;">' +
-                '<tr style="opacity: .7;"><td style="padding: 2px 12px 2px 0;">when</td>' +
-                '<td style="padding: 2px 12px 2px 0;">status</td>' +
-                '<td style="padding: 2px 12px 2px 0;">public score</td><td>message</td></tr>';
-              s.submissions.forEach(function (x) {
-                html += '<tr><td style="padding: 2px 12px 2px 0;">' + x.date + '</td>' +
-                        '<td style="padding: 2px 12px 2px 0;">' + x.status + '</td>' +
-                        '<td style="padding: 2px 12px 2px 0;">' + (x.public_score || '—') + '</td>' +
-                        '<td>' + x.message + '</td></tr>';
-              });
-              html += '</table>';
-            } else if (!s.submissions_error) {
-              html += '<em style="opacity: .7;">No Kaggle submissions yet.</em>';
-            }
-            if (s.submissions_error) { html += '<em style="opacity: .7;">Submissions: ' + s.submissions_error + '</em><br>'; }
-            if (s.leaderboard_error) { html += '<em style="opacity: .7;">Leaderboard: ' + s.leaderboard_error + '</em>'; }
-            el('st-kaggle').innerHTML = html || '<em style="opacity: .7;">Nothing to show yet.</em>';
-          })
+          .then(renderKaggleFrom)
           .catch(function (e) {
-            el('st-kaggle').innerHTML = '<em style="opacity: .7;">Could not reach the service: ' + e + '</em>';
+            if (kgConn.fail(e)) { return; }
+            el('st-kaggle').innerHTML = '<div class="kg-callout info">' + kgIcon('info') +
+              '<span>Could not reach the service: ' + esc(e.message || String(e)) + '</span></div>';
           });
       }
 
-      function refreshStatus() {
-        el('st-state').textContent = 'Refreshing…';
-        renderHistory();
+      function stRenderUpdated() {
+        el('st-updated').textContent = stLastUpdated
+          ? 'Updated ' + kgFmtAgo(stLastUpdated / 1000) : '';
+      }
+
+      // One fetch pass for hero + history (Kaggle live fetches separately —
+      // its API round-trip is slow and must not hold the local data back).
+      function stFetchAll(manual) {
+        if (stBusy) { return; }
+        stBusy = true;
+        if (manual) { el('st-refresh-btn').classList.add('kg-spin'); }
+        var get = function (path) {
+          return API.authFetch(computeUrl + path)
+            .then(function (r) { return r.json(); }).catch(function () { return []; });
+        };
+        Promise.all([
+          get('/api/plugins/kaggle/runs'),
+          get('/api/plugins/kaggle/jobs?kind=predict'),
+          get('/api/plugins/kaggle/jobs?kind=predict_submit'),
+          get('/api/plugins/kaggle/jobs?kind=train'),
+          get('/api/plugins/kaggle/jobs?kind=kaggle_submit')
+        ]).then(function (res) {
+          var runsByJob = {};
+          (res[0] || []).forEach(function (run) { runsByJob[run.job_id] = run; });
+          var records = (res[1] || []).concat(res[2] || []).sort(function (a, b) {
+            return (b.created_at || 0) - (a.created_at || 0);
+          });
+          var liveJobs = (res[3] || []).concat(res[1] || []).concat(res[4] || [])
+            .filter(function (j) { return j.status === 'running'; });
+          stRenderHero(records, liveJobs);
+          renderHistoryFrom(records, runsByJob);
+          stLastUpdated = Date.now();
+          stRenderUpdated();
+        }).then(done, done);
+        function done() {
+          stBusy = false;
+          el('st-refresh-btn').classList.remove('kg-spin');
+        }
         renderKaggleLive();
+      }
+
+      function refreshStatus() {
         renderPipeline();
-        setTimeout(function () { el('st-state').textContent = ''; }, 800);
+        stFetchAll(true);
       }
       el('st-refresh-btn').addEventListener('click', refreshStatus);
-      renderHistory();
-      renderKaggleLive();
+      if (!kgDevMode) { stFetchAll(false); }
 
       // ── Dev-affordance dispatch — LAST, so forced states apply after
       // every tab's vars and handlers exist. Normal loads resolve the
