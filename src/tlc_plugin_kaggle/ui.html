@@ -2055,6 +2055,7 @@
       // Values: state1, state2, state2-mismatch, state2-error, state3,
       // state4, state5, state6. Documented in docs/ui-notes.md.
       function kgDevForce(mode) {
+        if (mode && mode.indexOf('train-') === 0) { trDevForce(mode); return; }
         var devYaml = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\competition_exdark\\package_build\\starter_kit\\dataset.yaml';
         var base = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
         function T(s, rows, reused) {
@@ -2191,8 +2192,163 @@
         configLoaded.then(function () { setTimeout(apply, 0); });
       }
 
+      // Train-tab forced states (?kgdev=train-state1 … train-state6):
+      // static fixtures, no fetches, no job side effects. Documented in
+      // docs/ui-notes.md.
+      function trDevForce(mode) {
+        var base = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
+        var trainUrl = base + 'exdark_train/tables/initial';
+        var valUrl = base + 'exdark_val/tables/initial';
+        var devRun = 'kaggle_run_20260721_090000';
+        var weights = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\runs\\kaggle-plugin\\' +
+                      devRun + '\\weights\\best.pt';
+        var runUrl = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/runs/' + devRun;
+
+        // Deterministic improving curve with a mild wobble — fixtures must
+        // render identically on every load (no randomness).
+        function HIST(n) {
+          var h = [];
+          for (var e = 1; e <= n; e++) {
+            var f = e / Math.max(n, 1);
+            var w = ((e * 37) % 11) / 11;
+            h.push({
+              e: e,
+              m50: +(0.44 * Math.pow(f, 0.55) + 0.02 * w).toFixed(4),
+              m95: +(0.26 * Math.pow(f, 0.6) + 0.012 * w).toFixed(4),
+              p: +(0.58 * Math.pow(f, 0.35) + 0.03 * w).toFixed(4),
+              r: +(0.5 * Math.pow(f, 0.5) + 0.025 * w).toFixed(4)
+            });
+          }
+          return h;
+        }
+        var PROV = [
+          { label: 'run records model == yolo11n.yaml (from scratch)', ok: true, detail: "model='yolo11n.yaml'" },
+          { label: 'run records imgsz == 640', ok: true, detail: 'imgsz=640' },
+          { label: 'run records pretrained == False', ok: true, detail: 'pretrained=False' }
+        ];
+        var LOG = [
+          'train: ' + trainUrl + ' (5910 rows)',
+          'val: ' + valUrl + ' (733 rows)',
+          'Locked: model=yolo11n.yaml (from scratch) · imgsz=640 · pretrained=False. ' +
+            'Training 50 epochs, batch 16, device 0.',
+          'epoch 1/50 — metrics/precision(B)=0.31427, metrics/recall(B)=0.10553, ' +
+            'metrics/mAP50(B)=0.09409, metrics/mAP50-95(B)=0.04116',
+          'epoch 2/50 — metrics/precision(B)=0.38112, metrics/recall(B)=0.16881, ' +
+            'metrics/mAP50(B)=0.14213, metrics/mAP50-95(B)=0.06632'
+        ];
+
+        function JOB(status, epoch, total, extra) {
+          var now = Date.now() / 1000;
+          var job = {
+            id: '', kind: 'train', status: status,
+            created_at: now - 2400,
+            finished_at: status === 'running' ? null : now - 60,
+            params: { epochs: total, run_name: '' },
+            progress: {
+              epoch: epoch, total_epochs: total, history: HIST(epoch),
+              avg_epoch_s: 96.4, eta_s: Math.round(96.4 * (total - epoch))
+            },
+            facts: { run_name: devRun },
+            checks: [], result: null, log: LOG
+          };
+          Object.keys(extra || {}).forEach(function (k) { job[k] = extra[k]; });
+          return job;
+        }
+
+        function gateGreen() {
+          el('tr-train-url').value = trainUrl;
+          el('tr-val-url').value = valUrl;
+          trGate = { ok: true, train_url: trainUrl, val_url: valUrl };
+          trRenderGate(trGate);
+          trCheckReady();
+        }
+
+        var doneJob = function () {
+          return JOB('completed', 50, 50, {
+            checks: PROV,
+            facts: { run_name: devRun, run_url: runUrl, weights: weights },
+            result: { run_name: devRun, weights: weights, epochs_completed: 50, provenance: PROV }
+          });
+        };
+
+        function apply() {
+          trShowForm(true);
+          el('tr-banner').innerHTML = '';
+          el('tr-progress').innerHTML = '';
+          el('tr-checks').innerHTML = '';
+          el('tr-result').innerHTML = '';
+          el('tr-state').textContent = '';
+          el('tr-spinner').style.display = 'none';
+          el('tr-cancel-btn').disabled = true;
+          el('tr-start-btn').innerHTML = KG_BTN_TRAIN;
+          trLogReset();
+          trRunning = false;
+          trHadChecks = true;   // forced states never cascade
+
+          if (mode === 'train-state1') {
+            el('tr-train-url').value = '';
+            el('tr-val-url').value = '';
+            trGate = null;
+            trRenderGate(null);
+            trCheckReady();
+          } else if (mode === 'train-state2') {
+            gateGreen();
+          } else if (mode === 'train-state2-missing') {
+            el('tr-train-url').value = trainUrl;
+            el('tr-val-url').value = valUrl;
+            trGate = null;
+            trRenderGate({
+              ok: false, headline: 'These tables aren’t on disk yet.',
+              problems: ['val table not found on disk (<code>' + esc(midTrunc(valUrl, 64)) + '</code>).']
+            });
+            trCheckReady();
+          } else if (mode === 'train-state2-invalid') {
+            gateGreen();
+            el('tr-epochs').value = '999';
+            trValidateField('tr-epochs');
+          } else if (mode === 'train-state3') {
+            gateGreen();
+            trRunning = true;
+            trCheckReady();
+            el('tr-cancel-btn').disabled = false;
+            el('tr-spinner').style.display = 'inline-block';
+            el('tr-state').textContent = 'Training… (safe to navigate away)';
+            trRenderRunView(JOB('running', 12, 50));
+            el('tr-log').textContent = LOG.join('\n');
+            el('tr-log-details').style.display = 'block';
+          } else if (mode === 'train-state4') {
+            gateGreen();
+            trRenderTerminal(doneJob(), false, false);
+            el('tr-log').textContent = LOG.concat([
+              "PASS run records model == yolo11n.yaml (from scratch) — model='yolo11n.yaml'",
+              'PASS run records imgsz == 640 — imgsz=640',
+              'PASS run records pretrained == False — pretrained=False',
+              'best.pt: ' + weights + ' (exists: True)'
+            ]).join('\n');
+            el('tr-log-details').style.display = 'block';
+          } else if (mode === 'train-state5') {
+            gateGreen();
+            trRenderTerminal(JOB('failed', 7, 50, {
+              error: 'RuntimeError: CUDA out of memory. Tried to allocate 512.00 MiB.'
+            }), false, false);
+            el('tr-log').textContent = LOG.concat([
+              'FAILED: CUDA out of memory. Tried to allocate 512.00 MiB.'
+            ]).join('\n');
+            el('tr-log-details').style.display = 'block';
+          } else if (mode === 'train-state6') {
+            gateGreen();
+            trRenderTerminal(doneJob(), false, true);
+          }
+        }
+        showTab('train');
+        apply();
+        configLoaded.then(function () { setTimeout(apply, 0); });
+      }
+
+      // Assigned here (sections below consult it); the dispatch itself runs
+      // at the END of the script so forced states apply after every tab's
+      // vars and handlers exist.
       var kgDevMode = new URLSearchParams(window.location.search).get('kgdev');
-      if (kgDevMode) { kgDevForce(kgDevMode); } else { kgInitImportTab(); }
 
       // ── Train tab ──────────────────────────────────────────────────
       var trainJobId = null;
@@ -2226,7 +2382,7 @@
             if (d.val && !el('tr-val-url').value.trim()) { el('tr-val-url').value = d.val.url; }
           });
       }).catch(function () { /* leave pickers empty */ })
-        .then(function () { trVerifyTables(true); });
+        .then(function () { if (!kgDevMode) { trVerifyTables(true); } });
 
       // Disclosures default collapsed; a saved config that customized an
       // advanced field reopens its disclosure so nothing saved is invisible.
@@ -2371,24 +2527,123 @@
         box.innerHTML = html + '</div></div>';
       }
 
-      // Interim terminal rendering (run link + weights); the next commit
-      // replaces this with the banner vocabulary.
-      function trRenderTerminal(job) {
+      // ── Terminal states (banner vocabulary) + revisit ────────────────
+      function trShowForm(show) {
+        el('tr-form').style.display = show ? '' : 'none';
+      }
+
+      // Back to the form (Start new run / Start over analogue). Saved
+      // values are already applied by the config store; the gate re-runs.
+      function trEnterFormState(animate) {
+        trShowForm(true);
+        el('tr-banner').innerHTML = '';
+        el('tr-progress').innerHTML = '';
+        el('tr-checks').innerHTML = '';
+        el('tr-result').innerHTML = '';
+        el('tr-state').textContent = '';
+        trLogReset();
+        trHadChecks = false;
+        el('tr-start-btn').innerHTML = KG_BTN_TRAIN;
+        if (animate) { kglEnter(el('tr-form')); el('tr-epochs').focus(); }
+        trVerifyTables(true);
+      }
+
+      function trRenderSuccessBanner(job, animate, revisit) {
         var facts = job.facts || {};
-        var out = '';
-        if (facts.run_url) {
-          var link = dashRunLink(facts.run_url);
-          out += '<div style="margin: 6px 0;">' +
-                 (link ? '<a class="btn btn-primary btn-sm kgi-btn" href="' + link +
-                         '" target="_blank"><span>Open Run in Dashboard</span>' +
-                         kgIcon('external-link', 'kgi-12') + '</a> ' : '') +
-                 '<code style="font-size: 11px;">' + esc(facts.run_url) + '</code></div>';
+        var result = job.result || {};
+        var weights = facts.weights || result.weights || '';
+        var link = facts.run_url ? dashRunLink(facts.run_url) : '';
+        var banner = '<div class="alert alert-success' + (animate ? ' kgl-enter' : '') + '">' +
+          '<span class="alert-icon">' + kgCheckIcon(animate) + '</span>' +
+          '<div style="flex:1;min-width:0">' +
+          '<strong>Training complete: best.pt saved</strong>' +
+          (weights
+            ? '<div style="margin-top:4px;font-size:12px;display:flex;gap:6px;align-items:center;min-width:0">' +
+              '<span style="min-width:0;overflow:hidden;white-space:nowrap;color:var(--text-secondary)" ' +
+              'title="' + esc(weights) + '">' + esc(midTrunc(weights, 64)) + '</span>' +
+              '<button type="button" class="btn btn-ghost btn-sm kgi-btn" data-copy="' + esc(weights) +
+              '" title="Copy weights path" aria-label="Copy weights path">' + kgIcon('copy') + '</button></div>'
+            : '') +
+          '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+          '<button type="button" class="btn btn-primary btn-sm kgi-btn" id="tr-continue-submit">' +
+          '<span>Continue to Submit</span>' + kgIcon('arrow-right') + '</button>' +
+          (link ? '<a class="btn btn-secondary btn-sm kgi-btn" target="_blank" href="' + link +
+                  '"><span>Open Run in Dashboard</span>' + kgIcon('external-link', 'kgi-12') + '</a>' : '') +
+          (revisit ? '<button type="button" class="btn btn-ghost btn-sm" id="tr-start-new">Start new run</button>' : '') +
+          '</div></div></div>';
+        el('tr-banner').innerHTML = banner;
+        kgBindCopy(el('tr-banner'));
+        el('tr-continue-submit').addEventListener('click', function () { showTab('submit'); });
+        if (revisit) {
+          el('tr-start-new').addEventListener('click', function () { trEnterFormState(true); });
         }
-        if (facts.weights) {
-          out += '<div style="margin-top: 6px;">Weights: <code style="font-size: 11px;">' +
-                 esc(facts.weights) + '</code></div>';
+      }
+
+      function trRenderFailBanner(message, animate, headline) {
+        el('tr-banner').innerHTML =
+          '<div class="alert alert-error' + (animate ? ' kgl-enter' : '') + '">' +
+          '<span class="alert-icon">' + kgIcon('x-circle', 'kgi-16') + '</span>' +
+          '<div style="flex:1;min-width:0"><strong>' + esc(headline || 'Training failed') + '</strong>' +
+          '<div style="margin-top:4px;font-size:12.5px">' + esc(message) + '</div>' +
+          '<div style="margin-top:8px" id="tr-diag-slot"></div></div></div>';
+      }
+
+      function trRenderCancelledBanner(job, animate) {
+        var epochs = (job.result || {}).epochs_completed || (job.progress || {}).epoch || 0;
+        var weights = (job.facts || {}).weights || '';
+        el('tr-banner').innerHTML = '<div class="' + (animate ? 'kgl-enter' : '') + '">' +
+          '<div class="kg-callout info">' + kgIcon('info') +
+          '<span>Training cancelled after ' + epochs + ' epoch' + (epochs === 1 ? '' : 's') + '.' +
+          (weights ? ' The best checkpoint so far was kept.' : '') +
+          ' Start Training begins a new run.</span></div></div>';
+      }
+
+      // Terminal orchestrator, shared by the live poll and revisit.
+      // Success on revisit hides the form (Import State-6 parity: Start
+      // new run restores it); live success keeps the form below the
+      // results, exactly like Import's live State 4. Failure keeps the
+      // form populated and flips the CTA to Re-run.
+      function trRenderTerminal(job, animate, revisit) {
+        trRenderRunView(job);
+        var checks = (job.checks && job.checks.length)
+          ? job.checks : ((job.result || {}).provenance || []);
+        if (checks.length) {
+          // Provenance arrives with the terminal record: cascade it on a
+          // live finish (once), render static on revisit.
+          trRenderProvenance(checks, animate && !trHadChecks);
+          trHadChecks = true;
         }
-        el('tr-result').innerHTML = out;
+        var facts = job.facts || {};
+        if (job.status === 'completed') {
+          trRenderSuccessBanner(job, animate, revisit);
+          if (facts.run_url) {
+            el('tr-result').innerHTML =
+              '<div class="kg-callout info">' + kgIcon('info') + '<span>Review per-sample ' +
+              'losses and embeddings in the Run to find label issues; fix them in the ' +
+              'Dashboard and retrain with "Use latest revision" on. That loop is the ' +
+              'competition.</span></div>';
+          }
+          trShowForm(!revisit);
+          el('tr-start-btn').innerHTML = KG_BTN_TRAIN;
+        } else if (job.status === 'cancelled') {
+          trRenderCancelledBanner(job, animate);
+          trShowForm(true);
+          el('tr-start-btn').innerHTML = KG_BTN_TRAIN;
+        } else {   // failed or stale
+          trRenderFailBanner(
+            job.error || 'Training failed. See the log below.', animate,
+            job.status === 'stale' ? 'Training was interrupted' : 'Training failed');
+          trShowForm(true);
+          el('tr-start-btn').innerHTML = KG_BTN_TRAIN_RERUN;
+        }
+        if (animate) {
+          kgScrollTo(el('tr-banner'));
+          var alertEl = el('tr-banner').firstChild;
+          if (alertEl && alertEl.setAttribute) {
+            alertEl.setAttribute('tabindex', '-1');
+            alertEl.focus({ preventScroll: true });
+          }
+        }
       }
 
       var trHadChecks = false;   // cascade only on live arrival
@@ -2401,27 +2656,25 @@
             el('tr-log-details').style.display = 'block';
             el('tr-log').textContent = (job.log || []).join('\n');
             if (trLogOpen()) { el('tr-log').scrollTop = el('tr-log').scrollHeight; }
-            trRenderRunView(job);
-            if (job.checks && job.checks.length) {
-              trRenderProvenance(job.checks, !trHadChecks);
-              trHadChecks = true;
-            }
             if (job.status === 'running') {
+              trRenderRunView(job);
+              if (job.checks && job.checks.length) {
+                trRenderProvenance(job.checks, !trHadChecks);
+                trHadChecks = true;
+              }
               el('tr-state').textContent = job.cancelled
                 ? 'Cancelling… (stops at the next checkpoint)'
                 : 'Training… (safe to navigate away)';
               return;
             }
             clearInterval(trainTimer);
+            trainTimer = null;
             trRunning = false;
             trCheckReady();
             el('tr-cancel-btn').disabled = true;
             el('tr-spinner').style.display = 'none';
-            el('tr-state').textContent =
-              job.status === 'completed' ? 'Training complete'
-              : job.status === 'cancelled' ? 'Cancelled'
-              : (job.error || 'Training failed');
-            trRenderTerminal(job);
+            el('tr-state').textContent = '';   // the banner is the headline
+            trRenderTerminal(job, true, false);
             renderPipeline();
           })
           .catch(function () { /* transient poll error — keep trying */ });
@@ -2526,7 +2779,8 @@
       }
 
       function trOnTabEnter() {
-        trVerifyTables(false);   // same-values re-entry is a no-op
+        if (kgDevMode) { return; }   // forced states own the gate
+        trVerifyTables(false);       // same-values re-entry is a no-op
       }
 
       ['tr-train-url', 'tr-val-url'].forEach(function (id) {
@@ -2656,6 +2910,7 @@
         };
         trRunning = true;
         trCheckReady();
+        el('tr-start-btn').innerHTML = KG_BTN_TRAIN;   // reset a Re-run label
         el('tr-spinner').style.display = 'inline-block';
         el('tr-state').textContent = 'Starting…';
         el('tr-banner').innerHTML = '';
@@ -2696,6 +2951,50 @@
           .then(function () { el('tr-state').textContent = 'Cancelling… (stops at the next checkpoint)'; })
           .catch(function () {});
       });
+
+      // ── Tab-open resolution (Train) ──────────────────────────────────
+      // Same precedence as Import: a still-running job wins (reconnect →
+      // in-run view; the job store's pid check guarantees restart orphans
+      // come back stale, never running), then the newest terminal record
+      // renders its summary (completed hides the form behind Start new
+      // run; failed/cancelled keep the form for a re-run), else the form.
+      function trInitTrainTab() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=train')
+          .then(function (r) { return r.json(); })
+          .catch(function () { return []; })
+          .then(function (list) {
+            list = list || [];
+            var running = list.filter(function (j) { return j.status === 'running'; })[0];
+            if (running && !trainTimer) {
+              trainJobId = running.id;
+              trHadChecks = false;
+              trRunning = true;
+              trCheckReady();
+              el('tr-cancel-btn').disabled = false;
+              el('tr-spinner').style.display = 'inline-block';
+              el('tr-state').textContent = 'Training… (safe to navigate away)';
+              trainTimer = setInterval(pollTrain, 2000);
+              pollTrain();
+              return;
+            }
+            var last = list[0];
+            if (!last) { return; }   // no train history: plain form state
+            // The list route strips checks and log — fetch the full record
+            // for the static terminal render.
+            API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + last.id)
+              .then(function (r) { return r.json(); })
+              .then(function (job) {
+                if (!job || !job.status || job.status === 'running') { return; }
+                trainJobId = job.id;
+                trRenderTerminal(job, false, true);
+                if (job.log && job.log.length) {
+                  el('tr-log').textContent = job.log.join('\n');
+                  el('tr-log-details').style.display = 'block';
+                }
+              })
+              .catch(function () { /* leave the form state */ });
+          });
+      }
 
       // ── Submit tab ─────────────────────────────────────────────────
       var psJobId = null;
@@ -3062,6 +3361,16 @@
       el('st-refresh-btn').addEventListener('click', refreshStatus);
       renderHistory();
       renderKaggleLive();
+
+      // ── Dev-affordance dispatch — LAST, so forced states apply after
+      // every tab's vars and handlers exist. Normal loads resolve the
+      // Import and Train tab-open states here instead.
+      if (kgDevMode) {
+        kgDevForce(kgDevMode);
+      } else {
+        kgInitImportTab();
+        trInitTrainTab();
+      }
     })();
   </script>
 </div>
