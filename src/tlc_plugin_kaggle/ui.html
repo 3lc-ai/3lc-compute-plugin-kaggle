@@ -678,10 +678,12 @@
             <label class="form-label" for="tr-conf">Conf threshold</label>
             <input id="tr-conf" type="number" class="form-control" value="0.1" step="0.01" min="0" max="1">
             <div class="form-help">Confidence cutoff for collected predictions.</div>
+            <div class="kg-field-slot" data-for="tr-conf"></div>
           </div>
           <div class="form-group">
             <label class="form-label" for="tr-maxdet">Max detections</label>
-            <input id="tr-maxdet" type="number" class="form-control" value="300" min="1">
+            <input id="tr-maxdet" type="number" class="form-control" value="300" min="1" max="1000">
+            <div class="kg-field-slot" data-for="tr-maxdet"></div>
           </div>
         </div>
 
@@ -733,6 +735,8 @@
                   </div>
                   <div class="form-help">First collection epoch (blank uses the trainer default)
                     and how often to collect, in epochs.</div>
+                  <div class="kg-field-slot" data-for="tr-colstart"></div>
+                  <div class="kg-field-slot" data-for="tr-colint"></div>
                 </div>
               </div>
               <div class="kg-check-cols" style="margin-top: 4px;">
@@ -870,6 +874,9 @@
           function (a) { a.classList.toggle('kg-loop-active', a.getAttribute('data-goto') === name); }
         );
         try { localStorage.setItem(TAB_KEY, name); } catch (e) { /* sandboxed */ }
+        // Tab-entry work (function declarations hoist within this IIFE):
+        // Train re-verifies its table gate — a same-values re-entry is free.
+        if (name === 'train') { trOnTabEnter(); }
       }
 
       Array.prototype.forEach.call(
@@ -1681,7 +1688,12 @@
         }
         banner += '</div></div></div>';
         el('kg-import-banner').innerHTML = banner;
-        el('kg-continue-train').addEventListener('click', function () { showTab('train'); });
+        el('kg-continue-train').addEventListener('click', function () {
+          // Continue-to-Train flow: the tab opens with its gate already
+          // verified (prefill chain) and focus lands on Epochs.
+          showTab('train');
+          el('tr-epochs').focus();
+        });
         if (kgRevisitSrc) {
           el('kg-start-over').addEventListener('click', function () { kgEnterFormState(true); });
         }
@@ -2162,7 +2174,9 @@
       }
 
       // Prefill table pickers with the canonical import outputs — after the
-      // saved config applies, and only into fields it left empty.
+      // saved config applies, and only into fields it left empty. Verify
+      // whatever landed (config or defaults) so the gate is already green
+      // when the tab opens on a healthy install.
       configLoaded.then(function () {
         return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
           .then(function (r) { return r.json(); })
@@ -2170,7 +2184,8 @@
             if (d.train && !el('tr-train-url').value.trim()) { el('tr-train-url').value = d.train.url; }
             if (d.val && !el('tr-val-url').value.trim()) { el('tr-val-url').value = d.val.url; }
           });
-      }).catch(function () { /* leave pickers empty */ });
+      }).catch(function () { /* leave pickers empty */ })
+        .then(function () { trVerifyTables(true); });
 
       // Disclosures default collapsed; a saved config that customized an
       // advanced field reopens its disclosure so nothing saved is invisible.
@@ -2259,7 +2274,8 @@
               return;
             }
             clearInterval(trainTimer);
-            el('tr-start-btn').disabled = false;
+            trRunning = false;
+            trCheckReady();
             el('tr-cancel-btn').disabled = true;
             el('tr-spinner').style.display = 'none';
             el('tr-state').textContent =
@@ -2271,35 +2287,202 @@
           .catch(function () { /* transient poll error — keep trying */ });
       }
 
-      // Client-side mirror of the server bounds (trainer._EXPOSED). The
-      // server remains the enforcer; this just fails faster with the same
-      // message shape.
+      // ── Train gating: table verification + inline bounds ────────────
+      // Mirror of Import's progressive disclosure: Start Training stays
+      // disabled until both table URLs verify against disk and every
+      // bounded field is in range. Verification reuses the read-only
+      // /import/revisions existence check — no new endpoint needed.
+      var trGate = null;            // truthy {ok: true} only on green
+      var trGateKind = 'idle';      // entrance animates on kind transitions only
+      var trGateTimer = null;
+      var trGateSeq = 0;            // stale-response guard
+      var trLastGateKey = null;
+      var trRunning = false;
+
+      function trTableName(url) {
+        var m = String(url).match(/datasets[\\\/]+([^\\\/]+)/);
+        return m ? m[1] : '';
+      }
+
+      function trRenderGate(data) {
+        var box = el('tr-tables-gate');
+        var kind = !data ? 'idle'
+          : data.checking ? 'checking'
+          : data.ok ? 'ok' : 'missing';
+        var entering = (kind !== trGateKind && (kind === 'ok' || kind === 'missing'))
+          ? 'kgl-enter' : '';
+        trGateKind = kind;
+        if (!data) {                     // no URLs yet
+          box.innerHTML = '<div class="form-help">Run Import (tab 1) to create the competition ' +
+                          'tables, or paste table URLs from the Dashboard.</div>';
+          return;
+        }
+        if (data.checking) {
+          box.innerHTML = '<div class="form-help">Checking tables…</div>';
+          return;
+        }
+        if (data.ok) {
+          var names = [trTableName(data.train_url) || 'train table',
+                       trTableName(data.val_url) || 'val table'];
+          box.innerHTML = '<div class="' + entering + '"><div class="kg-preflight-ok">' +
+            kgIcon('check') + '<span>Tables verified: ' + esc(names[0]) + ' · ' +
+            esc(names[1]) + '</span></div></div>';
+          return;
+        }
+        var problems = data.problems || [];
+        box.innerHTML = '<div class="' + entering + '"><div class="kg-callout warn">' +
+          kgIcon('alert-triangle') +
+          '<span><strong>' + esc(data.headline || 'Tables not found.') + '</strong>' +
+          (problems.length ? '<br>' + problems.map(function (p) { return '• ' + p; }).join('<br>') : '') +
+          '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm kgi-btn" ' +
+          'id="tr-goto-import"><span>Go to Import</span>' + kgIcon('arrow-right', 'kgi-12') +
+          '</button></div></span></div></div>';
+        el('tr-goto-import').addEventListener('click', function () { showTab('import'); });
+      }
+
+      function trVerifyTables(force) {
+        var trainUrl = el('tr-train-url').value.trim();
+        var valUrl = el('tr-val-url').value.trim();
+        var key = trainUrl + '\n' + valUrl;
+        if (!force && key === trLastGateKey) { return; }
+        trLastGateKey = key;
+        trGate = null;
+        trCheckReady();
+        if (!trainUrl || !valUrl) { trRenderGate(null); return; }
+        var seq = ++trGateSeq;
+        trRenderGate({ checking: true });
+        var check = function (url) {
+          return API.authFetch(computeUrl + '/api/plugins/kaggle/import/revisions?url=' +
+                               encodeURIComponent(url))
+            .then(function (r) { return r.json(); });
+        };
+        Promise.all([check(trainUrl), check(valUrl)])
+          .then(function (res) {
+            if (seq !== trGateSeq) { return; }   // superseded by newer input
+            var problems = [];
+            [['train', res[0], trainUrl], ['val', res[1], valUrl]].forEach(function (row) {
+              if (row[1].error) {
+                problems.push(row[0] + ': ' + esc(row[1].error));
+              } else if (!row[1].exists) {
+                problems.push(row[0] + ' table not found on disk (<code>' +
+                              esc(midTrunc(row[2], 64)) + '</code>).');
+              }
+            });
+            if (!problems.length) {
+              trGate = { ok: true, train_url: trainUrl, val_url: valUrl };
+              trRenderGate(trGate);
+            } else {
+              trGate = null;
+              trRenderGate({ ok: false, headline: 'These tables aren’t on disk yet.', problems: problems });
+            }
+            trCheckReady();
+          })
+          .catch(function (e) {
+            if (seq !== trGateSeq) { return; }
+            trGate = null;
+            trRenderGate({ ok: false, headline: 'Could not verify the tables: ' + e.message + '.' });
+            trCheckReady();
+          });
+      }
+
+      function trOnTabEnter() {
+        trVerifyTables(false);   // same-values re-entry is a no-op
+      }
+
+      ['tr-train-url', 'tr-val-url'].forEach(function (id) {
+        el(id).addEventListener('input', function () {
+          clearTimeout(trGateTimer);
+          trGateTimer = setTimeout(trVerifyTables, 500);
+        });
+        el(id).addEventListener('blur', function () {
+          clearTimeout(trGateTimer);
+          trVerifyTables();
+        });
+        el(id).addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            clearTimeout(trGateTimer);
+            trVerifyTables();
+          }
+        });
+        el(id).addEventListener('paste', function () {
+          clearTimeout(trGateTimer);
+          setTimeout(trVerifyTables, 0);   // after the pasted text lands
+        });
+      });
+
+      // Client-side mirror of the server bounds (trainer._EXPOSED and
+      // _SETTINGS_BOUNDS). The server remains the enforcer; these surface
+      // the same message shape inline, on blur, instead of letting submit
+      // fail. Fourth element = blank allowed (falls back to the default).
       var TR_BOUNDS = {
         'tr-epochs': ['epochs', 1, 300],
         'tr-batch': ['batch', 1, 128],
         'tr-lr0': ['lr0', 0.0001, 0.1],
         'tr-lrf': ['lrf', 0.01, 1.0],
         'tr-patience': ['patience', 0, 100],
-        'tr-workers': ['workers', 0, 16]
+        'tr-workers': ['workers', 0, 16],
+        'tr-conf': ['conf_thres', 0, 1],
+        'tr-maxdet': ['max_det', 1, 1000],
+        'tr-colstart': ['collection_epoch_start', 0, 300, true],
+        'tr-colint': ['collection_epoch_interval', 1, 300]
       };
+      var trInvalid = {};
 
-      function trBoundsError() {
-        for (var id in TR_BOUNDS) {
-          var spec = TR_BOUNDS[id];
-          var raw = el(id).value;
-          var v = parseFloat(raw);
-          if (raw === '' || isNaN(v) || v < spec[1] || v > spec[2]) {
-            el(id).focus();
-            return spec[0] + ' must be between ' + spec[1] + ' and ' + spec[2] +
-                   (raw === '' ? '.' : ' (got ' + raw + ').');
-          }
-        }
-        return null;
+      function trAnyInvalid() {
+        return Object.keys(trInvalid).some(function (id) { return trInvalid[id]; });
       }
 
+      function trCheckReady() {
+        el('tr-start-btn').disabled = trRunning || !(trGate && trGate.ok) || trAnyInvalid();
+      }
+
+      function trValidateField(id) {
+        var spec = TR_BOUNDS[id];
+        var slot = document.querySelector('.kg-field-slot[data-for="' + id + '"]');
+        var raw = el(id).value;
+        var v = parseFloat(raw);
+        var bad = raw === '' ? !spec[3] : (isNaN(v) || v < spec[1] || v > spec[2]);
+        trInvalid[id] = bad;
+        if (slot) {
+          slot.innerHTML = bad
+            ? '<div class="kg-field-err">' + kgIcon('x-circle', 'kgi-12') + '<span>' +
+              esc(spec[0] + ' must be between ' + spec[1] + ' and ' + spec[2] +
+                  (raw === '' ? '.' : ' (got ' + raw + ').')) + '</span></div>'
+            : '';
+        }
+        trCheckReady();
+        return !bad;
+      }
+
+      function trValidateAll() {
+        var firstBad = null;
+        Object.keys(TR_BOUNDS).forEach(function (id) {
+          if (!trValidateField(id) && !firstBad) { firstBad = id; }
+        });
+        return firstBad;
+      }
+
+      Object.keys(TR_BOUNDS).forEach(function (id) {
+        el(id).addEventListener('blur', function () { trValidateField(id); });
+        el(id).addEventListener('input', function () {
+          if (trInvalid[id]) { trValidateField(id); }   // fixing clears immediately
+        });
+      });
+      trCheckReady();   // Start stays disabled until the gate goes green
+
       el('tr-start-btn').addEventListener('click', function () {
-        var boundsError = trBoundsError();
-        if (boundsError) { el('tr-state').textContent = boundsError; return; }
+        var firstBad = trValidateAll();
+        if (firstBad) {
+          el(firstBad).focus();
+          el('tr-state').textContent = 'Fix the highlighted fields first.';
+          return;
+        }
+        // Safety net — the button is disabled until the gate goes green.
+        if (!(trGate && trGate.ok)) {
+          el('tr-state').textContent = 'Training needs verified tables. Check the URLs above.';
+          return;
+        }
         saveTabConfig('train');
         var body = {
           train_table_url: el('tr-train-url').value.trim(),
@@ -2331,7 +2514,8 @@
           collection_val_only: el('tr-valonly').checked,
           collection_disable: el('tr-coldisable').checked
         };
-        el('tr-start-btn').disabled = true;
+        trRunning = true;
+        trCheckReady();
         el('tr-spinner').style.display = 'inline-block';
         el('tr-state').textContent = 'Starting…';
         el('tr-banner').innerHTML = '';
@@ -2351,7 +2535,8 @@
             trainTimer = setInterval(pollTrain, 2000);
           })
           .catch(function (e) {
-            el('tr-start-btn').disabled = false;
+            trRunning = false;
+            trCheckReady();
             el('tr-spinner').style.display = 'none';
             el('tr-state').textContent = e.message;
           });
