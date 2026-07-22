@@ -299,6 +299,21 @@
   .kg-table-row .path { flex-basis: 100%; order: 10; }
 }
 
+/* Dataset at a glance — right-column card, green preflight only */
+.kg-glance { margin-top: 14px; }
+.kg-glance-stats { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.kg-stat {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px;
+  border: 1px solid var(--border-light, rgba(0,0,0,.08)); border-radius: 6px;
+}
+.kg-stat .lbl { font-size: 10.5px; color: var(--text-muted); }
+.kg-stat .val { font-size: 12px; font-weight: 600; color: var(--text); }
+.kg-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.kg-tag {
+  font-size: 10.5px; padding: 1px 7px; border: 1px solid var(--border-light, rgba(0,0,0,.08));
+  border-radius: 999px; color: var(--text-muted); white-space: nowrap;
+}
+
 /* Inline preflight feedback under the YAML path field. Callouts share one
    internal geometry: icon column + text, same padding/radius everywhere. */
 .kg-preflight-ok {
@@ -424,6 +439,7 @@
               <label class="form-label">Splits to import</label>
               <div id="kg-splits-body"></div>
             </div>
+            <div id="kg-glance"></div>
           </div>
         </div>
 
@@ -999,6 +1015,32 @@
         el('kg-splits-body').innerHTML = html;
       }
 
+      // Right-column balance: after a green preflight the column carries a
+      // compact "Dataset at a glance" card (counts, class tags, GT-guard
+      // note) — all data the preflight response already has. Clears
+      // instantly when preflight leaves green; the mismatch/error callout
+      // under the field owns those moments.
+      function kgRenderGlance(data, entering) {
+        var box = el('kg-glance');
+        if (!data || !data.all_ok) { box.innerHTML = ''; return; }
+        var html = '<div class="kg-glance' + (entering ? ' kgl-enter' : '') + '">' +
+          '<div class="kg-micro-label">Dataset at a glance</div>' +
+          '<div class="kg-glance-stats">';
+        ['train', 'val', 'test'].forEach(function (s) {
+          html += '<span class="kg-stat"><span class="lbl">' + s + '</span><span class="val">' +
+                  fmtCount(data.splits[s].found) + '</span></span>';
+        });
+        html += '</div>';
+        var names = (data.classes && data.classes.names) || [];
+        if (names.length) {
+          html += '<div class="kg-tags">' + names.map(function (n) {
+            return '<span class="kg-tag">' + esc(n) + '</span>';
+          }).join('') + '</div>';
+        }
+        if (data.test_labels_on_disk) { html += kgTestLabelsNote(); }
+        box.innerHTML = html + '</div>';
+      }
+
       function kgTestLabelsNote() {
         return '<div class="kg-callout info">' + kgIcon('info') +
                '<span>Test labels detected on disk — the GT-leak guard will import the test ' +
@@ -1024,28 +1066,32 @@
         if (!data) {                       // State 1: empty / no path yet
           box.innerHTML = KG_HINT_HTML;
           kgSplitsPlaceholder();
+          kgRenderGlance(null);
           return;
         }
         if (data.checking) {
           box.innerHTML = '<div class="form-help">Checking dataset…</div>';
+          kgRenderGlance(null);
           return;
         }
         if (data.error) {                  // parse failure / path not found
           box.innerHTML = '<div class="kg-callout err' + entering + '">' + kgIcon('x-circle') +
                           '<span>' + esc(data.error) + '</span></div>';
           kgSplitsPlaceholder();
+          kgRenderGlance(null);
           return;
         }
         if (data.all_ok) {
           var counts = ['train', 'val', 'test'].map(function (s) {
             return fmtCount(data.splits[s].found);
           }).join(' / ');
+          // GT-guard note (test labels on disk) lives in the glance card here.
           var html = '<div class="kg-preflight-ok">' + kgIcon('check') +
                      '<span>Detected: train / val / test · 12 classes (canonical order) · ' + counts +
                      ' images — matches the competition dataset.</span></div>';
-          if (data.test_labels_on_disk) { html += kgTestLabelsNote(); }
           box.innerHTML = '<div class="' + (entering ? 'kgl-enter' : '') + '">' + html + '</div>';
           kgRenderSplitsLocked();
+          kgRenderGlance(data, !!entering);
           return;
         }
         // Mismatch: name exactly what's off, with a remediation hint.
@@ -1083,6 +1129,7 @@
         box.innerHTML = '<div class="' + (entering ? 'kgl-enter' : '') + '">' + mhtml + '</div>';
         kgBindDiag(box);
         kgSplitsPlaceholder();
+        kgRenderGlance(null);
       }
 
       function kgCheckReady() {
