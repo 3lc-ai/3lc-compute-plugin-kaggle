@@ -133,10 +133,10 @@
 /* Overflow containment: long table paths / log lines must never push the
    card past its container. Scoped to the finished panels (Submit/Status
    restyle in their own sessions). */
-#kg-panel-import .card, #kg-panel-train .card { min-width: 0; }
-#kg-panel-import .card-body, #kg-panel-train .card-body { min-width: 0; }
-#kg-panel-import code, #kg-panel-train code { word-break: break-all; }
-#kg-panel-import pre, #kg-panel-train pre { white-space: pre-wrap; word-break: break-all; overflow-x: auto; max-width: 100%; }
+#kg-panel-import .card, #kg-panel-train .card, #kg-panel-submit .card { min-width: 0; }
+#kg-panel-import .card-body, #kg-panel-train .card-body, #kg-panel-submit .card-body { min-width: 0; }
+#kg-panel-import code, #kg-panel-train code, #kg-panel-submit code { word-break: break-all; }
+#kg-panel-import pre, #kg-panel-train pre, #kg-panel-submit pre { white-space: pre-wrap; word-break: break-all; overflow-x: auto; max-width: 100%; }
 
 /* Per-split job rows (stock importer queue-panel anatomy) */
 .kg-job-row {
@@ -269,7 +269,7 @@
   }
 
   /* Button feedback: smooth whatever the shared hover styles change */
-  #kg-panel-import .btn, #kg-panel-train .btn {
+  #kg-panel-import .btn, #kg-panel-train .btn, #kg-panel-submit .btn {
     transition: background-color var(--kgl-motion-fast) var(--kgl-ease-out),
                 border-color var(--kgl-motion-fast) var(--kgl-ease-out),
                 color var(--kgl-motion-fast) var(--kgl-ease-out),
@@ -281,7 +281,7 @@
   .kg-loop a { transition: color var(--kgl-motion-fast) var(--kgl-ease-out); }
 
   /* Stat-value swaps (kgSwapText): fade out, swap, fade back */
-  .kg-metric .val, .kg-run-meta .epoch {
+  .kg-metric .val, .kg-run-meta .epoch, .kg-hero .num, .kg-stat .val {
     transition: opacity var(--kgl-motion-fast) var(--kgl-ease-out);
   }
 
@@ -391,6 +391,47 @@
 .kg-spark polyline { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .kg-spark circle { fill: currentColor; stroke: none; }
 
+/* ── Predict + Submit tab (two-step flow) ─────────────────────────────
+   Step 1 (inference: free, repeatable) and Step 2 (spends a daily Kaggle
+   attempt) are visually distinct sections gated left to right. */
+/* Segmented source toggle: one control, either/or made structural */
+.kg-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+.kg-seg button {
+  border: 0; background: transparent; padding: 5px 12px; font-size: 12px;
+  color: var(--text-secondary); cursor: pointer; font: inherit; font-size: 12px;
+}
+.kg-seg button + button { border-left: 1px solid var(--border); }
+.kg-seg button[aria-pressed="true"] {
+  background: var(--accent-light, rgba(42,74,97,.08)); color: var(--accent); font-weight: 600;
+}
+/* Step 2 muted until a validated prediction exists (controls also get the
+   disabled attribute — the muting is visual, the gate is real) */
+.kg-step-muted { opacity: .55; pointer-events: none; }
+/* Results panel: sanity card + hero stat side by side, collapsing narrow */
+.kg-results-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch; margin-top: 12px; }
+.kg-sanity {
+  flex: 1 1 320px; min-width: 0; border: 1px solid var(--border-light, rgba(0,0,0,.08));
+  border-radius: var(--radius-lg, 8px); padding: 10px 12px;
+}
+.kg-sanity .kg-tags { margin-top: 8px; }
+.kg-hero {
+  flex: 0 0 auto; border: 1px solid var(--border-light, rgba(0,0,0,.08));
+  border-radius: var(--radius-lg, 8px); padding: 10px 16px; min-width: 150px;
+}
+.kg-hero .num { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1.15; }
+.kg-hero .lbl {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .4px; color: var(--text-muted); margin-top: 2px;
+}
+.kg-hero .note { font-size: 10.5px; color: var(--text-muted); margin-top: 4px; max-width: 160px; }
+/* CSV facts row */
+.kg-csv-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px;
+  font-size: 12.5px;
+}
+.kg-csv-row .fname { font-weight: 600; color: var(--text); }
+.kg-csv-row .path { min-width: 0; overflow: hidden; white-space: nowrap; font-size: 11px; color: var(--text-muted); }
+
 /* Inline preflight feedback under the YAML path field. Callouts share one
    internal geometry: icon column + text, same padding/radius everywhere. */
 .kg-preflight-ok {
@@ -410,6 +451,8 @@
 .kg-callout.err > .kgi { color: var(--danger, #ef4444); }
 .kg-callout.info { background: var(--accent-light, rgba(42,74,97,.05)); border: 1px solid var(--border); color: var(--text-secondary); }
 .kg-callout.info > .kgi { color: var(--text-muted); }
+.kg-callout.ok { background: rgba(5,150,105,.08); border: 1px solid rgba(5,150,105,.25); }
+.kg-callout.ok > .kgi { color: var(--success); }
 </style>
 
 <div class="plugin-page-narrow" style="padding: 24px; max-width: 900px; margin: 0 auto;">
@@ -813,46 +856,112 @@
 
   <!-- ── 3. Predict + Submit ───────────────────────────────────────── -->
   <div class="kg-panel" id="kg-panel-submit">
-  <div class="card" style="padding: 16px; margin-bottom: 16px;">
-    <h2 style="margin-top: 0;"><span class="plugin-section-number">3</span> Predict + Submit</h2>
-    <p style="opacity: .8; margin-top: 0;">
-      Inference on the test table (imgsz 640, locked) → <code>submission.csv</code>
-      (id, image_id, prediction_string; image_id = filename stem) → pre-flight format
-      validation (the metric's exact rules, so a bad file never burns a Kaggle
-      submission) → optional Kaggle upload.
-    </p>
-    <div id="ps-conn" class="kg-conn"><em style="opacity:.7;">Checking Kaggle connection…</em></div>
-    <div class="plugin-form-grid" style="display: grid; gap: 8px; max-width: 720px;">
-      <label>Run (trained via this plugin)
-        <select id="ps-run" style="width: 100%;"><option value="">— select a run —</option></select>
-      </label>
-      <label>…or weights path (for runs made outside the plugin)
-        <input id="ps-weights" type="text" style="width: 100%;" placeholder="C:\...\weights\best.pt">
-      </label>
-      <label>Test table URL
-        <input id="ps-test-url" type="text" style="width: 100%;">
-      </label>
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-header"><div>
+      <div class="card-title"><span class="plugin-section-number">3</span> Predict + Submit</div>
+      <div class="card-subtitle">Inference on the test table (640px, locked) becomes a validated
+        <code>submission.csv</code>; submitting it to Kaggle spends one of your daily attempts.</div>
+    </div></div>
+    <div class="card-body">
+      <!-- Connection guard banner (network-level failures only) -->
+      <div id="ps-conn-banner" role="status" aria-live="polite"></div>
+
+      <!-- ── Step 1: Predict (free, repeatable) ─────────────────────── -->
+      <div id="ps-step1">
+        <div class="kg-sec-head">Step 1 · Predict</div>
+        <div id="ps1-banner"></div>
+        <form id="ps-form" onsubmit="return false;">
+          <div class="form-group">
+            <label class="form-label required">Weights source</label>
+            <div class="kg-seg" role="group" aria-label="Weights source">
+              <button type="button" id="ps-src-run-btn" aria-pressed="true">Plugin run</button>
+              <button type="button" id="ps-src-weights-btn" aria-pressed="false">Weights file</button>
+            </div>
+            <div id="ps-src-run">
+              <div class="kg-select-wrap">
+                <select id="ps-run" class="form-control"><option value="">Loading runs…</option></select>
+                <span class="kg-select-caret"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6L8 10.5 12.5 6"/></svg></span>
+              </div>
+              <div id="ps-run-note"></div>
+            </div>
+            <div id="ps-src-weights" hidden>
+              <input id="ps-weights" type="text" class="form-control" autocomplete="off" spellcheck="false"
+                     placeholder="C:\...\weights\best.pt">
+              <div class="kg-callout warn" style="margin-top: 6px;">
+                <svg class="kgi" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.6L14.4 13.4H1.6L8 2.6z"/><path d="M8 6.8v2.8"/><path d="M8 12h.01"/></svg>
+                <span>External weights: provenance cannot be verified by the plugin.</span>
+              </div>
+            </div>
+          </div>
+          <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;">
+            <div class="form-group">
+              <label class="form-label required" for="ps-test-url">Test table URL</label>
+              <input id="ps-test-url" type="text" class="form-control" autocomplete="off" spellcheck="false">
+              <div id="ps-table-gate"></div>
+            </div>
+            <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px;">
+              <div class="form-group">
+                <label class="form-label" for="ps-conf">Conf threshold</label>
+                <input id="ps-conf" type="number" class="form-control" value="0.25" step="0.01" min="0" max="1">
+                <div class="kg-field-slot" data-for="ps-conf"></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="ps-device">Device</label>
+                <input id="ps-device" type="text" class="form-control" value="0">
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button type="button" id="ps-predict-btn" class="btn btn-primary btn-lg kgi-btn" disabled>Run inference</button>
+            <span class="spinner" id="ps-spinner" style="display: none;"></span>
+            <span id="ps-state" aria-live="polite" style="font-size: 12px; color: var(--text-muted);"></span>
+          </div>
+        </form>
+        <div id="ps-progress" style="margin-top: 12px;"></div>
+        <div id="ps-results"></div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── Step 2: Submit to Kaggle (spends a daily attempt) ──────── -->
+      <div id="ps-step2">
+        <div class="kg-sec-head">Step 2 · Submit to Kaggle</div>
+        <div id="ps-basis"></div>
+        <div id="ps-step2-body" class="kg-step-muted">
+          <div id="ps-kconn" style="margin-bottom: 12px;"></div>
+          <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;">
+            <div class="form-group">
+              <label class="form-label" for="ps-slug">Competition slug</label>
+              <input id="ps-slug" type="text" class="form-control" placeholder="loading default…" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="ps-message">Submission message</label>
+              <input id="ps-message" type="text" class="form-control" placeholder="<run_name> via 3LC plugin">
+              <div class="form-help">Shows in your Kaggle submission history. Blank uses
+                "&lt;run name&gt; via 3LC plugin".</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button type="button" id="ps-submit-btn" class="btn btn-primary btn-lg kgi-btn" disabled>Submit to Kaggle</button>
+            <span class="spinner" id="ps-submit-spinner" style="display: none;"></span>
+            <span id="ps-submit-state" aria-live="polite" style="font-size: 12px; color: var(--text-muted);"></span>
+          </div>
+        </div>
+        <div id="ps-banner" style="margin-top: 12px;"></div>
+      </div>
+
+      <div class="kg-log-details" id="ps-log-details" style="display: none;">
+        <button type="button" class="kgl-acc-summary" id="ps-log-toggle"
+                aria-expanded="false" aria-controls="ps-log-panel">
+          <span class="kgl-acc-caret" aria-hidden="true"><svg class="kgi kgi-12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span> Show log
+        </button>
+        <div class="kgl-acc" id="ps-log-panel" hidden>
+          <div class="kgl-acc-inner">
+            <pre id="ps-log"></pre>
+          </div>
+        </div>
+      </div>
     </div>
-    <div style="display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 8px; max-width: 720px; margin-top: 8px;">
-      <label>Conf threshold <input id="ps-conf" type="number" value="0.25" step="0.01" min="0" max="1" style="width: 100%;"></label>
-      <label>Device <input id="ps-device" type="text" value="0" style="width: 100%;"></label>
-      <label>Competition slug <input id="ps-slug" type="text" placeholder="loading default…" style="width: 100%;"></label>
-    </div>
-    <label style="display: block; margin-top: 8px; max-width: 720px;">Submission message
-      <input id="ps-message" type="text" style="width: 100%;" placeholder="<run_name> via 3LC plugin">
-    </label>
-    <label style="display: block; margin-top: 6px;">
-      <input id="ps-csvonly" type="checkbox"> Generate CSV only — don't submit to Kaggle
-    </label>
-    <div class="plugin-action-bar" style="margin-top: 12px;">
-      <button id="ps-start-btn" class="btn btn-primary">Predict &amp; Submit</button>
-      <span id="ps-state" style="margin-left: 10px; opacity: .8;"></span>
-    </div>
-    <div id="ps-progress" style="margin-top: 10px;"></div>
-    <div id="ps-checks" style="margin-top: 8px;"></div>
-    <div id="ps-result" style="margin-top: 8px;"></div>
-    <pre id="ps-log" style="margin-top: 12px; max-height: 220px; overflow: auto; display: none;
-         font-size: 12px; padding: 8px; border-radius: 6px;"></pre>
   </div>
   </div>
 
@@ -960,6 +1069,7 @@
         'copy': '<rect x="6" y="6" width="7.5" height="7.5" rx="1.5"/><path d="M10 3.5H4A1.5 1.5 0 0 0 2.5 5v6"/>',
         'arrow-right': '<path d="M2.5 8h11"/><path d="M9.5 4l4 4-4 4"/>',
         'upload': '<path d="M8 10.5v-8"/><path d="M4.5 6L8 2.5 11.5 6"/><path d="M2.5 13.5h11"/>',
+        'download': '<path d="M8 2.5v8"/><path d="M4.5 7L8 10.5 11.5 7"/><path d="M2.5 13.5h11"/>',
         'flag': '<path d="M3.5 14V2.5"/><path d="M3.5 3h8.5l-1.8 2.5L12 8H3.5"/>',
         'refresh-cw': '<path d="M13.5 8a5.5 5.5 0 1 1-1.7-3.97"/><path d="M13.5 2.5V6H10"/>',
         'chevron-right': '<path d="M6 3.5L10.5 8 6 12.5"/>',
@@ -1085,7 +1195,7 @@
         var DELAYS = [2000, 5000, 10000];
         // One guard, one state — rendered into every finished tab's slot
         // (only the active panel's slot is visible).
-        var SLOTS = ['kg-conn-banner', 'tr-conn-banner'];
+        var SLOTS = ['kg-conn-banner', 'tr-conn-banner', 'ps-conn-banner'];
 
         function show(html) {
           SLOTS.forEach(function (id) {
@@ -1289,7 +1399,7 @@
         },
         submit: {
           'ps-test-url': 'test_table_url', 'ps-conf': 'conf', 'ps-device': 'device',
-          'ps-slug': 'competition_slug', 'ps-csvonly': 'csv_only'
+          'ps-slug': 'competition_slug'
         }
       };
 
@@ -3069,9 +3179,33 @@
           });
       }
 
-      // ── Submit tab ─────────────────────────────────────────────────
-      var psJobId = null;
-      var psTimer = null;
+      // ── Predict + Submit tab (two-step flow) ────────────────────────
+      // Step 1 (inference) is free and repeatable; its results panel is
+      // the decision surface. Step 2 (Kaggle upload) stays muted until a
+      // validated prediction exists, and spends a daily attempt.
+      var psPredictJobId = null, psPredictTimer = null;
+      var psSubmitJobId = null, psSubmitTimer = null;
+      var psRuns = [];
+      var psSource = 'run';            // 'run' | 'weights'
+      var psGate = null;               // test-table gate (green only)
+      var psGateKind = 'idle', psGateTimer = null, psGateSeq = 0, psLastGateKey = null;
+      var psPredicting = false, psSubmitting = false;
+      var psStep2Enabled = false;
+      var psBasis = null;              // the prediction step 2 would submit
+      var psConnState = null;          // last /kaggle/connection payload
+      var psInvalid = {};
+      var psLastChecks = null, psLastSanity = null, psLastSubmission = null;
+
+      var KG_BTN_PREDICT = kgIcon('play', 'kgi-16') + '<span>Run inference</span>';
+      var KG_BTN_PREDICT_RERUN = kgIcon('refresh-cw', 'kgi-16') + '<span>Re-run inference</span>';
+      var KG_BTN_SUBMIT = kgIcon('upload', 'kgi-16') + '<span>Submit to Kaggle</span>';
+      el('ps-predict-btn').innerHTML = KG_BTN_PREDICT;
+      el('ps-submit-btn').innerHTML = KG_BTN_SUBMIT;
+      kgBindAccordion('ps-log-toggle', 'ps-log-panel');
+
+      function psLogOpen() {
+        return el('ps-log-toggle').getAttribute('aria-expanded') === 'true';
+      }
 
       // Download a job's submission CSV through the authenticated API
       // (a plain <a href> would miss the Authorization header).
@@ -3097,179 +3231,438 @@
       // renderHistory builds rows as strings — expose for onclick handlers.
       window.kgDownloadCsv = downloadCsv;
 
-      // Three-state connection panel: no credential / not joined / ready.
-      function renderConnection() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/kaggle/connection?slug=' +
-                      encodeURIComponent(el('ps-slug').value.trim()))
+      // Predict flavor of Copy diagnostics: inputs, the five format
+      // checks, sanity numbers, submission response, log tail.
+      function psBuildDiagnostics() {
+        var head = [];
+        if (psBasis && psBasis.run_name) { head.push('run: ' + psBasis.run_name); }
+        var run = psSelectedRun();
+        var weights = psSource === 'weights' ? el('ps-weights').value.trim() : (run ? run.weights : '');
+        if (weights) { head.push('weights: ' + weights); }
+        head.push('conf: ' + el('ps-conf').value);
+        if (psPredictJobId) { head.push('predict job: ' + psPredictJobId); }
+        if (psSubmitJobId) { head.push('submit job: ' + psSubmitJobId); }
+        return kgBuildDiagnosticsCore([
+          head,
+          kgChecksSection('format checks', psLastChecks),
+          psLastSanity ? ['', '[sanity]', JSON.stringify(psLastSanity, null, 1)] : null,
+          psLastSubmission ? ['', '[submission]', JSON.stringify(psLastSubmission, null, 1)] : null,
+          kgLogTailSection(el('ps-log'))
+        ]);
+      }
+
+      // ── Weights source: segmented either/or ─────────────────────────
+      function psSetSource(mode) {
+        psSource = mode;
+        el('ps-src-run-btn').setAttribute('aria-pressed', String(mode === 'run'));
+        el('ps-src-weights-btn').setAttribute('aria-pressed', String(mode === 'weights'));
+        el('ps-src-run').hidden = mode !== 'run';
+        el('ps-src-weights').hidden = mode !== 'weights';
+        // The either/or is structural: switching sides clears the other.
+        if (mode === 'run') { el('ps-weights').value = ''; }
+        else { el('ps-run').value = ''; psRenderRunNote(); }
+        psCheckPredictReady();
+      }
+      el('ps-src-run-btn').addEventListener('click', function () { psSetSource('run'); });
+      el('ps-src-weights-btn').addEventListener('click', function () { psSetSource('weights'); });
+      el('ps-weights').addEventListener('input', psCheckPredictReady);
+
+      // ── Run selector with provenance summaries ──────────────────────
+      function psFmtDate(ts) {
+        return ts ? new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      }
+
+      function psFmtAgo(ts) {
+        if (!ts) { return ''; }
+        var mins = Math.round((Date.now() / 1000 - ts) / 60);
+        if (mins < 1) { return 'just now'; }
+        if (mins < 60) { return mins + 'm ago'; }
+        if (mins < 60 * 24) { return Math.round(mins / 60) + 'h ago'; }
+        return psFmtDate(ts);
+      }
+
+      function psRunSummary(run) {
+        var bits = [run.provenance_ok ? 'from-scratch' : 'provenance unverified'];
+        if (run.epochs_completed) { bits.push(run.epochs_completed + ' epochs'); }
+        if (typeof run.best_map50 === 'number') { bits.push('best mAP50 ' + run.best_map50.toFixed(3)); }
+        var d = psFmtDate(run.created_at);
+        if (d) { bits.push(d); }
+        return bits.join(' · ');
+      }
+
+      function psSelectedRun() {
+        var id = el('ps-run').value;
+        return psRuns.filter(function (r) { return r.job_id === id; })[0] || null;
+      }
+
+      function psRenderRunNote() {
+        var run = psSelectedRun();
+        el('ps-run-note').innerHTML = (run && run.provenance_ok)
+          ? '<div class="kg-preflight-ok">' + kgIcon('check') +
+            '<span>From-scratch provenance verified on this run’s record.</span></div>'
+          : (run ? '<div class="kg-callout warn">' + kgIcon('alert-triangle') +
+            '<span>This run has no recorded provenance checks.</span></div>' : '');
+      }
+
+      function psLoadRuns() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/runs')
           .then(function (r) { return r.json(); })
-          .then(function (s) {
-            // Hardcoded competition default (server constant), still editable.
-            if (!el('ps-slug').value.trim() && s.default_slug) {
-              el('ps-slug').value = s.default_slug;
-            }
-            var box = el('ps-conn');
-            if (s.state === 'no_credentials') {
-              box.className = 'kg-conn err';
-              box.innerHTML = '<strong>🔌 Kaggle account not connected.</strong><br>' +
-                '<span style="opacity:.85">' + (s.help || '') + '</span>';
-            } else if (s.state === 'not_joined') {
-              box.className = 'kg-conn warn';
-              box.innerHTML = '<strong>🚪 Join the competition on Kaggle first.</strong> ' +
-                'Your account (<strong>' + (s.username || '?') + '</strong>) has not accepted the ' +
-                'competition rules yet — submissions would be rejected.<br>' +
-                '<a class="btn btn-secondary btn-sm" style="margin-top:6px; display:inline-block;" ' +
-                'href="' + s.competition_url + '" target="_blank">Open competition page →</a>';
-            } else if (s.state === 'ready') {
-              box.className = 'kg-conn ok';
-              var extra = '';
-              if (s.daily_limit) {
-                // LAUNCH-VERIFY: submissions_used_today only renders when
-                // ListSubmissions is permitted (403s on the private test comp).
-                extra = typeof s.submissions_used_today === 'number'
-                  ? ' · ' + s.submissions_used_today + ' of ' + s.daily_limit + ' submissions used today'
-                  : ' · ' + s.daily_limit + ' submissions/day';
-              }
-              box.innerHTML = '<strong>🟢 Connected to Kaggle</strong>' +
-                (s.username ? ' as <strong>' + s.username + '</strong>' : '') + extra +
-                (s.probe_error ? '<br><span style="opacity:.7">(competition probe failed: ' + s.probe_error + ')</span>' : '');
-            } else {
-              box.className = 'kg-conn';
-              box.innerHTML = '<em style="opacity:.7">Connection state unknown.</em>';
-            }
+          .then(function (runs) {
+            psRuns = runs || [];
+            var sel = el('ps-run');
+            var kept = sel.value;
+            sel.innerHTML = '';
+            var ph = document.createElement('option');
+            ph.value = '';
+            ph.textContent = psRuns.length ? 'Select a run…'
+              : 'No plugin runs yet. Train first, or use a weights file.';
+            sel.appendChild(ph);
+            psRuns.forEach(function (run) {
+              var opt = document.createElement('option');
+              opt.value = run.job_id;
+              opt.textContent = (run.run_name || run.job_id) + ' · ' +
+                (run.usable ? psRunSummary(run) : run.reason);
+              if (!run.usable) { opt.disabled = true; }
+              sel.appendChild(opt);
+            });
+            var firstUsable = psRuns.filter(function (r) { return r.usable; })[0];
+            sel.value = kept && psRuns.some(function (r) { return r.job_id === kept && r.usable; })
+              ? kept : (firstUsable ? firstUsable.job_id : '');
+            psRenderRunNote();
+            psCheckPredictReady();
+            // Loop banner "inspect" deep-links to the newest Run with a URL.
+            var withUrl = psRuns.filter(function (r) { return r.run_url; })[0];
+            if (withUrl && dashboardUrl) { el('kg-loop-inspect').href = dashRunLink(withUrl.run_url); }
           })
-          .catch(function () {
-            el('ps-conn').className = 'kg-conn';
-            el('ps-conn').innerHTML = '<em style="opacity:.7">Could not check the Kaggle connection ' +
-              '(is the compute service running with the latest plugin routes?).</em>';
+          .catch(function (e) {
+            kgConn.fail(e, psLoadRuns);
+            el('ps-run').options[0].textContent = 'Could not load runs. Use a weights file, or retry.';
           });
       }
-      configLoaded.then(renderConnection);
+      psLoadRuns();
+      el('ps-run').addEventListener('change', function () {
+        psRenderRunNote();
+        psCheckPredictReady();
+      });
 
-      function renderSanity(sanity) {
-        if (!sanity) { return ''; }
-        var html = '<div style="margin-top:6px; font-size:12.5px;">' +
-          '<strong>Pre-submit sanity:</strong> ' + sanity.total_boxes + ' boxes over ' +
-          sanity.images + ' images · mean ' + sanity.boxes_per_image_mean + '/image · ' +
-          sanity.empty_images + ' images with no boxes';
-        var pc = sanity.per_class || {};
-        var parts = Object.keys(pc).map(function (k) { return k + ' ' + pc[k]; });
-        if (parts.length) {
-          html += '<div style="opacity:.75; font-size:11.5px; margin-top:2px;">' + parts.join(' · ') + '</div>';
+      // ── Test-table gate (Train's pattern, one URL) ──────────────────
+      function psRenderGate(data) {
+        var box = el('ps-table-gate');
+        var kind = !data ? 'idle' : data.checking ? 'checking' : data.ok ? 'ok' : 'missing';
+        var entering = (kind !== psGateKind && (kind === 'ok' || kind === 'missing')) ? 'kgl-enter' : '';
+        psGateKind = kind;
+        if (!data) {
+          box.innerHTML = '<div class="form-help">Run Import (tab 1) to create the test table, ' +
+                          'or paste its URL from the Dashboard.</div>';
+          return;
         }
-        html += '</div>';
-        if (sanity.warning) {
-          html += '<div class="kg-soft-warn">⚠ ' + sanity.warning + '</div>';
+        if (data.checking) {
+          box.innerHTML = '<div class="form-help">Checking table…</div>';
+          return;
         }
-        return html;
+        if (data.ok) {
+          box.innerHTML = '<div class="' + entering + '"><div class="kg-preflight-ok">' +
+            kgIcon('check') + '<span>Table verified: ' + esc(trTableName(data.url) || 'test table') +
+            '</span></div></div>';
+          return;
+        }
+        box.innerHTML = '<div class="' + entering + '"><div class="kg-callout warn">' +
+          kgIcon('alert-triangle') + '<span><strong>' + esc(data.headline || 'Table not found.') +
+          '</strong><div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm kgi-btn" ' +
+          'id="ps-goto-import"><span>Go to Import</span>' + kgIcon('arrow-right', 'kgi-12') +
+          '</button></div></span></div></div>';
+        el('ps-goto-import').addEventListener('click', function () { showTab('import'); });
       }
 
-      // Run selector: plugin-trained runs with weights, newest first.
-      API.authFetch(computeUrl + '/api/plugins/kaggle/runs')
-        .then(function (r) { return r.json(); })
-        .then(function (runs) {
-          var sel = el('ps-run');
-          if (!runs.length) {
-            sel.options[0].textContent = '— no plugin runs yet: train first, or paste a weights path below —';
-            return;
-          }
-          runs.forEach(function (run) {
-            var opt = document.createElement('option');
-            opt.value = run.job_id;
-            opt.textContent = run.run_name + ' (' + run.status + ')';
-            sel.appendChild(opt);
+      function psVerifyTable(force) {
+        var url = el('ps-test-url').value.trim();
+        if (!force && url === psLastGateKey) { return; }
+        psLastGateKey = url;
+        psGate = null;
+        psCheckPredictReady();
+        if (!url) { psRenderGate(null); return; }
+        var seq = ++psGateSeq;
+        psRenderGate({ checking: true });
+        API.authFetch(computeUrl + '/api/plugins/kaggle/import/revisions?url=' + encodeURIComponent(url))
+          .then(function (r) { return r.json(); })
+          .then(function (info) {
+            if (seq !== psGateSeq) { return; }
+            if (info && info.exists) {
+              psGate = { ok: true, url: url };
+              psRenderGate(psGate);
+            } else {
+              psGate = null;
+              psRenderGate({ ok: false, headline: info && info.error
+                ? 'Could not read the table: ' + info.error
+                : 'This table isn’t on disk yet.' });
+            }
+            psCheckPredictReady();
+          })
+          .catch(function (e) {
+            if (seq !== psGateSeq) { return; }
+            if (kgConn.fail(e, function () { psVerifyTable(true); })) {
+              psRenderGate(null);
+              psCheckPredictReady();
+              return;
+            }
+            psGate = null;
+            psRenderGate({ ok: false, headline: 'Could not verify the table: ' + e.message + '.' });
+            psCheckPredictReady();
           });
-          // Loop banner "inspect" deep-links to the newest Run once one exists.
-          if (runs[0] && runs[0].run_url && dashboardUrl) {
-            el('kg-loop-inspect').href = dashRunLink(runs[0].run_url);
-          }
-        })
-        .catch(function () {
-          el('ps-run').options[0].textContent = '— could not load runs; paste a weights path below —';
+      }
+
+      ['input', 'blur', 'paste'].forEach(function (evt) {
+        el('ps-test-url').addEventListener(evt, function () {
+          clearTimeout(psGateTimer);
+          if (evt === 'input') { psGateTimer = setTimeout(psVerifyTable, 500); }
+          else { setTimeout(psVerifyTable, 0); }
         });
+      });
+      el('ps-test-url').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          clearTimeout(psGateTimer);
+          psVerifyTable();
+        }
+      });
+
+      // Conf bounds, inline on blur (server clamps too)
+      function psValidateConf() {
+        var raw = el('ps-conf').value;
+        var v = parseFloat(raw);
+        var bad = raw === '' || isNaN(v) || v < 0 || v > 1;
+        psInvalid['ps-conf'] = bad;
+        document.querySelector('.kg-field-slot[data-for="ps-conf"]').innerHTML = bad
+          ? '<div class="kg-field-err">' + kgIcon('x-circle', 'kgi-12') +
+            '<span>' + esc('conf must be between 0 and 1' + (raw === '' ? '.' : ' (got ' + raw + ').')) +
+            '</span></div>'
+          : '';
+        psCheckPredictReady();
+        return !bad;
+      }
+      el('ps-conf').addEventListener('blur', psValidateConf);
+      el('ps-conf').addEventListener('input', function () {
+        if (psInvalid['ps-conf']) { psValidateConf(); }
+      });
+
+      function psWeightsChosen() {
+        return psSource === 'run' ? !!el('ps-run').value : !!el('ps-weights').value.trim();
+      }
+
+      function psCheckPredictReady() {
+        el('ps-predict-btn').disabled =
+          psPredicting || !(psGate && psGate.ok) || !!psInvalid['ps-conf'] || !psWeightsChosen();
+      }
 
       // Test table default from the same helper the Train tab uses — saved
-      // config wins, defaults fill blanks only.
+      // config wins, defaults fill blanks only; then the gate verifies.
       configLoaded.then(function () {
         return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
           .then(function (r) { return r.json(); })
           .then(function (d) {
             if (d.test && !el('ps-test-url').value.trim()) { el('ps-test-url').value = d.test.url; }
           });
-      }).catch(function () { el('ps-test-url').placeholder = 'paste the exdark_test table URL (run Import first)'; });
+      }).catch(function () { /* leave the field empty */ })
+        .then(function () { if (!kgDevMode) { psVerifyTable(true); } });
 
-      function psPoll() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + psJobId)
-          .then(function (r) { return r.json(); })
-          .then(function (job) {
-            el('ps-log').style.display = 'block';
-            el('ps-log').textContent = (job.log || []).join('\n');
-            el('ps-log').scrollTop = el('ps-log').scrollHeight;
-            var p = job.progress || {};
-            el('ps-progress').innerHTML = p.total_images
-              ? '<strong>Inference: ' + (p.images || 0) + ' / ' + p.total_images + ' images</strong>'
-              : '';
-            if (job.checks && job.checks.length) {
-              var html = '<ul style="list-style: none; padding-left: 0; margin: 0;">';
-              job.checks.forEach(function (c) {
-                html += '<li>' + (c.ok ? '✅' : '❌') + ' ' + c.label +
-                        (c.detail ? ' <span style="opacity:.7">(' + c.detail + ')</span>' : '') + '</li>';
-              });
-              el('ps-checks').innerHTML = html + '</ul>';
-            }
-            var facts = job.facts || {};
-            var out = '';
-            if (facts.csv_path) {
-              out += 'CSV: <code style="font-size: 11px;">' + facts.csv_path + '</code>' +
-                     (typeof facts.local_score === 'number'
-                       ? ' — local mAP@0.5: <strong>' + facts.local_score.toFixed(4) + '</strong>'
-                       : '') +
-                     ' <button class="btn btn-secondary btn-sm" onclick="kgDownloadCsv(\'' +
-                     job.id + '\')">⬇ Download CSV</button><br>';
-            }
-            out += renderSanity(facts.sanity);
-            if (facts.submission) {
-              var sub = facts.submission;
-              if (sub.status === 'limit_reached') {
-                out += '<div class="kg-soft-warn">🕛 ' + sub.reason +
-                       ' <button class="btn btn-secondary btn-sm" onclick="kgDownloadCsv(\'' +
-                       job.id + '\')">⬇ Download CSV</button></div>';
-              } else if (sub.status === 'not_joined') {
-                out += '<div class="kg-soft-warn">🚪 ' + sub.reason + '</div>';
-              } else {
-                out += '<div style="margin-top:4px;">Submission: <strong>' + sub.status + '</strong>' +
-                       (sub.ref ? ' — ' + sub.ref : '') +
-                       (sub.reason ? ' <span style="opacity:.7">' + sub.reason + '</span>' : '') + '</div>';
-              }
-            }
-            el('ps-result').innerHTML = out;
-            if (job.status === 'running') { el('ps-state').textContent = 'Working…'; return; }
-            clearInterval(psTimer);
-            el('ps-start-btn').disabled = false;
-            el('ps-state').textContent =
-              job.status === 'completed' ? '✅ Done' : '❌ ' + (job.error || 'Failed');
-            renderPipeline();
-            renderConnection();
-          })
-          .catch(function () {});
+      // ── Step 1 in-progress + results panel ──────────────────────────
+      function psRenderProgress(job) {
+        var p = job.progress || {};
+        var box = el('ps-progress');
+        if (!box.querySelector('.kg-run-head')) {
+          box.innerHTML =
+            '<div class="kg-run-head">' +
+            '<span class="name">Inference</span>' +
+            '<span class="badge badge-status-running">running</span>' +
+            '<span class="kg-run-meta"><span class="epoch" id="ps-prog-count"></span>' +
+            '<span id="ps-prog-elapsed"></span></span></div>' +
+            '<div class="plugin-progress-wrap"><div class="plugin-progress-bar" id="ps-prog-bar" style="width:0%"></div></div>';
+        }
+        var total = p.total_images || 0;
+        kgSwapText(el('ps-prog-count'),
+          total ? 'Inference: ' + fmtCount(p.images || 0) + ' / ' + fmtCount(total) + ' images' : 'Starting…');
+        el('ps-prog-elapsed').textContent = job.created_at
+          ? 'elapsed ' + fmtDur(Date.now() / 1000 - job.created_at) : '';
+        el('ps-prog-bar').style.width =
+          (total ? Math.min(100, Math.round(100 * (p.images || 0) / total)) : 0) + '%';
       }
 
-      el('ps-start-btn').addEventListener('click', function () {
+      // The five format checks in the checks vocabulary, one group.
+      function psRenderChecks(checks, animate) {
+        if (!checks || !checks.length) { return ''; }
+        var passed = checks.filter(function (c) { return c.ok; }).length;
+        var allOk = passed === checks.length;
+        var html = '<div class="kg-verdict">' +
+          (allOk ? '<span class="ok">' + kgIcon('check-circle') + '</span>'
+                 : '<span class="bad">' + kgIcon('x-circle') + '</span>') +
+          '<span>' + passed + '/' + checks.length + ' format checks passed' +
+          (allOk ? '' : ' (' + (checks.length - passed) + ' failed)') + '</span></div>' +
+          '<div class="kg-checks-grid' + (animate ? ' kgl-cascade' : '') + '"><div>' +
+          '<div class="kg-checks-head">Submission format</div>';
+        checks.forEach(function (c, i) {
+          html += '<div class="kg-check"' + (animate ? ' style="--kgl-i:' + i + '"' : '') + '>' +
+                  (c.ok ? '<span class="ok">' + kgIcon('check') + '</span>'
+                        : '<span class="bad">' + kgIcon('x') + '</span>') +
+                  '<span class="kg-check-body">' + esc(c.label) +
+                  (c.detail ? ' <span class="detail">(' + esc(c.detail) + ')</span>' : '') +
+                  '</span></div>';
+        });
+        return html + '</div></div>';
+      }
+
+      function psSanityHtml(sanity) {
+        if (!sanity) { return ''; }
+        var html = '<div class="kg-sanity">' +
+          '<div class="kg-micro-label">Prediction sanity</div>' +
+          '<div class="kg-glance-stats">' +
+          '<span class="kg-stat"><span class="lbl">boxes</span><span class="val">' +
+            fmtCount(sanity.total_boxes) + '</span></span>' +
+          '<span class="kg-stat"><span class="lbl">mean/image</span><span class="val">' +
+            esc(String(sanity.boxes_per_image_mean)) + '</span></span>' +
+          '<span class="kg-stat"><span class="lbl">empty images</span><span class="val">' +
+            fmtCount(sanity.empty_images) + '</span></span></div>';
+        var pc = sanity.per_class || {};
+        var names = Object.keys(pc);
+        if (names.length) {
+          html += '<div class="kg-tags">' + names.map(function (n, i) {
+            return '<span class="kg-tag" style="' + kgClassTint(i) + '">' + esc(n) + ' · ' +
+                   fmtCount(pc[n]) + '</span>';
+          }).join('') + '</div>';
+        }
+        if (sanity.warning) {
+          html += '<div class="kg-callout warn" style="margin-top:8px">' + kgIcon('alert-triangle') +
+                  '<span>' + esc(sanity.warning) + '</span></div>';
+        }
+        return html + '</div>';
+      }
+
+      function psHeroHtml(score) {
+        if (typeof score !== 'number') { return ''; }
+        return '<div class="kg-hero"><div class="num" id="ps-hero-num">' + score.toFixed(4) + '</div>' +
+               '<div class="lbl">Local mAP@0.5</div>' +
+               '<div class="note">Host-only preview, not the leaderboard.</div></div>';
+      }
+
+      function psCsvRowHtml(jobId, csvPath) {
+        if (!csvPath) { return ''; }
+        var fname = csvPath.replace(/^.*[\\\/]/, '');
+        return '<div class="kg-csv-row">' +
+          '<span class="fname">' + esc(fname) + '</span>' +
+          '<span class="path" title="' + esc(csvPath) + '">' + esc(midTrunc(csvPath, 56)) + '</span>' +
+          '<button type="button" class="btn btn-ghost btn-sm kgi-btn" data-copy="' + esc(csvPath) +
+          '" title="Copy CSV path" aria-label="Copy CSV path">' + kgIcon('copy') + '</button>' +
+          '<button type="button" class="btn btn-secondary btn-sm kgi-btn" data-download="' + esc(jobId) +
+          '">' + kgIcon('download') + '<span>Download CSV</span></button></div>';
+      }
+
+      // Results panel = step 1's decision surface. First live completion
+      // enters with the checks cascade; a re-run replaces content in place
+      // (same-type re-render: no replay).
+      var psResultsShown = false;
+
+      function psRenderResults(job, animate) {
+        var facts = job.facts || {};
+        var checks = job.checks || [];
+        psLastChecks = checks;
+        psLastSanity = facts.sanity || null;
+        var enter = animate && !psResultsShown;
+        psResultsShown = true;
+        var html = psRenderChecks(checks, enter);
+        var row = psSanityHtml(facts.sanity) + psHeroHtml(facts.local_score);
+        if (row) { html += '<div class="kg-results-row' + (enter ? ' kgl-enter' : '') + '">' + row + '</div>'; }
+        html += psCsvRowHtml(job.id, facts.csv_path || '');
+        el('ps-results').innerHTML = html;
+        kgBindCopy(el('ps-results'));
+        el('ps-results').querySelectorAll('[data-download]').forEach(function (b) {
+          b.addEventListener('click', function () { downloadCsv(b.getAttribute('data-download')); });
+        });
+      }
+
+      function psRenderPredictFail(message, animate) {
+        el('ps1-banner').innerHTML =
+          '<div class="alert alert-error' + (animate ? ' kgl-enter' : '') + '">' +
+          '<span class="alert-icon">' + kgIcon('x-circle', 'kgi-16') + '</span>' +
+          '<div style="flex:1;min-width:0"><strong>Inference failed</strong>' +
+          '<div style="margin-top:4px;font-size:12.5px">' + esc(message) + '</div>' +
+          '<div style="margin-top:8px">' + kgDiagBtn() + '</div></div></div>';
+        kgBindDiag(el('ps1-banner'), psBuildDiagnostics);
+      }
+
+      function psPollPredict() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + psPredictJobId)
+          .then(function (r) { return r.json(); })
+          .then(function (job) {
+            if (!job || !job.status) { return; }
+            el('ps-log-details').style.display = 'block';
+            el('ps-log').textContent = (job.log || []).join('\n');
+            if (psLogOpen()) { el('ps-log').scrollTop = el('ps-log').scrollHeight; }
+            if (job.status === 'running') {
+              psRenderProgress(job);
+              el('ps-state').textContent = 'Predicting… (safe to navigate away)';
+              return;
+            }
+            clearInterval(psPredictTimer);
+            psPredictTimer = null;
+            psPredicting = false;
+            el('ps-spinner').style.display = 'none';
+            el('ps-progress').innerHTML = '';
+            el('ps-state').textContent = '';
+            psCheckPredictReady();
+            if (job.status === 'completed') {
+              psRenderResults(job, true);
+              el('ps-predict-btn').innerHTML = KG_BTN_PREDICT_RERUN;
+              psSetBasis({
+                job_id: job.id,
+                run_name: (job.facts || {}).run_name || '',
+                local_score: (job.facts || {}).local_score,
+                when: job.finished_at,
+                persisted: false
+              });
+              kgScrollTo(el('ps-results'));
+            } else {
+              psRenderResults(job, false);   // whatever checks got recorded
+              psRenderPredictFail(job.error || 'Inference failed. See the log below.', true);
+              el('ps-predict-btn').innerHTML = KG_BTN_PREDICT_RERUN;
+              kgScrollTo(el('ps1-banner'));
+              var alertEl = el('ps1-banner').firstChild;
+              if (alertEl && alertEl.setAttribute) {
+                alertEl.setAttribute('tabindex', '-1');
+                alertEl.focus({ preventScroll: true });
+              }
+            }
+            renderPipeline();
+          })
+          .catch(function (e) {
+            if (kgConn.fail(e, function () {
+              if (!psPredictTimer) { psPredictTimer = setInterval(psPollPredict, 1000); }
+            })) {
+              clearInterval(psPredictTimer);
+              psPredictTimer = null;
+              el('ps-state').textContent = 'Connection lost. Inference continues on the host.';
+              return;
+            }
+            /* transient non-network poll error: keep trying */
+          });
+      }
+
+      el('ps-predict-btn').addEventListener('click', function () {
+        if (!psValidateConf()) { el('ps-conf').focus(); return; }
         saveTabConfig('submit');
         var body = {
-          train_job_id: el('ps-run').value,
-          weights_path: el('ps-weights').value.trim(),
+          train_job_id: psSource === 'run' ? el('ps-run').value : '',
+          weights_path: psSource === 'weights' ? el('ps-weights').value.trim() : '',
           test_table_url: el('ps-test-url').value.trim(),
           conf: el('ps-conf').value,
-          device: el('ps-device').value.trim(),
-          competition_slug: el('ps-slug').value.trim(),
-          message: el('ps-message').value.trim(),
-          csv_only: el('ps-csvonly').checked
+          device: el('ps-device').value.trim()
         };
-        el('ps-start-btn').disabled = true;
+        psPredicting = true;
+        psCheckPredictReady();
+        el('ps-predict-btn').innerHTML = KG_BTN_PREDICT;
+        el('ps-spinner').style.display = 'inline-block';
         el('ps-state').textContent = 'Starting…';
-        el('ps-checks').innerHTML = '';
-        el('ps-result').innerHTML = '';
-        API.authFetch(computeUrl + '/api/plugins/kaggle/predict_submit', {
+        el('ps1-banner').innerHTML = '';
+        el('ps-banner').innerHTML = '';
+        API.authFetch(computeUrl + '/api/plugins/kaggle/predict', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
@@ -3277,14 +3670,262 @@
           .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
           .then(function (res) {
             if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
-            psJobId = res.body.job_id;
-            psTimer = setInterval(psPoll, 1500);
+            psPredictJobId = res.body.job_id;
+            el('ps-progress').innerHTML = '';
+            psRenderProgress({ status: 'running', progress: {}, created_at: Date.now() / 1000 });
+            kgScrollTo(el('ps-progress'));
+            psPredictTimer = setInterval(psPollPredict, 1000);
           })
           .catch(function (e) {
-            el('ps-start-btn').disabled = false;
-            el('ps-state').textContent = '❌ ' + e.message;
+            psPredicting = false;
+            psCheckPredictReady();
+            el('ps-spinner').style.display = 'none';
+            el('ps-state').textContent = kgConn.fail(e)
+              ? 'Inference didn’t start (service unreachable). Start again once reconnected.'
+              : e.message;
           });
       });
+
+      // ── Step 2: basis, connection, budget, submit ───────────────────
+      function psSetBasis(basis) {
+        psBasis = basis;
+        psStep2Enabled = !!basis;
+        el('ps-step2-body').classList.toggle('kg-step-muted', !psStep2Enabled);
+        ['ps-slug', 'ps-message'].forEach(function (id) { el(id).disabled = !psStep2Enabled; });
+        psRenderBasis();
+        psCheckSubmitReady();
+      }
+
+      function psRenderBasis() {
+        var box = el('ps-basis');
+        if (!psBasis) {
+          box.innerHTML = '<div class="form-help" style="margin-bottom: 10px;">Run inference first. ' +
+                          'A validated CSV unlocks this step.</div>';
+          return;
+        }
+        box.innerHTML = '<div class="kg-preflight-ok" style="margin-bottom: 10px;">' + kgIcon('check') +
+          '<span>Submitting: <strong>' + esc(psBasis.run_name || 'latest prediction') + '</strong>' +
+          (psBasis.when ? ' · predicted ' + esc(psFmtAgo(psBasis.when)) : '') +
+          (typeof psBasis.local_score === 'number'
+            ? ' · local mAP@0.5 ' + psBasis.local_score.toFixed(4) : '') +
+          (psBasis.persisted ? ' (from a previous session)' : '') + '</span></div>';
+      }
+
+      function psBudget() {
+        var s = psConnState || {};
+        if (!s.daily_limit) { return null; }
+        if (typeof s.submissions_used_today !== 'number') { return { limit: s.daily_limit, left: null }; }
+        return { limit: s.daily_limit, left: Math.max(0, s.daily_limit - s.submissions_used_today) };
+      }
+
+      function psConnBlocked() {
+        return !!(psConnState &&
+                  (psConnState.state === 'no_credentials' || psConnState.state === 'not_joined'));
+      }
+
+      function psBudgetExhausted() {
+        var b = psBudget();
+        return !!(b && b.left === 0);
+      }
+
+      function psCheckSubmitReady() {
+        el('ps-submit-btn').disabled =
+          psSubmitting || !psStep2Enabled || !psBasis || psConnBlocked() || psBudgetExhausted();
+      }
+
+      // Kaggle connection card in the banner vocabulary; budget included.
+      function renderConnection() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/kaggle/connection?slug=' +
+                      encodeURIComponent(el('ps-slug').value.trim()))
+          .then(function (r) { return r.json(); })
+          .then(function (s) {
+            psConnState = s;
+            // Hardcoded competition default (server constant), still editable.
+            if (!el('ps-slug').value.trim() && s.default_slug) {
+              el('ps-slug').value = s.default_slug;
+            }
+            var box = el('ps-kconn');
+            if (s.state === 'no_credentials') {
+              box.innerHTML = '<div class="kg-callout err">' + kgIcon('x-circle') +
+                '<span><strong>Kaggle account not connected.</strong><br>' +
+                '<span style="opacity:.85">' + esc(s.help || '') + '</span></span></div>';
+            } else if (s.state === 'not_joined') {
+              box.innerHTML = '<div class="kg-callout warn">' + kgIcon('alert-triangle') +
+                '<span><strong>Join the competition on Kaggle first.</strong> Your account (<strong>' +
+                esc(s.username || '?') + '</strong>) has not accepted the competition rules yet; ' +
+                'submissions would be rejected.' +
+                '<div style="margin-top:8px"><a class="btn btn-secondary btn-sm kgi-btn" href="' +
+                esc(s.competition_url || '#') + '" target="_blank"><span>Open competition page</span>' +
+                kgIcon('external-link', 'kgi-12') + '</a></div></span></div>';
+            } else if (s.state === 'ready') {
+              var b = psBudget();
+              var budgetTxt = '';
+              if (b) {
+                // LAUNCH-VERIFY: submissions_used_today only renders when
+                // ListSubmissions is permitted (403s on the private test comp).
+                budgetTxt = b.left === null
+                  ? ' · ' + b.limit + ' submissions/day'
+                  : ' · ' + b.left + ' of ' + b.limit + ' submissions left today';
+              }
+              var exhausted = psBudgetExhausted();
+              box.innerHTML = '<div class="kg-callout ok">' + kgIcon('check-circle') +
+                '<span><strong>Connected to Kaggle</strong>' +
+                (s.username ? ' as <strong>' + esc(s.username) + '</strong>' : '') + budgetTxt +
+                (s.probe_error ? '<br><span style="opacity:.75">Competition probe failed: ' +
+                  esc(s.probe_error) + '</span>' : '') + '</span></div>' +
+                (exhausted
+                  ? '<div class="kg-callout info" style="margin-top:6px">' + kgIcon('info') +
+                    '<span>Daily limit reached, resets 00:00 UTC. Your CSV is saved and ready.</span></div>'
+                  : '');
+            } else {
+              box.innerHTML = '<div class="kg-callout info">' + kgIcon('info') +
+                '<span>Connection state unknown.</span></div>';
+            }
+            psCheckSubmitReady();
+          })
+          .catch(function (e) {
+            if (kgConn.fail(e, renderConnection)) { return; }
+            psConnState = null;
+            el('ps-kconn').innerHTML = '<div class="kg-callout info">' + kgIcon('info') +
+              '<span>Could not check the Kaggle connection: ' + esc(e.message) + '</span></div>';
+            psCheckSubmitReady();
+          });
+      }
+      configLoaded.then(renderConnection);
+
+      function psRenderSubmitSuccess(sub, animate) {
+        var viewUrl = ((psConnState || {}).competition_url ||
+                       'https://www.kaggle.com/competitions/' + encodeURIComponent(el('ps-slug').value.trim())) +
+                      '/submissions';
+        el('ps-banner').innerHTML =
+          '<div class="alert alert-success' + (animate ? ' kgl-enter' : '') + '">' +
+          '<span class="alert-icon">' + kgCheckIcon(animate) + '</span>' +
+          '<div style="flex:1;min-width:0">' +
+          '<strong>Submitted to Kaggle</strong>' +
+          (sub.ref ? '<div style="margin-top:4px;font-size:12.5px">Submission ' + esc(sub.ref) + '</div>' : '') +
+          '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+          '<button type="button" class="btn btn-primary btn-sm kgi-btn" id="ps-continue-status">' +
+          '<span>Continue to Status</span>' + kgIcon('arrow-right') + '</button>' +
+          '<a class="btn btn-secondary btn-sm kgi-btn" target="_blank" href="' + esc(viewUrl) +
+          '"><span>View on Kaggle</span>' + kgIcon('external-link', 'kgi-12') + '</a>' +
+          '</div></div></div>';
+        el('ps-continue-status').addEventListener('click', function () {
+          showTab('status');
+          refreshStatus();
+        });
+      }
+
+      function psRenderSubmitFail(message, animate) {
+        el('ps-banner').innerHTML =
+          '<div class="alert alert-error' + (animate ? ' kgl-enter' : '') + '">' +
+          '<span class="alert-icon">' + kgIcon('x-circle', 'kgi-16') + '</span>' +
+          '<div style="flex:1;min-width:0"><strong>Submission failed</strong>' +
+          '<div style="margin-top:4px;font-size:12.5px">' + esc(message) + '</div>' +
+          '<div style="margin-top:8px">' + kgDiagBtn() + '</div></div></div>';
+        kgBindDiag(el('ps-banner'), psBuildDiagnostics);
+      }
+
+      // The friendly non-failures: limit reached / not joined / skipped.
+      function psRenderSubmitSoft(sub, animate) {
+        var isInfo = sub.status === 'limit_reached';
+        var dl = (psBasis && psBasis.job_id)
+          ? '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm kgi-btn" ' +
+            'id="ps-soft-dl">' + kgIcon('download') + '<span>Download CSV</span></button></div>'
+          : '';
+        el('ps-banner').innerHTML = '<div class="' + (animate ? 'kgl-enter' : '') + '">' +
+          '<div class="kg-callout ' + (isInfo ? 'info' : 'warn') + '">' +
+          kgIcon(isInfo ? 'info' : 'alert-triangle') +
+          '<span>' + esc(sub.reason || sub.status) + dl + '</span></div></div>';
+        var b = el('ps-soft-dl');
+        if (b) { b.addEventListener('click', function () { downloadCsv(psBasis.job_id); }); }
+      }
+
+      function psPollSubmit() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + psSubmitJobId)
+          .then(function (r) { return r.json(); })
+          .then(function (job) {
+            if (!job || !job.status) { return; }
+            el('ps-log-details').style.display = 'block';
+            el('ps-log').textContent = (job.log || []).join('\n');
+            if (psLogOpen()) { el('ps-log').scrollTop = el('ps-log').scrollHeight; }
+            if (job.status === 'running') {
+              el('ps-submit-state').textContent = 'Submitting…';
+              return;
+            }
+            clearInterval(psSubmitTimer);
+            psSubmitTimer = null;
+            psSubmitting = false;
+            el('ps-submit-spinner').style.display = 'none';
+            el('ps-submit-state').textContent = '';
+            var sub = (job.facts || {}).submission || {};
+            psLastSubmission = sub;
+            if (job.status === 'completed' && sub.status === 'submitted') {
+              psRenderSubmitSuccess(sub, true);
+            } else if (job.status === 'completed') {
+              psRenderSubmitSoft(sub, true);
+            } else {
+              psRenderSubmitFail(job.error || 'Kaggle rejected the submission.', true);
+            }
+            psCheckSubmitReady();
+            kgScrollTo(el('ps-banner'));
+            var alertEl = el('ps-banner').firstChild;
+            if (alertEl && alertEl.setAttribute) {
+              alertEl.setAttribute('tabindex', '-1');
+              alertEl.focus({ preventScroll: true });
+            }
+            renderPipeline();
+            renderConnection();   // budget just changed
+          })
+          .catch(function (e) {
+            if (kgConn.fail(e, function () {
+              if (!psSubmitTimer) { psSubmitTimer = setInterval(psPollSubmit, 1500); }
+            })) {
+              clearInterval(psSubmitTimer);
+              psSubmitTimer = null;
+              el('ps-submit-state').textContent = 'Connection lost. The submission continues on the host.';
+              return;
+            }
+          });
+      }
+
+      el('ps-submit-btn').addEventListener('click', function () {
+        if (!psBasis) { return; }
+        var b = psBudget();
+        var n = b ? b.limit : 3;
+        if (!window.confirm('This spends 1 of your ' + n + ' daily submissions. Submit "' +
+                            (psBasis.run_name || 'latest prediction') + '" now?')) { return; }
+        saveTabConfig('submit');
+        psSubmitting = true;
+        psCheckSubmitReady();
+        el('ps-submit-spinner').style.display = 'inline-block';
+        el('ps-submit-state').textContent = 'Starting…';
+        el('ps-banner').innerHTML = '';
+        API.authFetch(computeUrl + '/api/plugins/kaggle/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            predict_job_id: psBasis.job_id,
+            message: el('ps-message').value.trim(),
+            competition_slug: el('ps-slug').value.trim()
+          })
+        })
+          .then(function (r) { return r.json().then(function (b2) { return { ok: r.ok, body: b2 }; }); })
+          .then(function (res) {
+            if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
+            psSubmitJobId = res.body.job_id;
+            psSubmitTimer = setInterval(psPollSubmit, 1500);
+          })
+          .catch(function (e) {
+            psSubmitting = false;
+            psCheckSubmitReady();
+            el('ps-submit-spinner').style.display = 'none';
+            el('ps-submit-state').textContent = kgConn.fail(e)
+              ? 'Submission didn’t start (service unreachable). Try again once reconnected.'
+              : e.message;
+          });
+      });
+
+      psSetBasis(null);   // step 2 starts muted until a prediction lands
 
       // ── Status tab ─────────────────────────────────────────────────
       function renderHistory() {
@@ -3298,10 +3939,20 @@
           })
           .catch(function () { /* rows render without run links */ })
           .then(function () {
-            return API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=predict_submit');
+            // Two-step era rows are kind=predict (submission stamped back
+            // onto them by the submit job); legacy single-job records are
+            // kind=predict_submit. Merge both, newest first.
+            return Promise.all([
+              API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=predict')
+                .then(function (r) { return r.json(); }).catch(function () { return []; }),
+              API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=predict_submit')
+                .then(function (r) { return r.json(); }).catch(function () { return []; })
+            ]);
           })
-          .then(function (r) { return r.json(); })
-          .then(function (records) {
+          .then(function (lists) {
+            var records = (lists[0] || []).concat(lists[1] || []).sort(function (a, b) {
+              return (b.created_at || 0) - (a.created_at || 0);
+            });
             if (!records.length) {
               el('st-history').innerHTML =
                 '<em style="opacity: .7;">No submissions yet — run Predict + Submit (tab 3).</em>';
