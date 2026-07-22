@@ -455,7 +455,7 @@
         <div style="display: flex; gap: 10px; align-items: center;">
           <button type="button" id="kg-import-btn" class="btn btn-primary btn-lg kgi-btn" disabled>Import &amp; Validate</button>
           <span class="spinner" id="kg-import-spinner" style="display: none;"></span>
-          <span id="kg-import-state" style="font-size: 12px; color: var(--text-muted);"></span>
+          <span id="kg-import-state" aria-live="polite" style="font-size: 12px; color: var(--text-muted);"></span>
         </div>
         <div id="kg-import-progress" style="margin-top: 12px;"></div>
         <div id="kg-checks"></div>
@@ -1253,6 +1253,13 @@
         clearTimeout(kgPreflightTimer);
         kgRunPreflight();
       });
+      el('kg-yaml').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();   // the form never submits on Enter
+          clearTimeout(kgPreflightTimer);
+          kgRunPreflight();
+        }
+      });
       el('kg-yaml').addEventListener('paste', function () {
         clearTimeout(kgPreflightTimer);
         setTimeout(kgRunPreflight, 0);   // after the pasted text lands
@@ -1444,11 +1451,17 @@
                       dashboardUrl + '?table=' + encodeURIComponent(t.url) + '">Explore ' + split + '</a>';
           }
         });
-        banner += '<button type="button" class="btn btn-ghost btn-sm" id="kg-start-over">Start over</button>';
+        // Start over belongs to the revisit context (form hidden). In live
+        // State 4 the form sits right below the results — no reset needed.
+        if (kgRevisitSrc) {
+          banner += '<button type="button" class="btn btn-ghost btn-sm" id="kg-start-over">Start over</button>';
+        }
         banner += '</div></div></div>';
         el('kg-import-banner').innerHTML = banner;
         el('kg-continue-train').addEventListener('click', function () { showTab('train'); });
-        el('kg-start-over').addEventListener('click', function () { kgEnterFormState(true); });
+        if (kgRevisitSrc) {
+          el('kg-start-over').addEventListener('click', function () { kgEnterFormState(true); });
+        }
 
         // Summary rows: count · badge · middle-truncated path · actions.
         // Full untruncated paths live only in the log accordion / Copy.
@@ -1468,7 +1481,7 @@
             '<span class="path" title="' + esc(t.url) + '">' + esc(midTrunc(t.url, 52)) + '</span>' +
             '<span class="kg-row-actions">' +
             '<button type="button" class="btn btn-ghost btn-sm kgi-btn" data-copy="' + esc(t.url) +
-              '" title="Copy full table path">' + kgIcon('copy') + '</button>' +
+              '" title="Copy full table path" aria-label="Copy full table path">' + kgIcon('copy') + '</button>' +
             (dashboardUrl ? '<a class="btn btn-secondary btn-sm kgi-btn" target="_blank" href="' +
               dashboardUrl + '?table=' + encodeURIComponent(t.url) + '"><span>Explore</span>' +
               kgIcon('arrow-right', 'kgi-12') + '</a>' : '') +
@@ -1572,6 +1585,11 @@
               el('kg-import-btn').innerHTML = KG_BTN_RERUN;
             }
             kgScrollTo(el('kg-import-banner'));
+            var alertEl = el('kg-import-banner').firstChild;
+            if (alertEl && alertEl.setAttribute) {
+              alertEl.setAttribute('tabindex', '-1');
+              alertEl.focus({ preventScroll: true });
+            }
             renderPipeline();
           })
           .catch(function (e) {
@@ -1679,7 +1697,7 @@
         el('kg-import-state').textContent = '';
         kgLogReset();
         el('kg-import-btn').innerHTML = KG_BTN_IMPORT;
-        if (animate) { kglEnter(el('kg-import-form')); }
+        if (animate) { kglEnter(el('kg-import-form')); el('kg-yaml').focus(); }
         kgRenderPreflight(null);
         kgCheckReady();
         configLoaded.then(function () {
