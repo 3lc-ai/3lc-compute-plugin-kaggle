@@ -134,10 +134,10 @@
 /* Overflow containment: long table paths / log lines must never push the
    card past its container. Scoped to the finished panels (Submit/Status
    restyle in their own sessions). */
-#kg-panel-import .card, #kg-panel-train .card, #kg-panel-submit .card { min-width: 0; }
-#kg-panel-import .card-body, #kg-panel-train .card-body, #kg-panel-submit .card-body { min-width: 0; }
-#kg-panel-import code, #kg-panel-train code, #kg-panel-submit code { word-break: break-all; }
-#kg-panel-import pre, #kg-panel-train pre, #kg-panel-submit pre { white-space: pre-wrap; word-break: break-all; overflow-x: auto; max-width: 100%; }
+.kg-panel .card { min-width: 0; }
+.kg-panel .card-body { min-width: 0; }
+.kg-panel code { word-break: break-all; }
+.kg-panel pre { white-space: pre-wrap; word-break: break-all; overflow-x: auto; max-width: 100%; }
 
 /* Per-split job rows (stock importer queue-panel anatomy) */
 .kg-job-row {
