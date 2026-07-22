@@ -301,15 +301,45 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
 
     model = YOLO(LOCKED_TRAIN_ARGS["model"], task="detect")
 
-    state: dict[str, Any] = {"epoch": 0, "cancelled": False, "train_start": time.time(), "history": []}
+    state: dict[str, Any] = {
+        "epoch": 0,
+        "cancelled": False,
+        "train_start": time.time(),
+        "history": [],
+        # Within-epoch batch progress. batch_i is our own count of
+        # on_train_batch_end callbacks (the loop index is a local in
+        # ultralytics' _do_train, not a trainer attribute); batch_n comes
+        # from len(trainer.train_loader). No internals patched.
+        "batch_i": 0,
+        "batch_n": 0,
+        "last_batch_flush": 0.0,
+        # Last epoch-level progress payload; batch flushes extend it so a
+        # poll never sees history/ETA vanish mid-epoch.
+        "progress": {"epoch": 0, "total_epochs": int(train_kwargs["epochs"]), "metrics": {}, "history": []},
+    }
 
     def _check_cancel(trainer: Any) -> None:
         if ctx.is_cancelled():
             state["cancelled"] = True
             trainer.stop = True
 
+    def on_train_epoch_start(trainer: Any) -> None:
+        state["batch_i"] = 0
+        try:
+            state["batch_n"] = len(trainer.train_loader)
+        except Exception:
+            state["batch_n"] = 0
+
     def on_train_batch_end(trainer: Any) -> None:
         _check_cancel(trainer)
+        state["batch_i"] += 1
+        # Throttle: the job record flushes to disk on every set_progress,
+        # so batch updates land at most ~1/s.
+        now = time.time()
+        if now - state["last_batch_flush"] < 1.0:
+            return
+        state["last_batch_flush"] = now
+        ctx.set_progress({**state["progress"], "batch_i": state["batch_i"], "batch_n": state["batch_n"]})
 
     def on_fit_epoch_end(trainer: Any) -> None:
         _check_cancel(trainer)
@@ -334,9 +364,13 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
             "avg_epoch_s": round(avg_epoch, 1),
             "eta_s": round(avg_epoch * max(total - epoch, 0)),
         }
-        ctx.set_progress(progress)
+        state["progress"] = progress
+        # Epoch boundary: batch_i resets to 0, so the client's overall
+        # fraction (epoch + batch_i/batch_n) / total stays continuous.
+        ctx.set_progress({**progress, "batch_i": 0, "batch_n": state["batch_n"]})
         ctx.log(f"epoch {epoch}/{total} — " + ", ".join(f"{k}={v}" for k, v in list(metrics.items())[:4]))
 
+    model.add_callback("on_train_epoch_start", on_train_epoch_start)
     model.add_callback("on_train_batch_end", on_train_batch_end)
     model.add_callback("on_fit_epoch_end", on_fit_epoch_end)
 
