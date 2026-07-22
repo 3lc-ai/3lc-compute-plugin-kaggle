@@ -46,6 +46,14 @@ def competition_url(slug: str) -> str:
 LOCAL_METRIC_PY = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\competition_exdark\metric\metric_exdark.py"
 LOCAL_SOLUTION_CSV = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\competition_exdark\kaggle_upload\solution.csv"
 
+
+def is_host() -> bool:
+    """Organizer-machine check — the same files that gate local scoring.
+    Participants never have the metric + solution on disk, so this gates the
+    host-only surfaces too: the direct weights-file source (predictions are
+    plugin-run-only for participants) and the local score display."""
+    return Path(LOCAL_METRIC_PY).is_file() and Path(LOCAL_SOLUTION_CSV).is_file()
+
 CREDENTIALS_HELP = (
     "Kaggle credentials not found. Create an API token on kaggle.com "
     "(Settings -> API -> Create New Token; new tokens look like KGAT_...) "

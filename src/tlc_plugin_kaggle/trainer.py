@@ -1,10 +1,13 @@
-"""Train card backend: constrained YOLOv11n from-scratch training via 3lc-ultralytics.
+"""Train card backend: constrained YOLOv11n pretrained training via 3lc-ultralytics.
 
 Competition constraints are enforced SERVER-SIDE, not in the form:
 
-* ``model="yolo11n.yaml"`` — ultralytics builds the architecture from the yaml
-  with random init; no checkpoint is ever loaded.
-* ``imgsz=640``, ``pretrained=False``.
+* ``model=yolo11n.pt`` — the OFFICIAL Ultralytics COCO-pretrained checkpoint,
+  downloaded and cached by the plugin and pinned by sha256, so every
+  participant trains from byte-identical starting weights.
+* ``imgsz=640``, ``pretrained=True`` (the pinned official init — uniform
+  init cuts both ways, so ``pretrained=False`` is rejected like any other
+  override attempt).
 * The locked kwargs are merged LAST into the train() call, so nothing a
   participant submits can override them; additionally ``parse_extra_args``
   rejects any attempt to name a locked key (model / imgsz / pretrained /
@@ -13,9 +16,10 @@ Competition constraints are enforced SERVER-SIDE, not in the form:
 
 Provenance: the 3lc-ultralytics trainer logs every YOLO arg plus all 3LC
 settings onto the tlc.Run via run.set_parameters (engine/trainer.py
-_log_3lc_parameters), so the Run's recorded config proves the from-scratch
-setup: parameters["model"] == "yolo11n.yaml", ["imgsz"] == 640,
-["pretrained"] == False.
+_log_3lc_parameters); run_training additionally records the checkpoint's
+sha256. The Run's recorded config proves the locked contract:
+parameters["model"] endswith "yolo11n.pt", ["imgsz"] == 640,
+["pretrained"] == True, ["checkpoint_sha256"] == the official hash.
 
 Uses the documented tlc_ultralytics API only (YOLO, Settings,
 model.train(tables=..., settings=...), standard ultralytics callbacks).
@@ -28,10 +32,20 @@ from pathlib import Path
 from typing import Any
 
 LOCKED_TRAIN_ARGS: dict[str, Any] = {
-    "model": "yolo11n.yaml",  # from-scratch random init
+    # Resolved to the plugin-managed official checkpoint at train time
+    # (ensure_official_checkpoint); the symbolic name here is what the
+    # extra-args guard and the locked-copy render.
+    "model": "yolo11n.pt",
     "imgsz": 640,
-    "pretrained": False,
+    "pretrained": True,
 }
+
+# The pinned init. Everyone trains from byte-identical weights; the sha256
+# recorded on the Run is the proof. Official Ultralytics release asset
+# (5,613,764 bytes), hash verified on every train.
+OFFICIAL_CHECKPOINT_URL = "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt"
+OFFICIAL_CHECKPOINT_SHA256 = "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1"
+CHECKPOINT_CACHE = Path.home() / ".3lc-kaggle-plugin" / "checkpoints" / "yolo11n.pt"
 
 # Keys that would defeat the competition locks if injected via extra args.
 FORBIDDEN_LOCKED = {"model", "imgsz", "pretrained", "weights", "resume"}
@@ -39,9 +53,66 @@ FORBIDDEN_LOCKED = {"model", "imgsz", "pretrained", "weights", "resume"}
 FORBIDDEN_MANAGED = {"data", "tables", "settings", "project", "name", "exist_ok", "task"}
 
 LOCK_MESSAGE = (
-    "This competition trains YOLOv11n from scratch at 640 px — "
-    "'{key}' is locked and cannot be overridden."
+    "This competition trains YOLOv11n from the official COCO-pretrained "
+    "checkpoint at 640 px — '{key}' is locked and cannot be overridden "
+    "(identical starting weights for every participant)."
 )
+
+
+def _sha256_file(path: Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def ensure_official_checkpoint(ctx: Any = None) -> tuple[Path, str]:
+    """(path, sha256) of the plugin-managed official yolo11n.pt.
+
+    Cached under CHECKPOINT_CACHE and hash-verified on every call; a stale
+    or tampered cache is re-downloaded, and a download that fails the pin
+    raises rather than trains. The fetch surfaces a pre-flight progress
+    stage so a first-ever train shows "Fetching official checkpoint" instead
+    of a silent stall.
+    """
+
+    def log(msg: str) -> None:
+        if ctx is not None:
+            ctx.log(msg)
+
+    if CHECKPOINT_CACHE.is_file():
+        digest = _sha256_file(CHECKPOINT_CACHE)
+        if digest == OFFICIAL_CHECKPOINT_SHA256:
+            return CHECKPOINT_CACHE, digest
+        log(f"Cached checkpoint failed hash verification ({digest[:12]}...); re-downloading the official file.")
+        CHECKPOINT_CACHE.unlink()
+
+    if ctx is not None:
+        ctx.set_progress({"stage": "checkpoint",
+                          "stage_note": "Fetching the official yolo11n.pt checkpoint (5.4 MB, one-time)"})
+    log(f"Fetching official checkpoint: {OFFICIAL_CHECKPOINT_URL} -> {CHECKPOINT_CACHE}")
+    CHECKPOINT_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    import os
+    import urllib.request
+
+    tmp = CHECKPOINT_CACHE.with_suffix(".tmp")
+    try:
+        urllib.request.urlretrieve(OFFICIAL_CHECKPOINT_URL, tmp)
+        digest = _sha256_file(tmp)
+        if digest != OFFICIAL_CHECKPOINT_SHA256:
+            raise RuntimeError(
+                "The downloaded checkpoint failed sha256 verification "
+                f"(got {digest[:12]}..., expected {OFFICIAL_CHECKPOINT_SHA256[:12]}...). "
+                "Check your network (proxy or captive portal?) and try again."
+            )
+        os.replace(tmp, CHECKPOINT_CACHE)
+    finally:
+        tmp.unlink(missing_ok=True)
+    log(f"Official checkpoint cached: {CHECKPOINT_CACHE} (sha256 {digest[:12]}...)")
+    return CHECKPOINT_CACHE, digest
 
 DEFAULT_SAVE_ROOT = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle-plugin"
 
@@ -50,7 +121,7 @@ DEFAULT_SAVE_ROOT = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle
 # mirrored as client-side attributes in ui.html; None bounds = free field.
 # Bounds apply to the FINAL kwargs, so extra args cannot sidestep them.
 _EXPOSED = {
-    "epochs": (int, 100, 1, 300),
+    "epochs": (int, 20, 1, 300),
     "batch": (int, 16, 1, 128),
     "lr0": (float, 0.01, 0.0001, 0.1),
     "lrf": (float, 0.01, 0.01, 1.0),
@@ -251,16 +322,18 @@ def get_run_parameters(run: Any) -> dict[str, Any]:
 
 
 def check_provenance(run_url: str) -> list[dict[str, Any]]:
-    """The acceptance criterion: the Run's own record proves from-scratch."""
+    """The acceptance criterion: the Run's own record proves the locked
+    contract — the pinned official init (by hash), architecture, resolution."""
     import tlc
 
     run = tlc.Run.from_url(tlc.Url(run_url))
     p = get_run_parameters(run)
-    model = str(p.get("model", ""))
+    model = str(p.get("model", "")).replace("\\", "/")
+    sha = str(p.get("checkpoint_sha256", "") or "")
     return [
         {
-            "label": "run records model == yolo11n.yaml (from scratch)",
-            "ok": model.endswith("yolo11n.yaml"),
+            "label": "run records model == yolo11n.pt (official checkpoint)",
+            "ok": model.endswith("yolo11n.pt"),
             "detail": f"model={p.get('model')!r}",
         },
         {
@@ -269,9 +342,14 @@ def check_provenance(run_url: str) -> list[dict[str, Any]]:
             "detail": f"imgsz={p.get('imgsz')!r}",
         },
         {
-            "label": "run records pretrained == False",
-            "ok": p.get("pretrained") in (False, "False", 0),
+            "label": "run records pretrained == True (official init)",
+            "ok": p.get("pretrained") in (True, "True", 1),
             "detail": f"pretrained={p.get('pretrained')!r}",
+        },
+        {
+            "label": "run records the official checkpoint sha256",
+            "ok": sha == OFFICIAL_CHECKPOINT_SHA256,
+            "detail": f"checkpoint_sha256={(sha[:12] + '...') if sha else '(missing)'}",
         },
     ]
 
@@ -293,13 +371,21 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     save_root = str(params.get("save_root") or DEFAULT_SAVE_ROOT)
     Path(save_root).mkdir(parents=True, exist_ok=True)
 
+    # Pin the init before anything else: cached-or-downloaded official
+    # checkpoint, hash-verified. The resolved path becomes the model arg so
+    # the Run's own record carries it.
+    ckpt_path, ckpt_sha = ensure_official_checkpoint(ctx)
+    train_kwargs["model"] = str(ckpt_path)
+    ctx.set_field("checkpoint_sha256", ckpt_sha)
+
     ctx.log(
-        "Locked: model=yolo11n.yaml (from scratch) · imgsz=640 · pretrained=False. "
+        f"Locked: model=yolo11n.pt (official COCO-pretrained, sha256 {ckpt_sha[:12]}...) "
+        "· imgsz=640 · pretrained=True. "
         f"Training {train_kwargs['epochs']} epochs, batch {train_kwargs['batch']}, "
         f"device {train_kwargs['device']}."
     )
 
-    model = YOLO(LOCKED_TRAIN_ARGS["model"], task="detect")
+    model = YOLO(str(ckpt_path), task="detect")
 
     state: dict[str, Any] = {
         "epoch": 0,
@@ -389,6 +475,15 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     ctx.set_field("run_url", run_url)
     ctx.set_field("weights", best)  # session 3 (Predict + Submit) consumes this
 
+    # The hash is the proof of the pinned init — record it on the Run itself
+    # (merged with the trainer's own parameter log) so check_provenance reads
+    # it back from the Run record, not from plugin state.
+    if run is not None:
+        try:
+            run.set_parameters({**get_run_parameters(run), "checkpoint_sha256": ckpt_sha})
+        except Exception as exc:
+            ctx.log(f"WARNING: could not record checkpoint_sha256 on the Run ({exc}).")
+
     if state["cancelled"]:
         ctx.log("Training stopped by cancellation request.")
         if run is not None:
@@ -414,4 +509,5 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
         "epochs_completed": state["epoch"],
         "provenance": checks,
         "locked": dict(LOCKED_TRAIN_ARGS),
+        "checkpoint_sha256": ckpt_sha,
     }

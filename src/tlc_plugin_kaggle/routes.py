@@ -30,6 +30,17 @@ def _resolve_predict_params(data: Any) -> tuple[dict[str, Any] | None, Response 
         return bad("Body must be a JSON object")
     weights = str(data.get("weights_path", "")).strip().strip('"')
     train_job_id = str(data.get("train_job_id", "")).strip()
+    # Direct weights files are host-only (same gate as local scoring):
+    # participants predict from plugin runs so every submission carries
+    # verified provenance. Enforced here, not just hidden in the UI.
+    if weights:
+        from tlc_plugin_kaggle import predictor
+
+        if not predictor.is_host():
+            return bad(
+                "Direct weights files are host-only. Select a run trained in "
+                "this plugin — predictions must carry verified provenance."
+            )
     run_name = ""
     if not weights and train_job_id:
         job = jobs.get_job(train_job_id)
@@ -234,6 +245,15 @@ class KaggleController(Controller):
 
             m50s = [h.get("m50") for h in history if isinstance(h.get("m50"), (int, float))]
             provenance = result.get("provenance") or []
+            # Contract era, read from the run's own stored provenance labels:
+            # pre-repositioning runs asserted "(from scratch)" and stay valid
+            # history — conforming yolo11n runs, truthfully tagged legacy.
+            if any("from scratch" in str(c.get("label") or "") for c in provenance):
+                contract = "legacy_scratch"
+            elif provenance:
+                contract = "pretrained"
+            else:
+                contract = None
             out.append(
                 {
                     "job_id": job.get("id"),
@@ -248,6 +268,10 @@ class KaggleController(Controller):
                     "epochs_completed": result.get("epochs_completed") or progress.get("epoch"),
                     "best_map50": max(m50s) if m50s else None,
                     "provenance_ok": bool(provenance) and all(c.get("ok") for c in provenance),
+                    "contract": contract,
+                    "checkpoint_sha256": facts.get("checkpoint_sha256")
+                    or result.get("checkpoint_sha256")
+                    or "",
                     "usable": usable,
                     "reason": reason,
                 }
@@ -370,12 +394,15 @@ class KaggleController(Controller):
         """Last-used form values per tab (re-runs become one click), plus a
         _meta block (version, repository) the fragment renders in the
         footer and stamps into diagnostics."""
-        from tlc_plugin_kaggle import KagglePlugin, config_store
+        from tlc_plugin_kaggle import KagglePlugin, config_store, predictor
 
         out = config_store.load()
         out["_meta"] = {
             "version": KagglePlugin.version,
             "repository_url": KagglePlugin.repository_url,
+            # Host machines (metric + solution on disk) get host-only UI:
+            # the direct weights-file source and local scores.
+            "host": predictor.is_host(),
         }
         return out
 
