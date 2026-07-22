@@ -2195,6 +2195,7 @@
       // state4, state5, state6. Documented in docs/ui-notes.md.
       function kgDevForce(mode) {
         if (mode && mode.indexOf('train-') === 0) { trDevForce(mode); return; }
+        if (mode && mode.indexOf('submit-') === 0) { psDevForce(mode); return; }
         var devYaml = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\competition_exdark\\package_build\\starter_kit\\dataset.yaml';
         var base = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
         function T(s, rows, reused) {
@@ -2480,6 +2481,190 @@
           }
         }
         showTab('train');
+        apply();
+        configLoaded.then(function () { setTimeout(apply, 0); });
+      }
+
+      // Predict + Submit forced states (?kgdev=submit-...): static
+      // fixtures, no fetches, no job side effects. Documented in
+      // docs/ui-notes.md.
+      function psDevForce(mode) {
+        var base = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
+        var testUrl = base + 'exdark_test/tables/initial';
+        var devRun = 'kaggle_run_20260721_090000';
+        var csvPath = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\runs\\kaggle-plugin\\' +
+                      devRun + '\\submissions\\submission_20260721_141530.csv';
+        var now = Date.now() / 1000;
+
+        var RUNS = [
+          { job_id: 'devtrain1', run_name: devRun, usable: true, provenance_ok: true,
+            epochs_completed: 50, best_map50: 0.312, created_at: now - 86400,
+            weights: 'C:\\...\\weights\\best.pt', run_url: '' },
+          { job_id: 'devtrain0', run_name: 'kaggle_run_20260720_183000', usable: false,
+            provenance_ok: false, created_at: now - 172800,
+            reason: 'failed: CUDA out of memory' }
+        ];
+        var CHECKS_OK = [
+          { label: 'columns are id, image_id, prediction_string', ok: true, detail: "got ['id', 'image_id', 'prediction_string']" },
+          { label: 'exactly 715 rows (one per test image)', ok: true, detail: 'got 715' },
+          { label: 'no duplicated image_id rows', ok: true, detail: '0 duplicates' },
+          { label: 'id column is 0..N-1 aligned to sorted image_id', ok: true, detail: 'aligned' },
+          { label: "all prediction_strings parse under the metric's strict rules", ok: true, detail: '2706 boxes total' }
+        ];
+        var CHECKS_FAIL = [
+          { label: 'columns are id, image_id, prediction_string', ok: true, detail: "got ['id', 'image_id', 'prediction_string']" },
+          { label: 'exactly 715 rows (one per test image)', ok: false, detail: 'got 713' }
+        ];
+        var CLASSES = ['Bicycle', 'Boat', 'Bottle', 'Bus', 'Car', 'Cat',
+                       'Chair', 'Cup', 'Dog', 'Motorbike', 'People', 'Table'];
+        function sanity(healthy) {
+          var pc = {};
+          CLASSES.forEach(function (n, i) {
+            pc[n] = healthy ? 80 + ((i * 53) % 260) : (i % 3 === 0 ? 20 + i : 0);
+          });
+          return healthy
+            ? { total_boxes: 2706, images: 715, empty_images: 41, boxes_per_image_mean: 3.78, per_class: pc }
+            : { total_boxes: 312, images: 715, empty_images: 590, boxes_per_image_mean: 0.44, per_class: pc,
+                warning: '312 boxes across 715 images is unusually low. Are these fully-trained ' +
+                         'weights? (Submitting is still fine.)' };
+        }
+        function predictJob(opts) {
+          return {
+            id: 'devpredict1', status: 'completed',
+            created_at: now - 400, finished_at: now - 160,
+            checks: opts.checks,
+            facts: { csv_path: csvPath, sanity: opts.sanity, run_name: devRun,
+                     local_score: opts.score }
+          };
+        }
+        var CONN_READY = { state: 'ready', username: 'rishikeshjadhav', daily_limit: 3,
+                           submissions_used_today: 1, default_slug: '', competition_url: 'https://www.kaggle.com/competitions/dev' };
+        var CONN_LIMIT = { state: 'ready', username: 'rishikeshjadhav', daily_limit: 3,
+                           submissions_used_today: 3, default_slug: '', competition_url: 'https://www.kaggle.com/competitions/dev' };
+        var CONN_NOTJOINED = { state: 'not_joined', username: 'rishikeshjadhav',
+                               competition_url: 'https://www.kaggle.com/competitions/dev', default_slug: '' };
+
+        function gateGreen() {
+          el('ps-test-url').value = testUrl;
+          psGate = { ok: true, url: testUrl };
+          psRenderGate(psGate);
+        }
+
+        function loadDevRuns(selectFirst) {
+          psRuns = RUNS;
+          var sel = el('ps-run');
+          sel.innerHTML = '<option value="">Select a run…</option>';
+          RUNS.forEach(function (run) {
+            var opt = document.createElement('option');
+            opt.value = run.job_id;
+            opt.textContent = (run.run_name || run.job_id) + ' · ' +
+              (run.usable ? psRunSummary(run) : run.reason);
+            if (!run.usable) { opt.disabled = true; }
+            sel.appendChild(opt);
+          });
+          if (selectFirst) { sel.value = 'devtrain1'; }
+          psRenderRunNote();
+        }
+
+        function results(opts) {
+          psResultsShown = false;
+          psRenderResults(predictJob(opts), false);
+          el('ps-predict-btn').innerHTML = KG_BTN_PREDICT_RERUN;
+          psSetBasis({ job_id: 'devpredict1', run_name: devRun, local_score: opts.score,
+                       when: now - 160, persisted: false });
+        }
+
+        function apply() {
+          el('ps-form').style.display = '';
+          el('ps1-banner').innerHTML = '';
+          el('ps-banner').innerHTML = '';
+          el('ps-progress').innerHTML = '';
+          el('ps-results').innerHTML = '';
+          el('ps-state').textContent = '';
+          el('ps-submit-state').textContent = '';
+          el('ps-spinner').style.display = 'none';
+          el('ps-submit-spinner').style.display = 'none';
+          el('ps-predict-btn').innerHTML = KG_BTN_PREDICT;
+          psResultsShown = false;
+          psPredicting = false;
+          psSubmitting = false;
+          psSetSource('run');
+          psSetBasis(null);
+          psRenderConnState(CONN_READY);
+
+          if (mode === 'submit-state1') {
+            psRuns = [];
+            el('ps-run').innerHTML = '<option value="">No plugin runs yet. Train first, or use a weights file.</option>';
+            el('ps-test-url').value = '';
+            psGate = null;
+            psRenderGate(null);
+            psRenderRunNote();
+            psCheckPredictReady();
+          } else if (mode === 'submit-gated') {
+            loadDevRuns(true);
+            gateGreen();
+            psCheckPredictReady();
+          } else if (mode === 'submit-inference') {
+            loadDevRuns(true);
+            gateGreen();
+            psPredicting = true;
+            psCheckPredictReady();
+            el('ps-spinner').style.display = 'inline-block';
+            el('ps-state').textContent = 'Predicting… (safe to navigate away)';
+            psRenderProgress({ status: 'running', created_at: now - 41,
+                               progress: { images: 312, total_images: 715 } });
+          } else if (mode === 'submit-results') {
+            loadDevRuns(true);
+            gateGreen();
+            results({ checks: CHECKS_OK, sanity: sanity(true), score: 0.6402 });
+          } else if (mode === 'submit-results-low') {
+            loadDevRuns(true);
+            gateGreen();
+            results({ checks: CHECKS_OK, sanity: sanity(false), score: 0.0512 });
+          } else if (mode === 'submit-checks-fail') {
+            loadDevRuns(true);
+            gateGreen();
+            psRenderResults({ id: 'devpredict1', status: 'failed', checks: CHECKS_FAIL,
+                              facts: {} }, false);
+            psRenderPredictFail('Submission must contain exactly 715 rows; got 713. ' +
+                                'Re-run Import to rebuild the test table, then predict again.', false);
+            el('ps-predict-btn').innerHTML = KG_BTN_PREDICT_RERUN;
+          } else if (mode === 'submit-nokaggle') {
+            loadDevRuns(true);
+            gateGreen();
+            results({ checks: CHECKS_OK, sanity: sanity(true), score: 0.6402 });
+            psRenderConnState(CONN_NOTJOINED);
+          } else if (mode === 'submit-limit') {
+            loadDevRuns(true);
+            gateGreen();
+            results({ checks: CHECKS_OK, sanity: sanity(true), score: 0.6402 });
+            psRenderConnState(CONN_LIMIT);
+          } else if (mode === 'submit-success') {
+            loadDevRuns(true);
+            gateGreen();
+            results({ checks: CHECKS_OK, sanity: sanity(true), score: 0.6402 });
+            psLastSubmission = { status: 'submitted', ref: '54861736' };
+            psRenderSubmitSuccess(psLastSubmission, false);
+          } else if (mode === 'submit-fail') {
+            loadDevRuns(true);
+            gateGreen();
+            results({ checks: CHECKS_OK, sanity: sanity(true), score: 0.6402 });
+            psRenderSubmitFail('Kaggle rejected the submission: 400 Bad Request '
+                               + '(submission file exceeds the allowed size).', false);
+          } else if (mode === 'submit-revisit') {
+            loadDevRuns(true);
+            gateGreen();
+            psRenderRevisit({
+              state: 'submitted',
+              predict: { job_id: 'devpredict1', run_name: devRun, csv_path: csvPath,
+                         local_score: 0.6402, sanity: sanity(true), checks: CHECKS_OK,
+                         finished_at: now - 7200 },
+              submission: { predict_job_id: 'devpredict1', status: 'submitted',
+                            ref: '54861736', finished_at: now - 7000 }
+            });
+          }
+        }
+        showTab('submit');
         apply();
         configLoaded.then(function () { setTimeout(apply, 0); });
       }
@@ -3734,11 +3919,22 @@
       }
 
       // Kaggle connection card in the banner vocabulary; budget included.
+      // Split fetch/render so ?kgdev fixtures can drive the render directly.
       function renderConnection() {
         API.authFetch(computeUrl + '/api/plugins/kaggle/kaggle/connection?slug=' +
                       encodeURIComponent(el('ps-slug').value.trim()))
           .then(function (r) { return r.json(); })
-          .then(function (s) {
+          .then(psRenderConnState)
+          .catch(function (e) {
+            if (kgConn.fail(e, renderConnection)) { return; }
+            psConnState = null;
+            el('ps-kconn').innerHTML = '<div class="kg-callout info">' + kgIcon('info') +
+              '<span>Could not check the Kaggle connection: ' + esc(e.message) + '</span></div>';
+            psCheckSubmitReady();
+          });
+      }
+
+      function psRenderConnState(s) {
             psConnState = s;
             // Hardcoded competition default (server constant), still editable.
             if (!el('ps-slug').value.trim() && s.default_slug) {
@@ -3782,14 +3978,6 @@
                 '<span>Connection state unknown.</span></div>';
             }
             psCheckSubmitReady();
-          })
-          .catch(function (e) {
-            if (kgConn.fail(e, renderConnection)) { return; }
-            psConnState = null;
-            el('ps-kconn').innerHTML = '<div class="kg-callout info">' + kgIcon('info') +
-              '<span>Could not check the Kaggle connection: ' + esc(e.message) + '</span></div>';
-            psCheckSubmitReady();
-          });
       }
       configLoaded.then(renderConnection);
 
@@ -3926,6 +4114,116 @@
       });
 
       psSetBasis(null);   // step 2 starts muted until a prediction lands
+
+      // ── Revisit + tab-open resolution (Predict + Submit) ────────────
+      function psEnterFormState(animate) {
+        el('ps-form').style.display = '';
+        el('ps1-banner').innerHTML = '';
+        el('ps-banner').innerHTML = '';
+        el('ps-progress').innerHTML = '';
+        el('ps-results').innerHTML = '';
+        el('ps-state').textContent = '';
+        psResultsShown = false;
+        el('ps-predict-btn').innerHTML = KG_BTN_PREDICT;
+        if (animate) { kglEnter(el('ps-form')); }
+        psSetBasis(null);
+        psCheckPredictReady();
+      }
+
+      // Revisit-first: the persisted snapshot renders the last prediction
+      // as a static results panel (checks, sanity, hero, CSV row) with the
+      // last submission's outcome, and "New prediction" restores the form.
+      // The snapshot is server-side re-verified (CSV on disk) before this
+      // renders; step 2 unlocks against the persisted CSV.
+      function psRenderRevisit(state) {
+        var ps = state.predict || {};
+        el('ps-form').style.display = 'none';
+        psResultsShown = true;   // later re-runs replace without replay
+        psRenderResults({
+          id: ps.job_id || '',
+          status: 'completed',
+          checks: ps.checks || [],
+          facts: {
+            csv_path: ps.csv_path,
+            sanity: ps.sanity,
+            local_score: ps.local_score,
+            run_name: ps.run_name
+          }
+        }, false);
+        var head = '<div class="kg-preflight-ok" style="margin-bottom: 6px;">' + kgIcon('check') +
+          '<span>Last prediction: <strong>' + esc(ps.run_name || 'run') + '</strong>' +
+          (ps.finished_at ? ' · predicted ' + esc(psFmtAgo(ps.finished_at)) : '') +
+          '</span></div>' +
+          '<div style="margin: 0 0 10px;"><button type="button" class="btn btn-ghost btn-sm" ' +
+          'id="ps-new-prediction">New prediction</button></div>';
+        el('ps-results').innerHTML = head + el('ps-results').innerHTML;
+        kgBindCopy(el('ps-results'));
+        el('ps-results').querySelectorAll('[data-download]').forEach(function (b) {
+          b.addEventListener('click', function () { downloadCsv(b.getAttribute('data-download')); });
+        });
+        el('ps-new-prediction').addEventListener('click', function () { psEnterFormState(true); });
+
+        if (state.submission) {
+          var ss = state.submission;
+          psLastSubmission = ss;
+          el('ps-banner').innerHTML = ss.status === 'submitted'
+            ? '<div class="kg-callout ok">' + kgIcon('check-circle') +
+              '<span>Submitted to Kaggle' + (ss.ref ? ' · submission ' + esc(ss.ref) : '') +
+              (ss.finished_at ? ' · ' + esc(psFmtAgo(ss.finished_at)) : '') + '</span></div>'
+            : '<div class="kg-callout info">' + kgIcon('info') +
+              '<span>Last submit attempt: ' + esc(ss.status || 'unknown') +
+              (ss.reason ? '. ' + esc(ss.reason) : '') + '</span></div>';
+        }
+        psPredictJobId = ps.job_id || psPredictJobId;
+        psSetBasis({
+          job_id: ps.job_id,
+          run_name: ps.run_name,
+          local_score: ps.local_score,
+          when: ps.finished_at,
+          persisted: true
+        });
+      }
+
+      // Order: a still-running job wins (reconnect), then the verified
+      // snapshot (revisit-first), then the form.
+      function psInitSubmitTab() {
+        Promise.all([
+          API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=predict')
+            .then(function (r) { return r.json(); }).catch(function () { return []; }),
+          API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=kaggle_submit')
+            .then(function (r) { return r.json(); }).catch(function () { return []; })
+        ]).then(function (lists) {
+          var runningPredict = (lists[0] || []).filter(function (j) { return j.status === 'running'; })[0];
+          var runningSubmit = (lists[1] || []).filter(function (j) { return j.status === 'running'; })[0];
+          if (runningPredict && !psPredictTimer) {
+            psPredictJobId = runningPredict.id;
+            psPredicting = true;
+            psCheckPredictReady();
+            el('ps-spinner').style.display = 'inline-block';
+            el('ps-state').textContent = 'Predicting… (safe to navigate away)';
+            psPredictTimer = setInterval(psPollPredict, 1000);
+            psPollPredict();
+            return;
+          }
+          if (runningSubmit && !psSubmitTimer) {
+            psSubmitJobId = runningSubmit.id;
+            psSubmitting = true;
+            el('ps-submit-spinner').style.display = 'inline-block';
+            el('ps-submit-state').textContent = 'Submitting…';
+            psSubmitTimer = setInterval(psPollSubmit, 1500);
+            psPollSubmit();
+            // fall through: the revisit snapshot still supplies step 1
+          }
+          API.authFetch(computeUrl + '/api/plugins/kaggle/submit/state')
+            .then(function (r) { return r.json(); })
+            .catch(function (e) { kgConn.fail(e); return { state: 'empty' }; })
+            .then(function (state) {
+              if (state.state === 'predicted' || state.state === 'submitted') {
+                psRenderRevisit(state);
+              }
+            });
+        });
+      }
 
       // ── Status tab ─────────────────────────────────────────────────
       function renderHistory() {
@@ -4094,6 +4392,7 @@
       } else {
         kgInitImportTab();
         trInitTrainTab();
+        psInitSubmitTab();
       }
     })();
   </script>

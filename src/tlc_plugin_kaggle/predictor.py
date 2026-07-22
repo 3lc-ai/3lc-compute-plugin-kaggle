@@ -54,9 +54,9 @@ CREDENTIALS_HELP = (
     'mkdir "$env:USERPROFILE\\.kaggle" -Force; '
     'Set-Content -Path "$env:USERPROFILE\\.kaggle\\access_token" '
     '-Value "KGAT_<your token>" -NoNewline -Encoding ascii '
-    "— plain text, no BOM, no trailing newline. Alternatively set the "
+    "(plain text, no BOM, no trailing newline). Alternatively set the "
     "KAGGLE_API_TOKEN environment variable; legacy ~/.kaggle/kaggle.json "
-    "also works. The generated submission.csv is saved locally — you can "
+    "also works. The generated submission.csv is saved locally, so you can "
     "always upload it manually on the competition's Submit page."
 )
 
@@ -296,8 +296,8 @@ def build_sanity_summary(pred_map: dict[str, str]) -> dict[str, Any]:
     }
     if mean < 1.0:
         summary["warning"] = (
-            f"{total} boxes across {len(pred_map)} images — unusually low; "
-            "are these fully-trained weights? (Submitting is still fine.)"
+            f"{total} boxes across {len(pred_map)} images is unusually low. "
+            "Are these fully-trained weights? (Submitting is still fine.)"
         )
     return summary
 
@@ -462,7 +462,7 @@ def submit_to_kaggle(csv_path: str, message: str, slug: str, ctx: Any) -> dict[s
                 "status": "limit_reached",
                 "reason": (
                     f"Daily submission limit reached{limit_txt}, resets midnight UTC. "
-                    "Your CSV is saved and validated — submit it tomorrow from here, "
+                    "Your CSV is saved and validated. Submit it tomorrow from here, "
                     "or upload it manually on the competition's Submit page."
                 ),
                 "detail": str(exc),
