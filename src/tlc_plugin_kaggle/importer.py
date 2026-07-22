@@ -63,9 +63,14 @@ def parse_dataset_yaml(yaml_path: str) -> dict[str, Any]:
     """Parse the YOLO dataset.yaml and resolve per-split image directories."""
     import yaml
 
-    p = Path(yaml_path.strip().strip('"'))
+    # Path ergonomics: tolerate Windows "Copy as path" quoting, trailing
+    # separators, and a path to the FOLDER containing dataset.yaml.
+    cleaned = yaml_path.strip().strip('"').strip("'").strip()
+    p = Path(cleaned.rstrip("\\/")) if cleaned else Path(cleaned)
+    if p.is_dir() and (p / "dataset.yaml").is_file():
+        p = p / "dataset.yaml"
     if not p.is_file():
-        raise FileNotFoundError(f"dataset.yaml not found: {p}")
+        raise FileNotFoundError(f"No dataset.yaml found at: {p} — the yaml file or the folder containing it both work")
     with open(p, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     if not isinstance(cfg, dict):
@@ -120,8 +125,20 @@ def preflight(yaml_path: str) -> dict[str, Any]:
         else:
             entry["dir"] = str(d)
             try:
-                entry["found"] = len(_list_images(d))
-                entry["ok"] = entry["found"] == EXPECTED_ROWS[split]
+                images = _list_images(d)
+                entry["found"] = len(images)
+                # Stat-level readability check (no decoding — keeps preflight
+                # fast): zero-byte or unstatable files flag a half-extracted
+                # starter kit before it becomes a confusing training error.
+                unreadable = 0
+                for f in images:
+                    try:
+                        if f.stat().st_size == 0:
+                            unreadable += 1
+                    except OSError:
+                        unreadable += 1
+                entry["unreadable"] = unreadable
+                entry["ok"] = entry["found"] == EXPECTED_ROWS[split] and unreadable == 0
             except FileNotFoundError:
                 entry["error"] = "image directory not found"
         splits[split] = entry
@@ -146,7 +163,18 @@ def preflight(yaml_path: str) -> dict[str, Any]:
         "classes": classes,
         "test_labels_on_disk": test_labels_on_disk,
         "all_ok": classes["canonical"] and all(s["ok"] for s in splits.values()),
+        "plugin_version": _plugin_version(),
     }
+
+
+def _plugin_version() -> str:
+    """Cheap version identifier for the Copy-diagnostics block."""
+    try:
+        from tlc_plugin_kaggle import KagglePlugin
+
+        return str(KagglePlugin.version)
+    except Exception:
+        return "unknown"
 
 
 def _labels_dir_for(images_dir: Path) -> Path:
