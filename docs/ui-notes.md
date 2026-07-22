@@ -232,9 +232,11 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   disconnects show "Connection lost. Training continues on the host."
   and the guard resumes polling on reconnect — never restarts anything.
 - **Provenance panel**: the run-record assertions render as verdict +
-  checks ("From-scratch provenance recorded" / group head "Provenance
+  checks ("Verified provenance recorded" / group head "Provenance
   verified") the moment the record carries them; cascade on live
-  arrival only. Screenshot target for the README.
+  arrival only. Four assertions since the 2026-07-22 contract change
+  (model / imgsz / pretrained / checkpoint sha256). Screenshot target
+  for the README — the hash line is the new centerpiece.
 
 ## 10. Predict + Submit additions to the vocabulary (2026-07-21)
 
@@ -359,6 +361,34 @@ and data that refreshes on tab activation so the UI never needs a
 manual reload to tell the truth. That is the bar for anything that
 ships after v1.
 
+## 13. Contract repositioning (2026-07-22)
+
+The from-scratch rule is retired. The locked contract is now **YOLOv11n
+from the official COCO-pretrained checkpoint (plugin-managed,
+sha256-pinned) at 640px** — identical starting weights for every
+participant; the recorded hash is the proof. Rationale: a ~0.005
+epoch-10 start demoralizes; a ~0.70 start with room to climb keeps the
+competition approachable, and fairness is preserved by pinning the
+init. Provenance now proves "trained through the verified pipeline
+under the locked contract", not "random init". All playbook rules
+stand unchanged.
+
+UI consequences: header chip "YOLOv11n · COCO-pretrained · 640px";
+Train stepper subtitle "YOLOv11n, pinned init"; contract panel gains an
+Init row (yolo11n.pt · sha256 prefix); Epochs default 20 with
+pretrained-calibrated help (~0.70 by epoch 10; productive range 10 to
+50); the in-run `tr-run-note` slot now renders the backend's
+checkpoint-fetch stage note at epoch 0 instead of the retired near-zero
+expectation line; provenance panel has four assertions.
+
+The **host-only pattern** (render only when the local-scoring file
+check passes, absence is the participant behavior) now also covers the
+Weights-file source: participants get a single Plugin-run source with
+no toggle, and the server rejects direct weights paths from
+non-host machines, so the gate is real, not visual. Legacy
+from-scratch runs render truthfully everywhere ("from-scratch ·
+legacy") and remain predictable/submittable — no data migration.
+
 ---
 
 ## Appendix — Import-tab reference
@@ -414,6 +444,8 @@ ships after v1.
 | `submit-success` | Submitted banner (pre-drawn check, ref 54861736, View on Kaggle, Continue to Status) |
 | `submit-fail` | Submission rejected: red banner + Copy diagnostics |
 | `submit-revisit` | Revisit-first: static results summary + submitted callout + New prediction |
+| `submit-participant` | Participant view: no Weights-file toggle (host=false), single Plugin-run source, gated-ready |
+| `predict-legacy-run` | A pre-repositioning from-scratch run selected: "from-scratch · legacy" summary tag + legacy note, still submittable |
 
 The dev dispatch runs at the END of the fragment script so forced states
 apply after every tab's vars and handlers exist; fixtures re-apply after

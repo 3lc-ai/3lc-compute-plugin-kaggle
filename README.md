@@ -7,6 +7,19 @@ One sidebar page walks a participant through the whole competition loop:
 
 *(screenshot placeholder — Hub page with the four cards)*
 
+Demo screenshot list (all reachable via `?kgdev` fixtures, identical on
+every load):
+
+1. Header + stepper — chip "YOLOv11n · COCO-pretrained · 640px"
+2. Train contract panel (Model / Init `yolo11n.pt · sha256 0ebbc80d4a76…` /
+   Image size) — `?kgdev=train-state2`
+3. **Provenance panel with the checkpoint-hash assertion** (the
+   centerpiece) — `?kgdev=train-state4`
+4. Predict results panel + hero — `?kgdev=submit-results`
+5. Participant view, single Plugin-run source — `?kgdev=submit-participant`
+6. Legacy run truthfully tagged — `?kgdev=predict-legacy-run`
+7. Status hero strip + history — `?kgdev=status-history`
+
 The point of the competition is the **data loop**: edit labels in the 3LC
 Dashboard, re-train on the newest revision (`.latest()`), and climb the
 leaderboard with better data — the model is fixed.
@@ -20,16 +33,21 @@ leaderboard with better data — the model is fixed.
    hidden ground truth can never enter the table. Re-import reuses existing
    tables (reported, never duplicated) and re-validates.
 2. **Train** — constrained training via 3lc-ultralytics. **Locked
-   server-side: `yolo11n.yaml` (from-scratch random init) · imgsz 640 ·
-   no pretrained weights.** The locks hold against the extra-args escape
-   hatch, and the produced 3LC Run's recorded parameters prove the
-   from-scratch provenance. Everything else (epochs, batch, lr, optimizer,
-   full 3LC metrics-collection settings) is yours.
+   server-side: `yolo11n.pt` (the official COCO-pretrained checkpoint,
+   plugin-managed and sha256-pinned) · imgsz 640 · pretrained locked True.**
+   Identical starting weights for every participant; the locks hold against
+   the extra-args escape hatch, and the produced 3LC Run's recorded
+   parameters (including the checkpoint hash) prove the provenance.
+   Everything else (epochs, batch, lr, optimizer, full 3LC
+   metrics-collection settings) is yours.
 3. **Predict + Submit** — inference on the test table → `submission.csv`
    (`id,image_id,prediction_string`, image_id = filename stem) → strict
    pre-flight validation implementing the competition metric's exact parsing
    rules (so a format error never burns a Kaggle submission) → optional
    upload via the Kaggle API. Works without credentials in CSV-only mode.
+   Predictions are **plugin-run-only** for participants (enforced
+   server-side); the direct Weights-file source is host-only, gated by the
+   same check as local scoring.
 4. **Status** — local submission history (runs, CSVs, scores) plus live
    Kaggle state (recent submissions, best public score, leaderboard) once
    `~/.kaggle/kaggle.json` and the competition slug are configured.
@@ -71,7 +89,7 @@ src/tlc_plugin_kaggle/   the plugin (manifest = class attrs on KagglePlugin)
 ├── ui.html              the four-card page
 ├── routes.py            REST endpoints under /api/plugins/kaggle
 ├── importer.py          card 1: import + dataset validation (GT-leak guard)
-├── trainer.py           card 2: locked from-scratch training + provenance
+├── trainer.py           card 2: locked pinned-init training + provenance
 ├── predictor.py         card 3+4: inference, submission.csv, Kaggle API
 └── jobs.py              disk-persisted job store (survives hot reload)
 docs/                    design notes + deployment guide (research phase)
