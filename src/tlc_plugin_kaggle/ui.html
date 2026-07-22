@@ -953,9 +953,13 @@
               <button type="button" id="ps-src-weights-btn" aria-pressed="false">Weights file</button>
             </div>
             <div id="ps-src-run">
-              <div class="kg-select-wrap">
-                <select id="ps-run" class="form-control"><option value="">Loading runs…</option></select>
-                <span class="kg-select-caret"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6L8 10.5 12.5 6"/></svg></span>
+              <div class="kg-url-row">
+                <div class="kg-select-wrap" style="flex: 1; min-width: 0;">
+                  <select id="ps-run" class="form-control"><option value="">Loading runs…</option></select>
+                  <span class="kg-select-caret"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6L8 10.5 12.5 6"/></svg></span>
+                </div>
+                <button type="button" id="ps-run-refresh" class="btn btn-ghost btn-sm kgi-btn"
+                        title="Refresh runs" aria-label="Refresh the runs list"><svg class="kgi" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-3.97"/><path d="M13.5 2.5V6H10"/></svg></button>
               </div>
               <div id="ps-run-note"></div>
             </div>
@@ -1100,9 +1104,13 @@
           function (a) { a.classList.toggle('kg-loop-active', a.getAttribute('data-goto') === name); }
         );
         try { localStorage.setItem(TAB_KEY, name); } catch (e) { /* sandboxed */ }
-        // Tab-entry work (function declarations hoist within this IIFE):
-        // Train re-verifies its table gate — a same-values re-entry is free.
+        // Tab-entry refetch (function declarations hoist within this IIFE):
+        // every tab refreshes its backing data when shown, silently — the
+        // no-more-F5 rule. The stepper refreshes on every switch.
+        renderPipeline();
         if (name === 'train') { trOnTabEnter(); }
+        if (name === 'submit') { psOnTabEnter(); }
+        if (name === 'status') { stOnTabEnter(); } else { stStopAuto(); }
       }
 
       Array.prototype.forEach.call(
@@ -1645,7 +1653,7 @@
           })
           .catch(function () { /* keep whatever is shown */ });
       }
-      renderPipeline();
+      // (initial render rides the first showTab call below)
 
       // ── Import: preflight (State 2 progressive disclosure) ─────────
       // "Import & Validate" stays disabled until a preflight comes back
@@ -2918,6 +2926,7 @@
         };
 
         function apply() {
+          stStopAuto();   // fixtures own the tab; no background refresh
           stLastUpdated = Date.now();
           stRenderUpdated();
           // Budget hero block reads the connection state: counted on the
@@ -3310,6 +3319,9 @@
             el('tr-state').textContent = '';   // the banner is the headline
             trRenderTerminal(job, true, false);
             renderPipeline();
+            // Stale-on-terminal: the finished run must be selectable in
+            // Predict immediately, not after a reload.
+            psLoadRuns();
           })
           .catch(function (e) {
             // The orphaned-poll fix matters doubly here: a multi-hour run
@@ -3790,7 +3802,10 @@
             '<span>This run has no recorded provenance checks.</span></div>' : '');
       }
 
-      function psLoadRuns() {
+      function psLoadRuns(manual) {
+        var btn = el('ps-run-refresh');
+        if (manual && btn) { btn.classList.add('kg-spin'); }
+        var settle = function () { if (btn) { btn.classList.remove('kg-spin'); } };
         API.authFetch(computeUrl + '/api/plugins/kaggle/runs')
           .then(function (r) { return r.json(); })
           .then(function (runs) {
@@ -3823,13 +3838,25 @@
           .catch(function (e) {
             kgConn.fail(e, psLoadRuns);
             el('ps-run').options[0].textContent = 'Could not load runs. Use a weights file, or retry.';
-          });
+          })
+          .then(settle, settle);
       }
       psLoadRuns();
+      el('ps-run-refresh').addEventListener('click', function () { psLoadRuns(true); });
       el('ps-run').addEventListener('change', function () {
         psRenderRunNote();
         psCheckPredictReady();
       });
+
+      // Tab-activation refetch: the runs list, connection/budget, and the
+      // table gate are all re-checked whenever the tab is shown, so a run
+      // that finished in the background is selectable without a reload.
+      function psOnTabEnter() {
+        if (kgDevMode) { return; }   // forced states own this tab
+        psLoadRuns();
+        renderConnection();
+        psVerifyTable(false);        // same-value re-entry is a no-op
+      }
 
       // ── Test-table gate (Train's pattern, one URL) ──────────────────
       function psRenderGate(data) {
@@ -4834,6 +4861,42 @@
       }
       el('st-refresh-btn').addEventListener('click', refreshStatus);
       if (!kgDevMode) { stFetchAll(false); }
+
+      // Auto-refresh while the Status tab is visible: a 15s poll (ticks
+      // skip while the document is hidden) plus a 5s ticker for the
+      // "Updated Ns ago" line. Stopped whenever another tab is shown.
+      var stAutoTimer = null;
+      var stAgoTimer = null;
+
+      function stStartAuto() {
+        if (!stAutoTimer) {
+          stAutoTimer = setInterval(function () {
+            if (document.hidden || kgDevMode) { return; }
+            stFetchAll(false);
+          }, 15000);
+        }
+        if (!stAgoTimer) { stAgoTimer = setInterval(stRenderUpdated, 5000); }
+      }
+
+      function stStopAuto() {
+        clearInterval(stAutoTimer); stAutoTimer = null;
+        clearInterval(stAgoTimer); stAgoTimer = null;
+      }
+
+      function stOnTabEnter() {
+        if (kgDevMode) { return; }   // forced states own this tab
+        stFetchAll(false);
+        stStartAuto();
+      }
+
+      document.addEventListener('visibilitychange', function () {
+        // Ticks skip while hidden; returning to a visible Status tab
+        // refreshes immediately instead of waiting out the interval.
+        if (!document.hidden && !kgDevMode &&
+            el('kg-panel-status').classList.contains('active')) {
+          stFetchAll(false);
+        }
+      });
 
       // ── Dev-affordance dispatch — LAST, so forced states apply after
       // every tab's vars and handlers exist. Normal loads resolve the
