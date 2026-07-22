@@ -402,6 +402,12 @@
 .kg-spark polyline { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .kg-spark circle { fill: currentColor; stroke: none; }
 
+/* Screen-reader-only announcer (aria-live regions with no visual box) */
+.kg-visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
 /* Version footer: one muted line per tab */
 .kg-footer {
   display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
@@ -546,9 +552,9 @@
     <div class="kg-constraints">
       <div class="kg-micro-label">Competition constraints</div>
       <div class="kg-chips">
-        <span class="kg-chip"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg> YOLOv11n from scratch · 640px</span>
-        <span class="kg-chip">12 classes</span>
-        <span class="kg-chip">Scored by mAP@0.5</span>
+        <span class="kg-chip" title="Fixed so all participants compete on identical architecture and resolution. Training from random init is the competition’s core rule; the Run’s provenance proves it."><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg> YOLOv11n from scratch · 640px</span>
+        <span class="kg-chip" title="The canonical ExDark class list, fixed so every submission scores against the same label map.">12 classes</span>
+        <span class="kg-chip" title="The leaderboard metric. The local preview uses the identical implementation.">Scored by mAP@0.5</span>
       </div>
     </div>
     <!-- The data-centric loop, surfaced in the tool. Inspect deep-links to
@@ -561,7 +567,7 @@
       <span class="kg-loop-sep"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span>
       <a id="kg-loop-inspect" target="_blank">inspect <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h-2A1.5 1.5 0 0 0 3 5v6.5A1.5 1.5 0 0 0 4.5 13H11a1.5 1.5 0 0 0 1.5-1.5v-2"/><path d="M9.5 2.5H13.5V6.5"/><path d="M13.5 2.5L8 8"/></svg></a>
       <span class="kg-loop-sep"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span>
-      <span title="Edit labels in the Dashboard, then re-import / use latest revision">fix labels</span>
+      <a id="kg-loop-fixlabels" target="_blank" title="Edit labels in the Dashboard, then retrain with Use latest revision on">fix labels <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h-2A1.5 1.5 0 0 0 3 5v6.5A1.5 1.5 0 0 0 4.5 13H11a1.5 1.5 0 0 0 1.5-1.5v-2"/><path d="M9.5 2.5H13.5V6.5"/><path d="M13.5 2.5L8 8"/></svg></a>
       <span class="kg-loop-sep"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span>
       <a data-goto="train">retrain</a>
       <span class="kg-loop-sep"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span>
@@ -600,7 +606,7 @@
     </div></div>
     <div class="card-body">
       <!-- Locked format: stock selected-format banner, no Change Format -->
-      <div class="format-selected-banner">
+      <div class="format-selected-banner" title="The official starter kit is the only accepted input, so every participant starts from identical data.">
         <span class="fmt-icon"><svg class="kgi kgi-16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></span>
         <div style="flex: 1;">
           <div class="fmt-name">YOLO format · Object Detection</div>
@@ -678,7 +684,7 @@
     </div></div>
     <div class="card-body">
       <!-- Locked contract: same geometry as Import's format banner -->
-      <div class="format-selected-banner">
+      <div class="format-selected-banner" title="Fixed so all participants compete on identical architecture and resolution. Extra args naming a locked key are rejected server-side.">
         <span class="fmt-icon"><svg class="kgi kgi-16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></span>
         <div style="flex: 1;">
           <div class="fmt-name">YOLOv11n from scratch · 640px · no pretrained weights</div>
@@ -689,10 +695,10 @@
            No ids, never collected into the POST body; the lock is enforced
            server-side (LOCKED_TRAIN_ARGS + extra-args guard). -->
       <div class="kg-locked-rows">
-        <div class="kg-locked-row"><span class="lbl">Model</span>
+        <div class="kg-locked-row" title="Locked: yolo11n.yaml builds the architecture from scratch with random init. No checkpoint is ever loaded."><span class="lbl">Model</span>
           <span class="val">yolo11n.yaml (from scratch, random init)</span>
           <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></div>
-        <div class="kg-locked-row"><span class="lbl">Image size</span>
+        <div class="kg-locked-row" title="Locked at 640px so results are comparable across participants."><span class="lbl">Image size</span>
           <span class="val">640</span>
           <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></div>
       </div>
@@ -742,6 +748,7 @@
             <input id="tr-epochs" type="number" class="form-control" value="100" min="1" max="300" step="1">
             <div class="form-help">Passes over the training data. 50 to 150 is the productive range
               for this dataset; returns diminish late. Range 1 to 300.</div>
+            <div id="tr-duration"></div>
             <div class="kg-field-slot" data-for="tr-epochs"></div>
           </div>
           <div class="form-group">
@@ -1151,14 +1158,28 @@
       try { savedTab = localStorage.getItem(TAB_KEY); } catch (e) { /* sandboxed */ }
       showTab(savedTab || 'import');
 
-      // Loop banner: tab links + Dashboard deep-link for "inspect".
+      // Loop banner as real navigation: the tab steps switch tabs (same
+      // mechanism as the stepper, keyboard-activatable), inspect and fix
+      // labels deep-link to the Dashboard — the latest Run / working train
+      // table once known, the Dashboard root until then.
       Array.prototype.forEach.call(
         document.querySelectorAll('#kg-loop a[data-goto]'),
         function (a) {
+          a.setAttribute('tabindex', '0');
+          a.setAttribute('role', 'button');
           a.addEventListener('click', function () { showTab(a.getAttribute('data-goto')); });
+          a.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              showTab(a.getAttribute('data-goto'));
+            }
+          });
         }
       );
-      if (dashboardUrl) { el('kg-loop-inspect').href = dashboardUrl; }
+      if (dashboardUrl) {
+        el('kg-loop-inspect').href = dashboardUrl;
+        el('kg-loop-fixlabels').href = dashboardUrl;
+      }
 
       function dashRunLink(runUrl) {
         return dashboardUrl ? dashboardUrl + '?run=' + encodeURIComponent(runUrl) : '';
@@ -1756,7 +1777,7 @@
         var html = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">';
         ['Train', 'Val', 'Test'].forEach(function (s) {
           html += '<label style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:.75;cursor:default" ' +
-                  'title="Locked by competition rules: all three splits are imported.">' +
+                  'title="All three splits are required for a valid competition setup.">' +
                   '<input type="checkbox" checked disabled> ' + s + ' ' +
                   kgIcon('lock', 'kgi-12 kgi-muted') + '</label>';
         });
@@ -2714,7 +2735,8 @@
             trGate = null;
             trRenderGate({
               ok: false, headline: 'These tables aren’t on disk yet.',
-              problems: ['val table not found on disk (<code>' + esc(midTrunc(valUrl, 64)) + '</code>).']
+              problems: ['val table not found on disk (<code title="' + esc(valUrl) + '">' +
+                         esc(midTrunc(valUrl, 64)) + '</code>).']
             });
             trCheckReady();
           } else if (mode === 'train-state2-invalid') {
@@ -3095,7 +3117,15 @@
             if (d.val && !el('tr-val-url').value.trim()) { el('tr-val-url').value = d.val.url; }
           });
       }).catch(function () { /* leave pickers empty */ })
-        .then(function () { if (!kgDevMode) { trVerifyTables(true); } });
+        .then(function () {
+          if (!kgDevMode) { trVerifyTables(true); }
+          // The Loop's "fix labels" targets the working train table once
+          // one is known (label edits happen there).
+          var trainUrl = el('tr-train-url').value.trim();
+          if (trainUrl && dashboardUrl) {
+            el('kg-loop-fixlabels').href = dashboardUrl + '?table=' + encodeURIComponent(trainUrl);
+          }
+        });
 
       // Disclosures default collapsed; a saved config that customized an
       // advanced field reopens its disclosure so nothing saved is invisible.
@@ -3185,7 +3215,7 @@
             '<div class="kg-run-head">' +
             '<span class="name" id="tr-run-name"></span>' +
             '<span id="tr-run-badge"></span>' +
-            '<span class="kg-run-meta"><span class="epoch" id="tr-run-epoch"></span>' +
+            '<span class="kg-run-meta"><span class="epoch" id="tr-run-epoch" aria-live="polite"></span>' +
             '<span id="tr-run-elapsed"></span><span id="tr-run-eta"></span></span></div>' +
             '<div class="plugin-progress-wrap" id="tr-run-track">' +
             '<div class="plugin-progress-bar" id="tr-run-bar" style="width:0%"></div></div>' +
@@ -3501,8 +3531,8 @@
               if (row[1].error) {
                 problems.push(row[0] + ': ' + esc(row[1].error));
               } else if (!row[1].exists) {
-                problems.push(row[0] + ' table not found on disk (<code>' +
-                              esc(midTrunc(row[2], 64)) + '</code>).');
+                problems.push(row[0] + ' table not found on disk (<code title="' + esc(row[2]) +
+                              '">' + esc(midTrunc(row[2], 64)) + '</code>).');
               }
             });
             if (!problems.length) {
@@ -3529,10 +3559,49 @@
           });
       }
 
+      // Expected-duration hint: median per-epoch time of recent completed
+      // runs on this machine, recomputed live as Epochs changes. Rendered
+      // only when history exists — no placeholder.
+      var trEpochSecs = null;
+
+      function trRenderDurationHint() {
+        var box = el('tr-duration');
+        if (!trEpochSecs) { box.innerHTML = ''; return; }
+        var epochs = parseInt(el('tr-epochs').value, 10);
+        if (!epochs || epochs < 1) { box.innerHTML = ''; return; }
+        var per = trEpochSecs >= 60
+          ? '~' + Math.round(trEpochSecs / 60) + ' min/epoch'
+          : '~' + Math.round(trEpochSecs) + ' s/epoch';
+        box.innerHTML = '<div class="form-help">Recent runs averaged ' + per +
+          ' on this machine. ' + fmtCount(epochs) + ' epochs ≈ ' +
+          fmtDur(trEpochSecs * epochs) + '.</div>';
+      }
+
+      function trLoadDurationStats() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=train')
+          .then(function (r) { return r.json(); })
+          .then(function (list) {
+            var times = (list || [])
+              .filter(function (j) { return j.status === 'completed' || j.status === 'cancelled'; })
+              .map(function (j) { return (j.progress || {}).avg_epoch_s; })
+              .filter(function (v) { return typeof v === 'number' && v > 0; })
+              .slice(0, 5);   // list is newest first: the 5 most recent
+            if (times.length) {
+              times.sort(function (a, b) { return a - b; });
+              trEpochSecs = times[Math.floor(times.length / 2)];
+            }
+            trRenderDurationHint();
+          })
+          .catch(function () { /* hint is optional */ });
+      }
+      el('tr-epochs').addEventListener('input', trRenderDurationHint);
+
       function trOnTabEnter() {
         if (kgDevMode) { return; }   // forced states own the gate
         trVerifyTables(false);       // same-values re-entry is a no-op
+        trLoadDurationStats();
       }
+      if (!kgDevMode) { trLoadDurationStats(); }
 
       ['tr-train-url', 'tr-val-url'].forEach(function (id) {
         el(id).addEventListener('input', function () {
@@ -4077,15 +4146,22 @@
             '<span class="badge badge-status-running">running</span>' +
             '<span class="kg-run-meta"><span class="epoch" id="ps-prog-count"></span>' +
             '<span id="ps-prog-elapsed"></span></span></div>' +
-            '<div class="plugin-progress-wrap"><div class="plugin-progress-bar" id="ps-prog-bar" style="width:0%"></div></div>';
+            '<div class="plugin-progress-wrap"><div class="plugin-progress-bar" id="ps-prog-bar" style="width:0%"></div></div>' +
+            '<span class="kg-visually-hidden" id="ps-prog-announce" aria-live="polite"></span>';
         }
         var total = p.total_images || 0;
         kgSwapText(el('ps-prog-count'),
           total ? 'Inference: ' + fmtCount(p.images || 0) + ' / ' + fmtCount(total) + ' images' : 'Starting…');
         el('ps-prog-elapsed').textContent = job.created_at
           ? 'elapsed ' + fmtDur(Date.now() / 1000 - job.created_at) : '';
-        el('ps-prog-bar').style.width =
-          (total ? Math.min(100, Math.round(100 * (p.images || 0) / total)) : 0) + '%';
+        var pct = total ? Math.min(100, Math.round(100 * (p.images || 0) / total)) : 0;
+        el('ps-prog-bar').style.width = pct + '%';
+        // Screen-reader announcements throttle to quartiles, not poll ticks.
+        var quartile = Math.floor(pct / 25) * 25;
+        var ann = el('ps-prog-announce');
+        if (quartile > 0 && ann.textContent !== 'Inference ' + quartile + '% complete') {
+          ann.textContent = 'Inference ' + quartile + '% complete';
+        }
       }
 
       // The five format checks in the checks vocabulary, one group.
