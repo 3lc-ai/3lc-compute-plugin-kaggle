@@ -280,6 +280,11 @@
   /* Loop-link hover (header wayfinding) */
   .kg-loop a { transition: color var(--kgl-motion-fast) var(--kgl-ease-out); }
 
+  /* Stat-value swaps (kgSwapText): fade out, swap, fade back */
+  .kg-metric .val, .kg-run-meta .epoch {
+    transition: opacity var(--kgl-motion-fast) var(--kgl-ease-out);
+  }
+
   /* Connection guard: "Reconnected" holds ~2s then fades (a deliberate
      exception to the no-exit-animation rule — the banner is transient
      status, not content). Under reduce it's removed instantly. */
@@ -364,6 +369,27 @@
   color: var(--danger, #ef4444); font-size: 11px; line-height: 1.4;
 }
 .kg-field-err .kgi { margin-top: 1px; }
+/* In-run view: run header row + determinate bar + metrics strip. The
+   strip's structure builds once; values swap in place (kgSwapText), so
+   poll ticks never re-trigger entrances. */
+.kg-run-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 2px 0 6px; }
+.kg-run-head .name { font-size: 13px; font-weight: 600; color: var(--text); }
+.kg-run-meta {
+  margin-left: auto; display: flex; gap: 12px; align-items: baseline;
+  font-size: 11.5px; color: var(--text-muted); white-space: nowrap;
+}
+.kg-run-meta .epoch { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+.kg-metric-strip { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 4px; }
+.kg-metric {
+  border: 1px solid var(--border-light, rgba(0,0,0,.08)); border-radius: 6px;
+  padding: 6px 10px; min-width: 96px;
+}
+.kg-metric .lbl { font-size: 10.5px; color: var(--text-muted); }
+.kg-metric .val { font-size: 14px; font-weight: 600; color: var(--text); }
+/* Sparkline: last N epochs, no axes — trend at a glance, not a chart */
+.kg-spark { display: block; margin-top: 3px; color: var(--accent); opacity: .8; }
+.kg-spark polyline { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.kg-spark circle { fill: currentColor; stroke: none; }
 
 /* Inline preflight feedback under the YAML path field. Callouts share one
    internal geometry: icon column + text, same padding/radius everywhere. */
@@ -1129,6 +1155,21 @@
           elm.classList.remove('kgl-enter');
           elm.removeEventListener('animationend', h);
         });
+      }
+
+      // Fading text swap for stat values (per-epoch updates). No-op when
+      // unchanged, so poll ticks never blink; instant under reduced motion.
+      // Relies on a gated opacity transition on the element.
+      function kgSwapText(elm, text) {
+        if (elm.textContent === text) { return; }
+        if (!kgMotionOK()) { elm.textContent = text; return; }
+        elm.addEventListener('transitionend', function h(e) {
+          if (e.propertyName !== 'opacity') { return; }
+          elm.removeEventListener('transitionend', h);
+          elm.textContent = text;
+          elm.style.opacity = '';
+        });
+        elm.style.opacity = '0';
       }
 
       // Fade a button's label swap (Copy → "Copied"); instant under
@@ -2204,42 +2245,135 @@
         }
       });
 
-      function trainChecks(checks) {
-        if (!checks || !checks.length) { el('tr-checks').innerHTML = ''; return; }
-        var html = '';
-        checks.forEach(function (c) {
-          html += '<div class="kg-check">' +
+      // ── In-run view: header row, determinate bar, metrics strip ─────
+      // Structure builds once; values swap in place per poll (kgSwapText),
+      // so nothing re-enters on ticks. During epoch 0 the bar runs
+      // indeterminate (no fraction to show yet); from epoch 1 it is the
+      // per-epoch fraction.
+      var TR_METRICS = [
+        ['m50', 'mAP50'], ['m95', 'mAP50-95'], ['p', 'Precision'], ['r', 'Recall']
+      ];
+      var TR_SPARK_N = 30;   // sparkline window: last N epochs
+
+      // Tiny inline sparkline: polyline, no axes, trend only. One point
+      // renders as a dot; a flat series renders mid-height.
+      function kgSparkline(values, w, h) {
+        w = w || 72; h = h || 18;
+        var pts = values.filter(function (v) { return typeof v === 'number' && isFinite(v); });
+        if (!pts.length) { return ''; }
+        var min = Math.min.apply(null, pts);
+        var max = Math.max.apply(null, pts);
+        var span = max - min;
+        var pad = 2;
+        function y(v) {
+          return span === 0 ? h / 2 : pad + (1 - (v - min) / span) * (h - 2 * pad);
+        }
+        var open = '<svg class="kg-spark" width="' + w + '" height="' + h + '" viewBox="0 0 ' +
+                   w + ' ' + h + '" aria-hidden="true">';
+        if (pts.length === 1) {
+          return open + '<circle cx="' + (w - pad) + '" cy="' + y(pts[0]).toFixed(1) + '" r="2"/></svg>';
+        }
+        var step = (w - 2 * pad) / (pts.length - 1);
+        var coords = pts.map(function (v, i) {
+          return (pad + i * step).toFixed(1) + ',' + y(v).toFixed(1);
+        }).join(' ');
+        return open + '<polyline points="' + coords + '"/></svg>';
+      }
+
+      function trRenderMetricStrip(history) {
+        var strip = el('tr-metric-strip');
+        if (!strip) { return; }
+        if (!history || !history.length) { strip.innerHTML = ''; return; }
+        if (!strip.childElementCount) {
+          strip.innerHTML = TR_METRICS.map(function (mdef) {
+            return '<div class="kg-metric"><span class="lbl">' + mdef[1] + '</span>' +
+                   '<div class="val" id="tr-m-' + mdef[0] + '"></div>' +
+                   '<span id="tr-s-' + mdef[0] + '"></span></div>';
+          }).join('');
+        }
+        var last = history[history.length - 1];
+        TR_METRICS.forEach(function (mdef) {
+          var v = last[mdef[0]];
+          kgSwapText(el('tr-m-' + mdef[0]), typeof v === 'number' ? v.toFixed(3) : '?');
+          el('tr-s-' + mdef[0]).innerHTML = kgSparkline(
+            history.slice(-TR_SPARK_N).map(function (hrow) { return hrow[mdef[0]]; }));
+        });
+      }
+
+      var TR_BADGE_CLASS = { running: 'running', completed: 'completed',
+                             failed: 'failed', cancelled: 'queued', stale: 'queued' };
+
+      function trRenderRunView(job) {
+        var p = job.progress || {};
+        var facts = job.facts || {};
+        var status = job.status || 'running';
+        var name = facts.run_name || (job.params || {}).run_name || 'kaggle run';
+        var total = p.total_epochs || parseInt((job.params || {}).epochs, 10) || 0;
+        var epoch = p.epoch || 0;
+        var box = el('tr-progress');
+        if (!box.querySelector('.kg-run-head')) {
+          box.innerHTML =
+            '<div class="kg-run-head">' +
+            '<span class="name" id="tr-run-name"></span>' +
+            '<span id="tr-run-badge"></span>' +
+            '<span class="kg-run-meta"><span class="epoch" id="tr-run-epoch"></span>' +
+            '<span id="tr-run-elapsed"></span><span id="tr-run-eta"></span></span></div>' +
+            '<div class="plugin-progress-wrap" id="tr-run-track">' +
+            '<div class="plugin-progress-bar" id="tr-run-bar" style="width:0%"></div></div>' +
+            '<div class="kg-metric-strip" id="tr-metric-strip"></div>';
+        }
+        el('tr-run-name').textContent = name;
+        var badgeCls = TR_BADGE_CLASS[status] || 'queued';
+        var badgeHtml = '<span class="badge badge-status-' + badgeCls + '">' + esc(status) + '</span>';
+        if (el('tr-run-badge').innerHTML !== badgeHtml) { el('tr-run-badge').innerHTML = badgeHtml; }
+        kgSwapText(el('tr-run-epoch'), 'Epoch ' + epoch + '/' + (total || '?'));
+        var now = Date.now() / 1000;
+        var end = status === 'running' ? now : (job.finished_at || now);
+        el('tr-run-elapsed').textContent = job.created_at
+          ? 'elapsed ' + fmtDur(end - job.created_at) : '';
+        el('tr-run-eta').textContent =
+          (status === 'running' && typeof p.eta_s === 'number' && epoch >= 1 && epoch < total)
+            ? '≈ ' + fmtDur(p.eta_s) + ' remaining' : '';
+        var bar = el('tr-run-bar');
+        if (status === 'running' && epoch === 0) {
+          bar.classList.add('indeterminate');
+          bar.style.width = '30%';
+        } else {
+          bar.classList.remove('indeterminate');
+          bar.style.width = (total ? Math.min(100, Math.round(100 * epoch / total)) : 0) + '%';
+        }
+        trRenderMetricStrip(p.history || []);
+      }
+
+      // ── Provenance panel: the product's whole point, promoted ────────
+      // The Run's own record proves from-scratch (model / imgsz /
+      // pretrained). Import's verdict + checks pattern, one group.
+      // `animate` = the assertions just arrived live in this session.
+      function trRenderProvenance(checks, animate) {
+        var box = el('tr-checks');
+        if (!checks || !checks.length) { box.innerHTML = ''; return; }
+        var allOk = checks.every(function (c) { return c.ok; });
+        var html = '<div class="kg-verdict">' +
+          (allOk ? '<span class="ok">' + kgIcon('check-circle') + '</span>'
+                 : '<span class="bad">' + kgIcon('x-circle') + '</span>') +
+          '<span>' + (allOk ? 'From-scratch provenance recorded'
+                            : 'Provenance check failed') + '</span></div>' +
+          '<div class="kg-checks-grid' + (animate ? ' kgl-cascade' : '') + '"><div>' +
+          '<div class="kg-checks-head">Provenance verified</div>';
+        checks.forEach(function (c, i) {
+          html += '<div class="kg-check"' + (animate ? ' style="--kgl-i:' + i + '"' : '') + '>' +
                   (c.ok ? '<span class="ok">' + kgIcon('check') + '</span>'
                         : '<span class="bad">' + kgIcon('x') + '</span>') +
                   '<span class="kg-check-body">' + esc(c.label) +
                   (c.detail ? ' <span class="detail">(' + esc(c.detail) + ')</span>' : '') +
                   '</span></div>';
         });
-        el('tr-checks').innerHTML = html;
+        box.innerHTML = html + '</div></div>';
       }
 
-      function trainProgress(job) {
-        var p = job.progress || {};
-        var html = '';
-        if (p.total_epochs) {
-          var pct = Math.round(100 * (p.epoch || 0) / p.total_epochs);
-          html += '<strong>Epoch ' + (p.epoch || 0) + ' / ' + p.total_epochs + '</strong> (' + pct + '%)';
-          // ETA appears once epoch 1 completes, from measured epoch time.
-          if (typeof p.eta_s === 'number' && (p.epoch || 0) >= 1 && p.epoch < p.total_epochs) {
-            html += ' · ≈ ' + fmtDur(p.eta_s) + ' remaining' +
-                    ' <span style="opacity:.6">(' + fmtDur(p.avg_epoch_s || 0) + '/epoch measured)</span>';
-          }
-          var m = p.metrics || {};
-          var keys = Object.keys(m);
-          if (keys.length) {
-            html += '<table style="border-collapse: collapse; margin-top: 4px; font-size: 12px;">';
-            keys.forEach(function (k) {
-              html += '<tr><td style="padding: 1px 10px 1px 0;">' + k + '</td><td>' + m[k] + '</td></tr>';
-            });
-            html += '</table>';
-          }
-        }
-        el('tr-progress').innerHTML = html;
+      // Interim terminal rendering (run link + weights); the next commit
+      // replaces this with the banner vocabulary.
+      function trRenderTerminal(job) {
         var facts = job.facts || {};
         var out = '';
         if (facts.run_url) {
@@ -2248,10 +2382,7 @@
                  (link ? '<a class="btn btn-primary btn-sm kgi-btn" href="' + link +
                          '" target="_blank"><span>Open Run in Dashboard</span>' +
                          kgIcon('external-link', 'kgi-12') + '</a> ' : '') +
-                 '<code style="font-size: 11px;">' + esc(facts.run_url) + '</code></div>' +
-                 '<div class="kg-callout info">' + kgIcon('info') + '<span>Review per-sample ' +
-                 'losses and embeddings in the Dashboard to find label issues, then retrain ' +
-                 'with "Use latest revision" on.</span></div>';
+                 '<code style="font-size: 11px;">' + esc(facts.run_url) + '</code></div>';
         }
         if (facts.weights) {
           out += '<div style="margin-top: 6px;">Weights: <code style="font-size: 11px;">' +
@@ -2260,17 +2391,25 @@
         el('tr-result').innerHTML = out;
       }
 
+      var trHadChecks = false;   // cascade only on live arrival
+
       function pollTrain() {
         API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + trainJobId)
           .then(function (r) { return r.json(); })
           .then(function (job) {
+            if (!job || !job.status) { return; }   // pruned/odd record: keep polling
             el('tr-log-details').style.display = 'block';
             el('tr-log').textContent = (job.log || []).join('\n');
             if (trLogOpen()) { el('tr-log').scrollTop = el('tr-log').scrollHeight; }
-            trainChecks(job.checks);
-            trainProgress(job);
+            trRenderRunView(job);
+            if (job.checks && job.checks.length) {
+              trRenderProvenance(job.checks, !trHadChecks);
+              trHadChecks = true;
+            }
             if (job.status === 'running') {
-              el('tr-state').textContent = job.cancelled ? 'Cancelling…' : 'Training…';
+              el('tr-state').textContent = job.cancelled
+                ? 'Cancelling… (stops at the next checkpoint)'
+                : 'Training… (safe to navigate away)';
               return;
             }
             clearInterval(trainTimer);
@@ -2282,6 +2421,7 @@
               job.status === 'completed' ? 'Training complete'
               : job.status === 'cancelled' ? 'Cancelled'
               : (job.error || 'Training failed');
+            trRenderTerminal(job);
             renderPipeline();
           })
           .catch(function () { /* transient poll error — keep trying */ });
@@ -2531,7 +2671,11 @@
           .then(function (res) {
             if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
             trainJobId = res.body.job_id;
+            trHadChecks = false;
             el('tr-cancel-btn').disabled = false;
+            el('tr-progress').innerHTML = '';   // fresh structure for this run
+            trRenderRunView({ status: 'running', params: body, progress: {}, facts: {} });
+            kgScrollTo(el('tr-progress'));
             trainTimer = setInterval(pollTrain, 2000);
           })
           .catch(function (e) {
@@ -2544,8 +2688,12 @@
 
       el('tr-cancel-btn').addEventListener('click', function () {
         if (!trainJobId) { return; }
+        // Cooperative cancel: the worker stops at the next checkpoint and
+        // the Run is marked cancelled — confirm before asking for it.
+        if (!window.confirm('Stop this training run? It stops at the next checkpoint; ' +
+                            'epochs completed so far are kept.')) { return; }
         API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + trainJobId + '/cancel', { method: 'POST' })
-          .then(function () { el('tr-state').textContent = 'Cancelling…'; })
+          .then(function () { el('tr-state').textContent = 'Cancelling… (stops at the next checkpoint)'; })
           .catch(function () {});
       });
 
