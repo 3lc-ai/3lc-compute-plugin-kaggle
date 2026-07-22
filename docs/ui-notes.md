@@ -154,11 +154,18 @@ their log formatting.
 | `kgMotionOK()` | Live `prefers-reduced-motion` check; gate any JS that waits on animation/transition end-events |
 | `kglEnter(elm)` | Re-triggerable entrance for a persistent element (fresh innerHTML embeds `kgl-enter` in markup instead) |
 | `kgSwapHtml(elm, html)` | Fading label swap on buttons (instant under reduce); relies on the gated opacity transition |
-| `kgConn.fail(err, resume?)` | Connection guard: returns true iff network-level (TypeError); shows retrying banner, backoff 2/5/10/15s pings, fires `resume` on reconnect (resume polls/preflights — never imports/submits) |
-| `kgBuildDiagnostics()` / `kgDiagBtn()` / `kgBindDiag(el)` | Fenced ```3lc-kaggle-diagnostics``` block (version, OS, time, inputs, preflight JSON, checks, log tail, job id — sections omitted when absent); button on every failure surface |
+| `kgSwapText(elm, text)` | Fading text swap for stat values; no-op when unchanged, so poll ticks never blink. Needs a gated opacity transition on the element |
+| `kgConn.fail(err, resume?)` | Connection guard: returns true iff network-level (TypeError); shows retrying banner in EVERY finished tab's `*-conn-banner` slot (one guard, one state), backoff 2/5/10/15s pings, fires `resume` on reconnect (resume polls/preflights/gates — never imports/trains/submits) |
+| `kgBuildDiagnosticsCore(sections)` | Fenced ```3lc-kaggle-diagnostics``` block: version/OS/time header + caller sections (falsy sections skipped — no placeholders). Per-tab builders compose it: `kgBuildDiagnostics` (Import: yaml, preflight JSON, checks, log tail), `trBuildDiagnostics` (Train: job id, HP set, provenance, log tail) |
+| `kgChecksSection(title, checks)` / `kgLogTailSection(logEl)` | Reusable diagnostics sections (PASS/FAIL lines; last-40-lines log tail) |
+| `kgDiagBtn()` / `kgBindDiag(el, build?)` | Copy-diagnostics button on every failure surface; `build` picks the tab's builder (default Import's) |
+| `kgBindAccordion(toggleId, panelId)` | Button + region accordion (aria-expanded / hidden, animated grid-rows); serves log accordions AND advanced disclosures |
+| `kgAccOpenInstant(toggleId, panelId)` | Open a disclosure with zero motion (page furniture on load) |
+| `kgSparkline(values, w?, h?)` | Tiny inline SVG polyline, no axes/library; one point renders as a dot, flat series renders mid-height |
 | `kgScrollTo(elm)` | Attention scroll: only when out of view, only on live events, smooth/instant per motion |
 | `kgCleanYamlPath(v)` | Copy-as-path quote/trailing-separator tolerance; field rewritten so what runs is what's shown (folder→file resolution is server-side) |
 | `kgIcon(name, cls)` | Inline SVG from the icon set |
+| `kgClassTint(i)` | Class-index tint (background + border) from the Hub `--chart-N` palette |
 | `esc(s)` / `fmtCount(n)` / `midTrunc(s, max)` / `fmtDur(s)` | Escaping, thousands separators, middle truncation, elapsed formatting |
 | `kgBindCopy(el)` | data-copy buttons with transient Copied state and prompt() fallback |
 
@@ -184,13 +191,56 @@ their log formatting.
   `word-break: break-all` on paths/`pre`; full paths only in the log/Copy.
 - Nothing within 4px of a container edge that isn't deliberately flush.
 
-## 9. Known deferred items
+## 9. Train-tab additions to the vocabulary (2026-07-21)
+
+Patterns the Train session added; Submit/Status sessions inherit them.
+
+- **Locked-contract banner + locked rows**: constraints render as the
+  format-banner geometry (lock icon, one-line contract, enforcement
+  sentence) with read-only `.kg-locked-row`s under it — never
+  fake-editable disabled inputs. Locks are calm facts: muted gray.
+- **Staged sections**: `.kg-sec-head` uppercase micro-heads + `divider`s
+  replace any wall-of-fields; core fields prominent, everything most
+  users keep on defaults goes into a collapsed **advanced disclosure**
+  (`kgBindAccordion`, same mechanics as the log accordion). A saved
+  config with non-default advanced values reopens its disclosure on load
+  (instant — page furniture never animates).
+- **Gate pattern**: cheap read-only existence checks (reuse
+  `/import/revisions`) gate the primary CTA; green is a quiet
+  `.kg-preflight-ok` line, missing is an amber callout with per-item
+  problems and a cross-tab remediation action ("Go to Import"). Kind
+  transitions animate; same-outcome re-checks don't.
+- **Inline bounds**: client mirrors of server bounds render red under
+  the field on blur (`.kg-field-err` in a `.kg-field-slot`), same
+  message shape as the server; fixing clears on input; CTA disabled
+  while any field is invalid.
+- **In-run view**: header row (run name · status badge · Epoch n/N ·
+  elapsed · measured ETA) + determinate per-epoch bar (indeterminate
+  only during epoch 0) + **metrics strip** (stat chips + `kgSparkline`,
+  values via `kgSwapText`). Structure builds once; values swap in place —
+  nothing re-enters on poll ticks. Cancel confirms (cooperative) and
+  stays in the action row: one destructive control, not duplicated in
+  the header.
+- **In-run reconnect**: tab-open resolution fetches `jobs?kind=<tab>`;
+  a running record reconnects straight into the in-run view (pid check
+  makes restart orphans arrive `stale`, never `running`); newest
+  terminal record renders its static summary (completed hides the form
+  behind "Start new run"; failed/stale keep the form + Re-run CTA;
+  cancelled keeps the form + info callout); else the form. Mid-run
+  disconnects show "Connection lost. Training continues on the host."
+  and the guard resumes polling on reconnect — never restarts anything.
+- **Provenance panel**: the run-record assertions render as verdict +
+  checks ("From-scratch provenance recorded" / group head "Provenance
+  verified") the moment the record carries them; cascade on live
+  arrival only. Screenshot target for the README.
+
+## 10. Known deferred items
 
 - **File-browse endpoint** (server-side directory picker for the YAML path)
 - **Recent-paths dropdown** on the YAML field
 - **Stepper glyph pass** (✓/●/○ in the shared tab bar are still typographic)
-- **Train/Submit/Status emoji + type/motion/copy retrofit** — apply this
-  playbook
+- **Submit/Status emoji + type/motion/copy retrofit** — apply this
+  playbook (Train done 2026-07-21)
 - **`.kg-tab` header transition** still a literal `all .15s` — tokenize
   during the tabs' motion pass
 - Post-launch: `gh:github.com:Isha2605` credential removal was recommended
@@ -212,6 +262,24 @@ their log formatting.
 | `state4` | Success: val CREATED + train/test REUSED, GT-guard note, grouped checks, log |
 | `state5` | Failure: val count + GT-leak failed, remediation, Re-run CTA, Copy diagnostics |
 | `state6` | Revisit (form hidden, Start over) |
+
+### ?kgdev fixture map — Train tab
+
+| Value | Renders |
+|---|---|
+| `train-state1` | Empty form (URLs cleared), gate hint, Start disabled |
+| `train-state2` | Gate green ("Tables verified: exdark_train · exdark_val"), Start enabled |
+| `train-state2-missing` | Amber gate (val table missing) + Go to Import, Start disabled |
+| `train-state2-invalid` | Gate green + epochs 999 inline bounds error, Start disabled |
+| `train-state3` | In-run: epoch 12/50, determinate bar, metrics strip + sparklines (12-point deterministic curve), ETA, Cancel enabled |
+| `train-state4` | Live success: banner (pre-drawn check), weights + copy, Continue to Submit, provenance panel, form visible |
+| `train-state5` | Failure: CUDA-OOM banner + Copy diagnostics, epoch 7/50 static, Re-run CTA, form visible |
+| `train-state6` | Revisit summary: form hidden, static strip + provenance, Start new run |
+
+The dev dispatch runs at the END of the fragment script so forced states
+apply after every tab's vars and handlers exist; fixtures re-apply after
+the async config load, and the metric curve is deterministic (no
+randomness — identical screenshots every load).
 
 ### Intentional improvements over the stock Import plugin
 
