@@ -106,6 +106,13 @@ Sentence case for labels/buttons/callouts; terminal periods on full
 sentences, none on fragments. "Import & Validate" keeps its capitalization
 as an established CTA name.
 
+**No em dashes in UI copy** (en dashes included). Rewrite the sentence
+instead: period + new sentence, a comma, or parentheses — whichever reads
+naturally case by case, never a blind character swap. Numeric ranges read
+"1 to 300", not "1–300". Scope is rendered copy (labels, help, callouts,
+titles, banners, state chips); log OUTPUT and the diagnostics fence keep
+their log formatting.
+
 ## 5. Checks / results presentation
 
 - **Verdict line first**: muted headline over the columns — check-circle
@@ -164,6 +171,15 @@ as an established CTA name.
   rows wrap with the path on its own line; actions keep right alignment.
 - **Callout geometry**: one internal shape everywhere — icon column + text,
   `padding: 9px 12px`, `radius-lg`, flex `gap: 8px`.
+- **Class-tag palette**: the Hub frontend's categorical CSS variables
+  `--chart-1` … `--chart-12` (the set stock run_insights colors from), class
+  index → slot, rendered as a quiet tint (`rgba(hue, .10)` background,
+  `.35` border, text unchanged). Fallback hexes are the stock plugin's own.
+  Chosen over a local palette (decided 2026-07-21): it's the only
+  deterministic Hub-shared assignment reachable from a fragment — tlc value
+  maps support `display_color` but the imported tables carry none, and the
+  Dashboard's bounding-box palette lives in its own bundle, so exact
+  Dashboard-overlay parity is plausible-but-unverified.
 - **Overflow**: cards never exceed their container — `min-width: 0`,
   `word-break: break-all` on paths/`pre`; full paths only in the log/Copy.
 - Nothing within 4px of a container edge that isn't deliberately flush.

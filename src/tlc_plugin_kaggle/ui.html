@@ -347,15 +347,14 @@
       <span class="kg-id-icon"><svg class="kgi kgi-20" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 14V2.5"/><path d="M3.5 3h8.5l-1.8 2.5L12 8H3.5"/></svg></span>
       <div>
         <h1 class="kg-id-title">Kaggle Competition</h1>
-        <p class="kg-id-sub">Import the dataset, train the fixed baseline, predict and submit —
-          the whole competition loop without leaving the Hub.</p>
+        <p class="kg-id-sub">Import the dataset, train the fixed baseline, predict and submit.
+          The whole competition loop without leaving the Hub.</p>
       </div>
     </div>
     <div class="kg-constraints">
       <div class="kg-micro-label">Competition constraints</div>
       <div class="kg-chips">
-        <span class="kg-chip"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg> YOLOv11n from scratch</span>
-        <span class="kg-chip"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg> 640 px</span>
+        <span class="kg-chip"><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg> YOLOv11n from scratch · 640px</span>
         <span class="kg-chip">12 classes</span>
         <span class="kg-chip">Scored by mAP@0.5</span>
       </div>
@@ -413,7 +412,7 @@
         <span class="fmt-icon"><svg class="kgi kgi-16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></span>
         <div style="flex: 1;">
           <div class="fmt-name">YOLO format · Object Detection</div>
-          <div class="fmt-desc">Fixed for this competition — the official starter kit is the only accepted input.</div>
+          <div class="fmt-desc">Fixed for this competition. The official starter kit is the only accepted input.</div>
         </div>
       </div>
 
@@ -439,7 +438,7 @@
             <div class="form-group">
               <label class="form-label" for="kg-table">Table name</label>
               <input id="kg-table" type="text" class="form-control" value="initial">
-              <div class="form-help">Revision name for the imported tables — <code>initial</code> is the convention for a first import.</div>
+              <div class="form-help">Revision name for the imported tables. <code>initial</code> is the convention for a first import.</div>
             </div>
           </div>
           <div>
@@ -756,6 +755,30 @@
                'stroke-linejoin="round">' + (KG_ICONS[name] || '') + '</svg>';
       }
 
+      // ── Class-tag palette (see docs/ui-notes.md § Layout) ───────────
+      // The Hub frontend exposes a 12-slot categorical palette as CSS
+      // variables (--chart-1 … --chart-12); the stock run_insights plugin
+      // colors from the same set, and the fallbacks below are its own.
+      // Class index -> slot is deterministic, so a class keeps its hue
+      // across renders and sessions. Tags stay quiet: low-alpha tint +
+      // same-hue border; the text keeps the tag's muted color.
+      var KG_CHART_FALLBACKS = ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949',
+                                '#af7aa1', '#9c755f', '#ff9da7', '#bab0ab', '#86bcb6', '#8cd17d'];
+
+      function kgClassTint(i) {
+        var v = '';
+        try {
+          v = getComputedStyle(document.documentElement)
+            .getPropertyValue('--chart-' + ((i % 12) + 1)).trim();
+        } catch (e) { /* fall through to the stock fallback */ }
+        var hex = /^#[0-9a-fA-F]{6}$/.test(v) ? v : KG_CHART_FALLBACKS[i % 12];
+        var r = parseInt(hex.slice(1, 3), 16);
+        var g = parseInt(hex.slice(3, 5), 16);
+        var b = parseInt(hex.slice(5, 7), 16);
+        return 'background:rgba(' + r + ',' + g + ',' + b + ',.10);' +
+               'border-color:rgba(' + r + ',' + g + ',' + b + ',.35);';
+      }
+
       // Primary CTA labels (icon + text), used everywhere the label resets.
       var KG_BTN_IMPORT = kgIcon('upload', 'kgi-16') + '<span>Import &amp; Validate</span>';
       var KG_BTN_RERUN = kgIcon('refresh-cw', 'kgi-16') + '<span>Re-run Import &amp; Validate</span>';
@@ -865,7 +888,7 @@
             if (!down) {
               down = true; attempt = 0;
               show('<div class="kg-callout warn">' + kgIcon('alert-triangle') +
-                   '<span>Compute service unreachable — retrying…</span></div>');
+                   '<span>Compute service unreachable, retrying…</span></div>');
               schedule();
             }
             return true;
@@ -1061,7 +1084,7 @@
 
       var KG_HINT_HTML =
         '<div class="form-help">Point this at the starter kit’s <code>dataset.yaml</code> ' +
-        '(or the folder containing it) — typically <code>&lt;starter_kit&gt;\\dataset.yaml</code>.</div>';
+        '(or the folder containing it), typically <code>&lt;starter_kit&gt;\\dataset.yaml</code>.</div>';
 
       function kgSplitsPlaceholder() {
         el('kg-splits-body').innerHTML =
@@ -1073,7 +1096,7 @@
         var html = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">';
         ['Train', 'Val', 'Test'].forEach(function (s) {
           html += '<label style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:.75;cursor:default" ' +
-                  'title="Locked by competition rules — all three splits are imported.">' +
+                  'title="Locked by competition rules: all three splits are imported.">' +
                   '<input type="checkbox" checked disabled> ' + s + ' ' +
                   kgIcon('lock', 'kgi-12 kgi-muted') + '</label>';
         });
@@ -1099,8 +1122,8 @@
         html += '</div>';
         var names = (data.classes && data.classes.names) || [];
         if (names.length) {
-          html += '<div class="kg-tags">' + names.map(function (n) {
-            return '<span class="kg-tag">' + esc(n) + '</span>';
+          html += '<div class="kg-tags">' + names.map(function (n, i) {
+            return '<span class="kg-tag" style="' + kgClassTint(i) + '">' + esc(n) + '</span>';
           }).join('') + '</div>';
         }
         if (data.test_labels_on_disk) { html += kgTestLabelsNote(); }
@@ -1109,7 +1132,7 @@
 
       function kgTestLabelsNote() {
         return '<div class="kg-callout info">' + kgIcon('info') +
-               '<span>Test labels detected on disk — the GT-leak guard will import the test ' +
+               '<span>Test labels detected on disk. The GT-leak guard will import the test ' +
                'split as images only (hidden ground truth stays hidden).</span></div>';
       }
 
@@ -1154,7 +1177,7 @@
           // GT-guard note (test labels on disk) lives in the glance card here.
           var html = '<div class="kg-preflight-ok">' + kgIcon('check') +
                      '<span>Detected: train / val / test · 12 classes (canonical order) · ' + counts +
-                     ' images — matches the competition dataset.</span></div>';
+                     ' images. Matches the competition dataset.</span></div>';
           box.innerHTML = '<div class="' + (entering ? 'kgl-enter' : '') + '">' + html + '</div>';
           kgRenderSplitsLocked();
           kgRenderGlance(data, !!entering);
@@ -1166,24 +1189,24 @@
           var names = data.classes.names || [];
           problems.push('classes: expected the canonical 12 (Bicycle … Table), found ' +
             data.classes.count + (names.length ? ' (first: ' + esc(names.slice(0, 3).join(', ')) + '…)' : '') +
-            ' — use the unmodified starter-kit dataset.yaml.');
+            '. Use the unmodified starter-kit dataset.yaml.');
         }
         ['train', 'val', 'test'].forEach(function (s) {
           var sp = data.splits[s];
           if (!sp || sp.ok) { return; }
           if (sp.error === 'split not declared in dataset.yaml') {
-            problems.push(s + ': not declared in dataset.yaml — use the unmodified starter-kit dataset.yaml.');
+            problems.push(s + ': not declared in dataset.yaml. Use the unmodified starter-kit dataset.yaml.');
           } else if (sp.error) {
             problems.push(s + ': ' + esc(sp.error) + (sp.dir ? ' (<code>' + esc(sp.dir) + '</code>)' : '') +
-              ' — re-download the starter kit or fix the path in dataset.yaml.');
+              '. Re-download the starter kit or fix the path in dataset.yaml.');
           } else {
             if (sp.found !== sp.expected) {
               problems.push(s + ': expected ' + fmtCount(sp.expected) + ' images, found ' + fmtCount(sp.found) +
-                ' — did the starter kit download complete? Re-download or check <code>images\\' + s + '\\</code>.');
+                '. Did the starter kit download complete? Re-download or check <code>images\\' + s + '\\</code>.');
             }
             if (sp.unreadable) {
               problems.push(s + ': ' + fmtCount(sp.unreadable) + ' unreadable image file' +
-                (sp.unreadable === 1 ? '' : 's') + ' — extraction may have failed. Re-extract the starter kit.');
+                (sp.unreadable === 1 ? '' : 's') + '. Extraction may have failed. Re-extract the starter kit.');
             }
           }
         });
@@ -1269,17 +1292,17 @@
       // Ordered [regex, hint]; first match wins. $1 = the split name.
       var KG_REMEDIES = [
         [/^dataset\.yaml declares/,
-          'Use the unmodified starter-kit dataset.yaml — it must declare all three splits.'],
+          'Use the unmodified starter-kit dataset.yaml; it must declare all three splits.'],
         [/^12 classes in canonical order/,
-          'Don’t edit nc/names in dataset.yaml — restore the starter kit’s class list.'],
+          'Don’t edit nc/names in dataset.yaml. Restore the starter kit’s class list.'],
         [/^(train|val|test) row count/,
-          'Image count doesn’t match the competition dataset — re-download the starter kit or check images\\$1\\.'],
+          'Image count doesn’t match the competition dataset. Re-download the starter kit or check images\\$1\\.'],
         [/^(train|val) value map/,
-          'The existing $1 table has a modified class map — use “Re-import fresh” on that split and run again.'],
+          'The existing $1 table has a modified class map. Use “Re-import fresh” on that split and run again.'],
         [/^test stems unique/,
-          'Duplicate test image filenames — restore the starter kit’s test images (don’t add or rename files).'],
+          'Duplicate test image filenames. Restore the starter kit’s test images (don’t add or rename files).'],
         [/^test table carries no ground-truth boxes/,
-          'Ground truth leaked into the test table — “Re-import fresh” the test split; the guard imports images only.']
+          'Ground truth leaked into the test table. “Re-import fresh” the test split; the guard imports images only.']
       ];
 
       function kgRemedyFor(label) {
@@ -1327,7 +1350,7 @@
           (allOk ? '<span class="ok">' + kgIcon('check-circle') + '</span>'
                  : '<span class="bad">' + kgIcon('x-circle') + '</span>') +
           '<span>' + passed + '/' + total + ' checks passed' +
-          (allOk ? '' : ' — ' + (total - passed) + ' failed') + '</span></div>';
+          (allOk ? '' : ' (' + (total - passed) + ' failed)') + '</span></div>';
         var groups = [
           { title: 'Dataset structure', items: checks.slice(0, 5) },
           { title: 'Competition integrity', items: checks.slice(5) }
@@ -1440,7 +1463,7 @@
         var banner = '<div class="alert alert-success' + (animate ? ' kgl-enter' : '') + '">' +
           '<span class="alert-icon">' + kgCheckIcon(animate) + '</span>' +
           '<div style="flex:1;min-width:0">' +
-          '<strong>Imported &amp; validated — exdark_train · exdark_val · exdark_test</strong>' +
+          '<strong>Imported &amp; validated: exdark_train · exdark_val · exdark_test</strong>' +
           '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
           '<button type="button" class="btn btn-primary btn-sm kgi-btn" id="kg-continue-train">' +
           '<span>Continue to Train</span>' + kgIcon('arrow-right') + '</button>';
@@ -1473,7 +1496,7 @@
           var t = result.tables[split];
           if (!t) { return; }
           var badge = t.reused
-            ? '<span class="kg-badge-reused" title="An identical table already existed and was reused — validation still ran on it.">REUSED</span>'
+            ? '<span class="kg-badge-reused" title="An identical table already existed and was reused. Validation still ran on it.">REUSED</span>'
             : '<span class="kg-badge-created" title="Freshly imported from disk this run.">CREATED</span>';
           html += '<div class="kg-table-row">' +
             '<span class="split">' + split + '</span>' +
@@ -1533,7 +1556,7 @@
                 'Re-importing fresh discards them. Continue?');
             } else {
               proceed = window.confirm(
-                'exdark_' + split + ' may have revisions derived from it (label edits) — ' +
+                'exdark_' + split + ' may have revisions derived from it (label edits), and ' +
                 'the revision count could not be determined. Re-importing fresh would discard them. Continue?');
             }
             if (proceed) { kgStartImport([split]); }
@@ -1565,7 +1588,7 @@
               // job and this UI reconnects to it on load. Checks render once
               // at the end (the cascade is the validation payoff) — the
               // progress rows carry the in-run story.
-              el('kg-import-state').textContent = 'Importing… — safe to navigate away';
+              el('kg-import-state').textContent = 'Importing… (safe to navigate away)';
               return;
             }
             clearInterval(pollTimer);
@@ -1581,7 +1604,7 @@
               // State 5: red banner is the headline; the form stays
               // populated and the button invites a re-run.
               el('kg-import-state').textContent = '';
-              renderFailBanner(job.error || 'Import failed — see the checks below.', true);
+              renderFailBanner(job.error || 'Import failed. See the checks below.', true);
               el('kg-import-btn').innerHTML = KG_BTN_RERUN;
             }
             kgScrollTo(el('kg-import-banner'));
@@ -1599,7 +1622,7 @@
             })) {
               clearInterval(pollTimer);
               pollTimer = null;
-              el('kg-import-state').textContent = 'Connection lost — the import continues on the service.';
+              el('kg-import-state').textContent = 'Connection lost. The import continues on the service.';
               return;
             }
             clearInterval(pollTimer);
@@ -1628,13 +1651,13 @@
           table = el('kg-table').value.trim();
           // Safety net — the button is disabled until preflight passes.
           if (!yaml || !(kgPreflight && kgPreflight.all_ok)) {
-            el('kg-import-state').textContent = 'Import needs a passing preflight — the YAML path above hasn’t validated yet.';
+            el('kg-import-state').textContent = 'Import needs a passing preflight. The YAML path above hasn’t validated yet.';
             return;
           }
           saveTabConfig('import');
         }
         if (!yaml) {
-          el('kg-import-state').textContent = 'No dataset.yaml recorded for this import — Start over restores the form.';
+          el('kg-import-state').textContent = 'No dataset.yaml recorded for this import. Start over restores the form.';
           return;
         }
         kgImporting = true;
@@ -1672,7 +1695,7 @@
             kgCheckReady();
             // No auto-re-run: the user re-triggers once reconnected.
             el('kg-import-state').textContent = kgConn.fail(e)
-              ? 'Import didn’t start — service unreachable. Re-run once reconnected.'
+              ? 'Import didn’t start (service unreachable). Re-run once reconnected.'
               : 'Import request failed: ' + e.message;
           });
       }
@@ -1725,7 +1748,7 @@
         renderChecks(snap.checks || []);
         if (state.synthesized) {
           el('kg-checks').innerHTML =
-            '<div class="kg-callout info">' + kgIcon('info') + '<span>Tables found from a previous session — no stored validation ' +
+            '<div class="kg-callout info">' + kgIcon('info') + '<span>Tables found from a previous session, with no stored validation ' +
             'results. Re-running Import &amp; Validate re-checks them.</span></div>' +
             el('kg-checks').innerHTML;
         }
@@ -1760,7 +1783,7 @@
               kgImporting = true;
               kgCheckReady();
               el('kg-import-spinner').style.display = 'inline-block';
-              el('kg-import-state').textContent = 'Importing… — safe to navigate away';
+              el('kg-import-state').textContent = 'Importing… (safe to navigate away)';
               pollTimer = setInterval(function () { poll(running.id); }, 1000);
               return;
             }
@@ -1810,7 +1833,9 @@
         ];
         var pfGreen = {
           all_ok: true, test_labels_on_disk: false,
-          classes: { count: 12, canonical: true, names: [] },
+          classes: { count: 12, canonical: true, names: [
+            'Bicycle', 'Boat', 'Bottle', 'Bus', 'Car', 'Cat',
+            'Chair', 'Cup', 'Dog', 'Motorbike', 'People', 'Table'] },
           splits: {
             train: { found: 5910, expected: 5910, ok: true },
             val: { found: 733, expected: 733, ok: true },
@@ -1858,7 +1883,7 @@
             kgImporting = true;
             kgCheckReady();
             el('kg-import-spinner').style.display = 'inline-block';
-            el('kg-import-state').textContent = 'Importing… — safe to navigate away';
+            el('kg-import-state').textContent = 'Importing… (safe to navigate away)';
             kgRenderProgress({
               status: 'running',
               progress: {
