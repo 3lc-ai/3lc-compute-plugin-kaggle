@@ -367,10 +367,17 @@ class KaggleController(Controller):
 
     @get("/config", sync_to_thread=True)
     def get_config(self) -> dict[str, Any]:
-        """Last-used form values per tab (re-runs become one click)."""
-        from tlc_plugin_kaggle import config_store
+        """Last-used form values per tab (re-runs become one click), plus a
+        _meta block (version, repository) the fragment renders in the
+        footer and stamps into diagnostics."""
+        from tlc_plugin_kaggle import KagglePlugin, config_store
 
-        return config_store.load()
+        out = config_store.load()
+        out["_meta"] = {
+            "version": KagglePlugin.version,
+            "repository_url": KagglePlugin.repository_url,
+        }
+        return out
 
     @post("/config", sync_to_thread=True)
     def save_config(self, data: dict[str, Any]) -> dict[str, Any]:
