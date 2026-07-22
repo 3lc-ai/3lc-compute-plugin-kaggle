@@ -275,17 +275,89 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   throttled batch counter; indeterminate only for the brief moment
   before the first batch progress lands.
 
-## 11. Known deferred items
+## 11. Status-tab + v1-final additions to the vocabulary (2026-07-21)
 
-- **File-browse endpoint** (server-side directory picker for the YAML path)
-- **Recent-paths dropdown** on the YAML field
-- **Stepper glyph pass** (✓/●/○ in the shared tab bar are still typographic)
-- **Submit/Status emoji + type/motion/copy retrofit** — apply this
-  playbook (Train done 2026-07-21)
-- **`.kg-tab` header transition** still a literal `all .15s` — tokenize
-  during the tabs' motion pass
-- Post-launch: `gh:github.com:Isha2605` credential removal was recommended
-  after the 2026-07-21 history rewrite (user's call)
+- **Hero strip**: a status surface answers three questions at a glance
+  (how good is my best · what happened last · what can I do now) as
+  `.kg-hero` blocks — headline number 4dp with its source beneath,
+  relative time + badge for latest activity, budget, and a "Live now"
+  block that is OMITTED when nothing runs (never an empty placeholder).
+- **Outcome vocabulary**: history rows speak participant language, not
+  job states — "Submitted · #ref" (quiet mono id), "CSV generated (not
+  submitted / daily limit reached / not joined)", "Validation failed";
+  raw reasons ride the row's title attribute. Δ is visual (tinted ▲/▼,
+  muted – for flat/first) and measured against the previous SCORED row.
+  Paths never render in tables; icon actions (copy, download) carry
+  them. The ▲/▼/– data glyphs are spec'd markers, exempt from the
+  no-dash prose rule.
+- **Friendly degradation for third-party API failures**: a known
+  limitation renders as a quiet info callout naming the limitation and
+  the working alternative (external link), with the raw error behind a
+  collapsed "Show details" accordion — never an error tone for
+  something that isn't the participant's fault. The code path keeps
+  trying the API, so the success path self-heals at public launch.
+- **Freshness rules**: every tab refetches its backing data on
+  activation, silently (the stepper re-renders on every switch); a
+  poll's terminal branch directly refreshes any list it invalidates
+  (stale-on-terminal, plain function calls — no event bus); surfaces
+  that watch a moving target poll while visible (Status: 15s, ticks
+  skip when `document.hidden`, immediate refresh on visibility return,
+  stopped on tab switch) with an "Updated Ns ago" line; manual refresh
+  is a ghost refresh-cw icon button spinning on `--kgl-motion-spin`
+  while in flight. Popovers that fetch per open (revision picker) are
+  fresh by construction.
+- **Tooltip pattern**: native `title` attributes (the Hub exposes no
+  shared tooltip component to fragments). Every lock icon carries its
+  one-line "why locked" reason; every truncated path carries its full
+  value; relative times carry the absolute timestamp (`kgWhenSpan`).
+- **Duration-hint pattern**: when prior completed runs exist, a muted
+  help line under the cost-driving field states the median historical
+  rate and the projected total, recomputed live as the field changes;
+  omitted entirely without history.
+- **aria-live rule**: announce meaningful transitions, not poll ticks —
+  the epoch counter is a polite region (it only changes at epoch
+  boundaries), fast counters get a visually-hidden announcer throttled
+  to quartiles, and terminal banners announce via the existing focus
+  move. State chips are polite regions.
+- **Version footer**: every tab ends with one muted 11px line — plugin
+  name + version (from `/config` `_meta`) + GitHub/Docs links
+  (git-branch glyph; the stroke set carries no brand marks).
+- **Document-title nudge**: "⟳ N% — <title>" while a job runs,
+  non-fighting (prefix added only when absent; only our own prefix
+  stripped on terminal).
+- **Load order**: the initial `showTab` and all tab-open resolutions
+  run in the end-of-script dispatch, after every section's state
+  exists — tab-enter hooks must never run mid-eval.
+
+### Deferred-ledger disposition (v1 close-out)
+
+- Stepper glyph pass — DONE (icon-set SVGs; the filled active dot is
+  the one sanctioned `fill`, like the sparkline point).
+- Train/Submit/Status emoji + type/motion/copy retrofit — DONE.
+- `.kg-tab` transition tokenization — DONE (inside the motion gate).
+- File-browse endpoint, recent-paths dropdown — deferred to
+  `docs/v1.1-ideas.md` with reasoning.
+- Post-launch: `gh:github.com:Isha2605` credential removal was
+  recommended after the 2026-07-21 history rewrite (user's call).
+
+## 12. v1 definition of done
+
+Every tab guarantees: a full six-state machine (empty → gated →
+in-progress → terminal → revisit-first) resolved at tab-open from
+disk-persisted, pid-checked job records, with `?kgdev` fixtures for
+every state; motion that only informs (tokenized durations, entrances
+on state-type transitions only, no exit animations, no replay on
+revisit, full reduced-motion parity); one monochrome 16px stroke icon
+set with zero emoji in rendered UI; copy that informs rather than
+instructs, in participant language, with no em dashes outside logs and
+diagnostics fences; keyboard reachability with visible focus, labeled
+icon buttons, and throttled aria-live progress; and resilience — a
+connection guard that owns network failures and resumes polling without
+ever auto-restarting work, Copy-diagnostics on every failure surface
+(version-stamped), friendly degradation for third-party API failures,
+and data that refreshes on tab activation so the UI never needs a
+manual reload to tell the truth. That is the bar for anything that
+ships after v1.
 
 ---
 
@@ -316,6 +388,16 @@ Patterns the Train session added; Submit/Status sessions inherit them.
 | `train-state4` | Live success: banner (pre-drawn check), weights + copy, Continue to Submit, provenance panel, form visible |
 | `train-state5` | Failure: CUDA-OOM banner + Copy diagnostics, epoch 7/50 static, Re-run CTA, form visible |
 | `train-state6` | Revisit summary: form hidden, static strip + provenance, Start new run |
+
+### ?kgdev fixture map — Status tab
+
+| Value | Renders |
+|---|---|
+| `status-empty` | Hero degrades ("no scores yet" / "no activity yet"), empty-state callout + Go to Train, not-connected Kaggle callout |
+| `status-history` | Rich mixed history: submitted/#ref, limit-reached, validation-failed, csv-only smoke row; Δ both directions + unscored row |
+| `status-live-running` | "Live now · Training · Epoch 12/50" hero block with Open-tab link |
+| `status-kaggle-live` | Simulated API success: submissions table with public scores, best public, rank |
+| `status-kaggle-403` | Friendly-degradation callout + View leaderboard link + Show details accordion with the raw 403s |
 
 ### ?kgdev fixture map — Predict + Submit tab
 

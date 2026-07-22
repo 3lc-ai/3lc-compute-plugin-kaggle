@@ -1156,7 +1156,10 @@
 
       var savedTab = null;
       try { savedTab = localStorage.getItem(TAB_KEY); } catch (e) { /* sandboxed */ }
-      showTab(savedTab || 'import');
+      // The initial showTab happens in the end-of-script dispatch: its
+      // tab-enter hooks touch per-tab state that only exists once every
+      // section has evaluated (calling it here would crash the fragment
+      // when the saved tab is not Import).
 
       // Loop banner as real navigation: the tab steps switch tabs (same
       // mechanism as the stepper, keyboard-activatable), inspect and fix
@@ -5064,9 +5067,10 @@
         }
       });
 
-      // ── Dev-affordance dispatch — LAST, so forced states apply after
-      // every tab's vars and handlers exist. Normal loads resolve the
-      // Import and Train tab-open states here instead.
+      // ── Dispatch — LAST, so the initial tab's enter hooks and forced
+      // states run after every tab's vars and handlers exist. Normal
+      // loads resolve each tab's tab-open state here.
+      showTab(savedTab || 'import');
       if (kgDevMode) {
         kgDevForce(kgDevMode);
       } else {
