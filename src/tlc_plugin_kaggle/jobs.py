@@ -158,6 +158,31 @@ def start_job(kind: str, params: dict[str, Any], target: Callable[[dict[str, Any
     return job_id
 
 
+def update_job_facts(job_id: str, key: str, value: Any) -> None:
+    """Write one durable fact onto another job's record (memory or disk).
+
+    Used by the submit step to stamp its outcome back onto the originating
+    predict job, so the Status tab's one-row-per-prediction history holds.
+    The target record is terminal by then — no writer races with it.
+    """
+    with _lock:
+        job = _jobs.get(job_id)
+        if job is not None:
+            job["facts"][key] = value
+            _flush_locked(job)
+            return
+    path = _job_path(job_id)
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data.setdefault("facts", {})[key] = value
+            tmp = path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(data, indent=1, default=str), encoding="utf-8")
+            os.replace(tmp, path)
+        except Exception:
+            pass  # best-effort: the submit job's own record still has the outcome
+
+
 def cancel_job(job_id: str) -> dict[str, Any] | None:
     """Request cooperative cancellation. Returns the updated record or None."""
     with _lock:

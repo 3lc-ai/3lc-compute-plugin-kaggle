@@ -15,6 +15,41 @@ from litestar.exceptions import NotFoundException
 from litestar.status_codes import HTTP_400_BAD_REQUEST
 
 
+def _resolve_predict_params(data: Any) -> tuple[dict[str, Any] | None, Response | None]:
+    """Shared request validation for the predict-shaped routes: resolve
+    train_job_id | weights_path to an on-disk weights file and require a
+    test table URL. Returns (params, None) or (None, error response)."""
+    from pathlib import Path
+
+    from tlc_plugin_kaggle import jobs
+
+    def bad(msg: str) -> tuple[None, Response]:
+        return None, Response(content={"error": msg}, status_code=HTTP_400_BAD_REQUEST)
+
+    if not isinstance(data, dict):
+        return bad("Body must be a JSON object")
+    weights = str(data.get("weights_path", "")).strip().strip('"')
+    train_job_id = str(data.get("train_job_id", "")).strip()
+    run_name = ""
+    if not weights and train_job_id:
+        job = jobs.get_job(train_job_id)
+        facts = (job or {}).get("facts") or {}
+        weights = str(facts.get("weights", ""))
+        run_name = ((job or {}).get("result") or {}).get("run_name", "")
+    if not weights:
+        return bad("Select a run or provide a weights path.")
+    if not Path(weights).is_file():
+        return bad(f"Weights file not found: {weights}")
+    if not str(data.get("test_table_url", "")).strip():
+        return bad("Missing required field 'test_table_url'")
+
+    params = dict(data)
+    params["weights_path"] = weights
+    if run_name:
+        params.setdefault("run_name", run_name)
+    return params, None
+
+
 class KaggleController(Controller):
     """Kaggle competition workflow endpoints."""
 
@@ -167,74 +202,132 @@ class KaggleController(Controller):
         job_id = jobs.start_job("train", dict(data), trainer.run_training)
         return Response(content={"job_id": job_id}, status_code=200)
 
-    @get("/runs")
-    async def list_runs(self) -> list[dict[str, Any]]:
-        """Completed train jobs that produced weights, newest first (Run selector)."""
+    @get("/runs", sync_to_thread=True)
+    def list_runs(self) -> list[dict[str, Any]]:
+        """Train jobs for the Run selector, newest first, with provenance
+        summary fields. Unusable runs (failed, still training, weights gone
+        from disk) are included with usable=False and a participant-facing
+        reason so the selector can list them disabled."""
+        from pathlib import Path
+
         from tlc_plugin_kaggle import jobs
 
         out: list[dict[str, Any]] = []
         for job in jobs.list_jobs("train"):
             facts = job.get("facts") or {}
-            if not facts.get("weights"):
-                continue
+            result = job.get("result") or {}
+            progress = job.get("progress") or {}
+            history = progress.get("history") or []
+            status = str(job.get("status") or "")
+            weights = str(facts.get("weights") or "")
+            weights_on_disk = bool(weights) and Path(weights).is_file()
+
+            usable, reason = True, ""
+            if status == "running":
+                usable, reason = False, "still training"
+            elif not weights:
+                usable, reason = False, (
+                    f"failed: {job.get('error')}" if job.get("error") else "no best.pt saved"
+                )
+            elif not weights_on_disk:
+                usable, reason = False, "best.pt missing on disk"
+
+            m50s = [h.get("m50") for h in history if isinstance(h.get("m50"), (int, float))]
+            provenance = result.get("provenance") or []
             out.append(
                 {
                     "job_id": job.get("id"),
-                    "run_name": (job.get("result") or {}).get("run_name")
+                    "run_name": result.get("run_name")
+                    or facts.get("run_name")
                     or (job.get("params") or {}).get("run_name")
                     or "",
-                    "weights": facts.get("weights"),
+                    "weights": weights,
                     "run_url": facts.get("run_url"),
-                    "status": job.get("status"),
+                    "status": status,
                     "created_at": job.get("created_at"),
+                    "epochs_completed": result.get("epochs_completed") or progress.get("epoch"),
+                    "best_map50": max(m50s) if m50s else None,
+                    "provenance_ok": bool(provenance) and all(c.get("ok") for c in provenance),
+                    "usable": usable,
+                    "reason": reason,
                 }
             )
         return out
 
     @post("/predict_submit", sync_to_thread=True)
     def start_predict_submit(self, data: dict[str, Any]) -> Response:
-        """Start the Predict + Submit job.
+        """Legacy single-job flow (predict + optional submit). The two-step
+        UI uses /predict and /submit instead."""
+        from tlc_plugin_kaggle import jobs, predictor
 
-        Body: {train_job_id? | weights_path?, test_table_url, conf?, device?,
-               message?, competition_slug?, csv_only?}
+        params, err = _resolve_predict_params(data)
+        if err is not None:
+            return err
+        job_id = jobs.start_job("predict_submit", params, predictor.run_predict_submit)
+        return Response(content={"job_id": job_id}, status_code=200)
+
+    @post("/predict", sync_to_thread=True)
+    def start_predict(self, data: dict[str, Any]) -> Response:
+        """Step-1 job: inference -> CSV -> validation -> sanity -> local
+        score. Free and repeatable; never touches Kaggle.
+
+        Body: {train_job_id? | weights_path?, test_table_url, conf?, device?}
+        """
+        from tlc_plugin_kaggle import jobs, predictor
+
+        params, err = _resolve_predict_params(data)
+        if err is not None:
+            return err
+        job_id = jobs.start_job("predict", params, predictor.run_predict)
+        return Response(content={"job_id": job_id}, status_code=200)
+
+    @post("/submit", sync_to_thread=True)
+    def start_submit(self, data: dict[str, Any]) -> Response:
+        """Step-2 job: upload a prior predict job's validated CSV to Kaggle.
+
+        Body: {predict_job_id, message?, competition_slug?}
         """
         from pathlib import Path
 
         from tlc_plugin_kaggle import jobs, predictor
 
-        if not isinstance(data, dict):
-            return Response(content={"error": "Body must be a JSON object"}, status_code=HTTP_400_BAD_REQUEST)
-
-        weights = str(data.get("weights_path", "")).strip().strip('"')
-        train_job_id = str(data.get("train_job_id", "")).strip()
-        run_name = ""
-        if not weights and train_job_id:
-            job = jobs.get_job(train_job_id)
-            facts = (job or {}).get("facts") or {}
-            weights = str(facts.get("weights", ""))
-            run_name = ((job or {}).get("result") or {}).get("run_name", "")
-        if not weights:
+        if not isinstance(data, dict) or not str(data.get("predict_job_id", "")).strip():
             return Response(
-                content={"error": "Select a run or provide a weights path."},
+                content={"error": "Missing required field 'predict_job_id'"},
                 status_code=HTTP_400_BAD_REQUEST,
             )
-        if not Path(weights).is_file():
+        # Fail fast with the participant-facing message before spawning the
+        # job thread; run_kaggle_submit re-validates (defense in depth).
+        pjob = jobs.get_job(str(data["predict_job_id"]).strip())
+        csv_path = str(((pjob or {}).get("facts") or {}).get("csv_path", ""))
+        if pjob is None or not csv_path or not Path(csv_path).is_file():
             return Response(
-                content={"error": f"Weights file not found: {weights}"},
+                content={"error": "No validated prediction CSV found for that job. Run inference first."},
                 status_code=HTTP_400_BAD_REQUEST,
             )
-        if not str(data.get("test_table_url", "")).strip():
-            return Response(
-                content={"error": "Missing required field 'test_table_url'"},
-                status_code=HTTP_400_BAD_REQUEST,
-            )
-
-        params = dict(data)
-        params["weights_path"] = weights
-        if run_name:
-            params.setdefault("run_name", run_name)
-        job_id = jobs.start_job("predict_submit", params, predictor.run_predict_submit)
+        job_id = jobs.start_job("kaggle_submit", dict(data), predictor.run_kaggle_submit)
         return Response(content={"job_id": job_id}, status_code=200)
+
+    @get("/submit/state", sync_to_thread=True)
+    def submit_state(self) -> dict[str, Any]:
+        """Revisit state for the Predict + Submit tab: persisted snapshots
+        with the CSV re-verified on disk."""
+        from tlc_plugin_kaggle import predictor
+
+        try:
+            return predictor.predict_submit_state()
+        except Exception as exc:
+            return {"state": "empty", "reason": f"{type(exc).__name__}: {exc}"}
+
+    @get("/tables/list", sync_to_thread=True)
+    def tables_list(self, project: str = "exdark-competition") -> dict[str, Any]:
+        """Datasets -> ordered revision chains (revision picker)."""
+        from tlc_plugin_kaggle import importer
+
+        try:
+            return importer.list_project_tables(project)
+        except Exception as exc:
+            return {"project": project, "datasets": [], "error": f"{type(exc).__name__}: {exc}"}
 
     @get("/kaggle/status", sync_to_thread=True)
     def kaggle_status(self, slug: str = "") -> dict[str, Any]:
@@ -304,7 +397,12 @@ class KaggleController(Controller):
         train_done = any(
             j.get("kind") == "train" and (j.get("facts") or {}).get("weights") for j in all_jobs
         )
+        # Two-step flow: a kaggle_submit job that Kaggle accepted, or a
+        # legacy single-job predict_submit completion.
         submit_done = any(
-            j.get("kind") == "predict_submit" and j.get("status") == "completed" for j in all_jobs
+            (j.get("kind") == "kaggle_submit"
+             and ((j.get("facts") or {}).get("submission") or {}).get("status") == "submitted")
+            or (j.get("kind") == "predict_submit" and j.get("status") == "completed")
+            for j in all_jobs
         )
         return {"import": import_done, "train": train_done, "submit": submit_done}

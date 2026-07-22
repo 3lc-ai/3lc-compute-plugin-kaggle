@@ -22,10 +22,11 @@ CONFIG_PATH = Path.home() / ".3lc-kaggle-plugin" / "ui_config.json"
 _lock = threading.Lock()
 
 # Keys the UI/backend may persist; anything else is dropped. The three tab
-# keys hold whole-form snapshots; "import_state" is the backend-written
-# last-successful-import snapshot that backs the Import tab's revisit view
-# (State 6) and the stepper checkmark.
-_ALLOWED_TABS = ("import", "train", "submit", "import_state")
+# keys hold whole-form snapshots; the *_state keys are backend-written
+# snapshots that back each tab's revisit view: "import_state" (Import,
+# State 6 + stepper checkmark), "predict_state" / "submit_state"
+# (Predict + Submit tab, re-verified against the CSV on disk).
+_ALLOWED_TABS = ("import", "train", "submit", "import_state", "predict_state", "submit_state")
 
 
 def load() -> dict[str, Any]:

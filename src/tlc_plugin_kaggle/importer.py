@@ -510,6 +510,84 @@ def verified_import_state() -> dict[str, Any]:
     }
 
 
+def list_project_tables(project: str) -> dict[str, Any]:
+    """Datasets and their revision chains for the revision picker.
+
+    Layout-derived: tlc's create_table_url gives the deterministic
+    ``.../projects/<project>/datasets/<dataset>/tables/<table>`` shape, so
+    the datasets root is walked directly (verified live, 2026-07-21; table
+    loads are milliseconds at this project's scale). Chain order is lineage
+    (parent = first input_tables entry inside the same dataset), root first,
+    following the newest child at each step; off-chain branches append in
+    mtime order. The ``latest`` flag comes from tlc's own latest() on the
+    chain root — the same resolution ``use_latest`` training follows.
+    """
+    import tlc
+
+    probe = tlc.Url.create_table_url("initial", "__probe__", project)
+    datasets_root = Path(str(probe)).parent.parent.parent
+    out: dict[str, Any] = {"project": project, "datasets": []}
+    if not datasets_root.is_dir():
+        return out
+
+    for ds_dir in sorted(p for p in datasets_root.iterdir() if p.is_dir()):
+        tables_dir = ds_dir / "tables"
+        if not tables_dir.is_dir():
+            continue
+        entries: dict[str, dict[str, Any]] = {}
+        for tdir in tables_dir.iterdir():
+            if not tdir.is_dir():
+                continue
+            try:
+                table = tlc.Table.from_url(tlc.Url(tdir.as_posix()))
+                entries[str(table.url)] = {
+                    "name": tdir.name,
+                    "url": str(table.url),
+                    "rows": table.row_count,
+                    "_inputs": [str(u) for u in (getattr(table, "input_tables", None) or [])],
+                    "_mtime": tdir.stat().st_mtime,
+                }
+            except Exception:
+                continue  # unreadable table folder: skip, never fail the listing
+        if not entries:
+            continue
+
+        children: dict[str, list[str]] = {}
+        roots: list[str] = []
+        for url, e in entries.items():
+            parent = next((i for i in e["_inputs"] if i in entries), None)
+            if parent:
+                children.setdefault(parent, []).append(url)
+            else:
+                roots.append(url)
+
+        ordered: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for root in sorted(roots, key=lambda u: entries[u]["_mtime"]):
+            cur: str | None = root
+            while cur and cur not in seen:
+                seen.add(cur)
+                ordered.append(entries[cur])
+                kids = sorted(children.get(cur, []), key=lambda u: entries[u]["_mtime"])
+                cur = kids[-1] if kids else None
+        for url, e in sorted(entries.items(), key=lambda kv: kv[1]["_mtime"]):
+            if url not in seen:
+                ordered.append(e)
+
+        latest_url = ""
+        try:
+            base = tlc.Table.from_url(tlc.Url(ordered[0]["url"]))
+            latest_url = str(base.latest(wait_for_rescan=False).url)
+        except Exception:
+            latest_url = ordered[-1]["url"]  # lineage tail as fallback
+        rows = [
+            {"name": e["name"], "url": e["url"], "rows": e["rows"], "latest": e["url"] == latest_url}
+            for e in ordered
+        ]
+        out["datasets"].append({"name": ds_dir.name, "tables": rows, "latest_url": latest_url})
+    return out
+
+
 def table_revisions(table_url: str) -> dict[str, Any]:
     """Best-effort revision info for the force-reimport confirmation guard.
 

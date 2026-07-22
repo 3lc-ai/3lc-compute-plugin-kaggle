@@ -221,6 +221,11 @@ def run_inference(
         # note: no dataloader workers in predict's streaming path — the
         # Windows workers=0 rule is inherently satisfied here
     )
+    # Determinate progress from the first tick: total is known up front,
+    # then per-image counts flushed at most ~1/s (each set_progress writes
+    # the job JSON) plus a final exact count.
+    ctx.set_progress({"images": 0, "total_images": total})
+    last_flush = 0.0
     for n, (item, result) in enumerate(zip(items, results), start=1):
         image_id = item[0]
         parts: list[str] = []
@@ -238,7 +243,9 @@ def run_inference(
                     f"{c} {clamp(cf):.6f} {clamp(xc):.6f} {clamp(yc):.6f} {clamp(w):.6f} {clamp(h):.6f}"
                 )
         pred_map[image_id] = " ".join(parts) if parts else "no box"
-        if n % 50 == 0 or n == total:
+        now = time.time()
+        if n == total or now - last_flush >= 1.0:
+            last_flush = now
             ctx.set_progress({"images": n, "total_images": total})
     return pred_map
 
@@ -538,16 +545,28 @@ def kaggle_live_status(slug: str) -> dict[str, Any]:
     return out
 
 
-# ── The job ──────────────────────────────────────────────────────────────
+# ── The jobs ─────────────────────────────────────────────────────────────
+#
+# Two-step model (2026-07-21): Predict (free, repeatable) and Submit
+# (spends a daily Kaggle attempt) are separate jobs. run_predict is step 1:
+# inference -> CSV -> strict validation -> sanity -> optional local score,
+# plus the predict_state snapshot that backs the tab's revisit view.
+# run_kaggle_submit is step 2: it uploads a prior predict job's CSV and
+# writes the outcome back onto that predict record so the Status tab's
+# one-row-per-prediction history stays true. The legacy single-job
+# run_predict_submit remains for the old route.
 
 
-def run_predict_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
+def _predict_core(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
+    """Inference through local scoring; shared by both job shapes."""
     import tlc
 
     weights = str(params.get("weights_path", "")).strip().strip('"')
     if not weights or not Path(weights).is_file():
         raise ValueError(f"Weights file not found: {weights or '(empty)'}")
     run_name = str(params.get("run_name") or Path(weights).parent.parent.name)
+    ctx.set_field("run_name", run_name)
+    ctx.set_field("weights", weights)
 
     table = tlc.Table.from_url(tlc.Url(str(params["test_table_url"]).strip().strip('"')))
     items = _test_items(table)
@@ -559,6 +578,7 @@ def run_predict_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
         )
 
     conf = float(params.get("conf", 0.25) or 0.25)
+    ctx.set_field("conf", conf)
     device = params.get("device", "0")
     if str(device).strip().isdigit():
         device = int(str(device).strip())
@@ -603,16 +623,6 @@ def run_predict_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     if local_score is not None:
         ctx.set_field("local_score", local_score)
 
-    message = str(params.get("message") or f"{run_name} via 3LC plugin")
-    slug = str(params.get("competition_slug", "")).strip()
-    if bool(params.get("csv_only", False)):
-        submission = {"status": "skipped", "reason": "CSV-only mode — no upload requested."}
-    else:
-        submission = submit_to_kaggle(str(csv_path), message, slug, ctx)
-    ctx.set_field("submission", submission)
-    if submission["status"] != "submitted":
-        ctx.log(f"Submit step: {submission['status']} — {submission.get('reason', '')}")
-
     n_boxes = sum(0 if p == "no box" else len(p.split()) // 6 for p in pred_map.values())
     return {
         "run_name": run_name,
@@ -623,5 +633,136 @@ def run_predict_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
         "sanity": sanity,
         "conf": conf,
         "local_score": local_score,
+        "checks": checks,
+    }
+
+
+def run_predict(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
+    """Step-1 job: predict + validate + score; persists the revisit snapshot."""
+    result = _predict_core(params, ctx)
+
+    try:
+        from tlc_plugin_kaggle import config_store
+
+        config_store.save(
+            {
+                "predict_state": {
+                    "job_id": getattr(ctx, "job_id", ""),
+                    "run_name": result["run_name"],
+                    "weights": result["weights"],
+                    "csv_path": result["csv_path"],
+                    "conf": result["conf"],
+                    "local_score": result["local_score"],
+                    "sanity": result["sanity"],
+                    "checks": result["checks"],
+                    "finished_at": time.time(),
+                }
+            }
+        )
+    except Exception as exc:
+        ctx.log(f"WARNING: could not persist the predict-state snapshot ({exc}); revisit view starts blank.")
+    return result
+
+
+def run_kaggle_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
+    """Step-2 job: upload a prior predict job's validated CSV to Kaggle.
+
+    The outcome is written back onto the predict job record
+    (facts.submission), so the Status tab's one-row-per-prediction history
+    holds. A Kaggle *rejection* fails the job (failure banner + diagnostics);
+    the friendly states (limit_reached / not_joined / skipped) complete with
+    the state in facts — the CSV stays valid either way.
+    """
+    from tlc_plugin_kaggle import config_store, jobs
+
+    predict_job_id = str(params.get("predict_job_id", "")).strip()
+    pjob = jobs.get_job(predict_job_id) if predict_job_id else None
+    if pjob is None:
+        raise ValueError("No prediction found for this submission. Run inference first.")
+    facts = pjob.get("facts") or {}
+    csv_path = str(facts.get("csv_path", ""))
+    if not csv_path or not Path(csv_path).is_file():
+        raise ValueError(
+            f"The prediction's CSV is missing on disk ({csv_path or 'no path recorded'}). "
+            "Run inference again."
+        )
+    run_name = str(facts.get("run_name") or (pjob.get("result") or {}).get("run_name") or "run")
+    ctx.set_field("run_name", run_name)
+    ctx.set_field("csv_path", csv_path)
+    ctx.set_field("predict_job_id", predict_job_id)
+
+    message = str(params.get("message") or f"{run_name} via 3LC plugin")
+    slug = str(params.get("competition_slug", "")).strip()
+    ctx.log(f"Submitting {Path(csv_path).name} for {run_name!r}: {message!r}")
+    submission = submit_to_kaggle(csv_path, message, slug, ctx)
+    ctx.set_field("submission", submission)
+    jobs.update_job_facts(predict_job_id, "submission", submission)
+    if submission["status"] != "submitted":
+        ctx.log(f"Submit step: {submission['status']} — {submission.get('reason', '')}")
+
+    try:
+        config_store.save(
+            {
+                "submit_state": {
+                    "job_id": getattr(ctx, "job_id", ""),
+                    "predict_job_id": predict_job_id,
+                    "run_name": run_name,
+                    "status": submission.get("status"),
+                    "ref": submission.get("ref"),
+                    "reason": submission.get("reason"),
+                    "message": message,
+                    "slug": (slug or COMPETITION_SLUG),
+                    "finished_at": time.time(),
+                }
+            }
+        )
+    except Exception as exc:
+        ctx.log(f"WARNING: could not persist the submit-state snapshot ({exc}).")
+
+    if submission["status"] == "failed":
+        raise RuntimeError(submission.get("reason") or "Kaggle rejected the submission.")
+    return {
+        "run_name": run_name,
+        "csv_path": csv_path,
+        "predict_job_id": predict_job_id,
         "submission": submission,
     }
+
+
+def predict_submit_state() -> dict[str, Any]:
+    """Revisit state for the Predict + Submit tab: the persisted snapshots,
+    with the CSV path re-verified on disk. CSV existence decides — a snapshot
+    whose CSV was deleted reports state="empty" (fall back to the form)."""
+    from tlc_plugin_kaggle import config_store
+
+    cfg = config_store.load() or {}
+    ps = cfg.get("predict_state") or {}
+    csv_path = str(ps.get("csv_path", ""))
+    if not csv_path or not Path(csv_path).is_file():
+        return {"state": "empty"}
+    out: dict[str, Any] = {"state": "predicted", "predict": ps}
+    ss = cfg.get("submit_state") or {}
+    if ss.get("predict_job_id") == ps.get("job_id") and ss.get("status"):
+        out["submission"] = ss
+        if ss.get("status") == "submitted":
+            out["state"] = "submitted"
+    return out
+
+
+def run_predict_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
+    """Legacy single-job flow (predict + optional submit), kept for the old
+    /predict_submit route and pre-split job records."""
+    result = _predict_core(params, ctx)
+
+    message = str(params.get("message") or f"{result['run_name']} via 3LC plugin")
+    slug = str(params.get("competition_slug", "")).strip()
+    if bool(params.get("csv_only", False)):
+        submission = {"status": "skipped", "reason": "CSV-only mode — no upload requested."}
+    else:
+        submission = submit_to_kaggle(result["csv_path"], message, slug, ctx)
+    ctx.set_field("submission", submission)
+    if submission["status"] != "submitted":
+        ctx.log(f"Submit step: {submission['status']} — {submission.get('reason', '')}")
+
+    result.pop("checks", None)
+    return {**result, "submission": submission}
