@@ -280,6 +280,11 @@
   /* Loop-link hover (header wayfinding) */
   .kg-loop a { transition: color var(--kgl-motion-fast) var(--kgl-ease-out); }
 
+  /* Connection guard: "Reconnected" holds ~2s then fades (a deliberate
+     exception to the no-exit-animation rule — the banner is transient
+     status, not content). Under reduce it's removed instantly. */
+  .kg-conn-fade { opacity: 0; transition: opacity var(--kgl-motion-slow) var(--kgl-ease-out); }
+
   /* Accordion expand/collapse + disclosure caret */
   .kgl-acc { transition: grid-template-rows var(--kgl-motion-slow) var(--kgl-ease-inout); }
   .kgl-acc-caret { transition: transform var(--kgl-motion-slow) var(--kgl-ease-inout); }
@@ -411,6 +416,9 @@
           <div class="fmt-desc">Fixed for this competition — the official starter kit is the only accepted input.</div>
         </div>
       </div>
+
+      <!-- Connection guard banner (network-level failures only) -->
+      <div id="kg-conn-banner" role="status" aria-live="polite"></div>
 
       <!-- Success / failure banner (rendered by JS) -->
       <div id="kg-import-banner"></div>
@@ -807,6 +815,64 @@
         });
       }
 
+      // ── Connection guard (see docs/ui-notes.md § Utilities) ─────────
+      // Network-level failures only: fetch rejects with TypeError; HTTP
+      // application errors keep their own states. One slim banner, quiet
+      // auto-retry (2s, 5s, 10s, then every 15s) against the cheap state
+      // route. Resume callbacks fire on reconnect — used to resume polling,
+      // never to auto-re-run imports or submits.
+      var kgConn = (function () {
+        var down = false, attempt = 0, timer = null, onUp = [];
+        var DELAYS = [2000, 5000, 10000];
+
+        function show(html) { el('kg-conn-banner').innerHTML = html; }
+
+        function ping() {
+          API.authFetch(computeUrl + '/api/plugins/kaggle/import/state')
+            .then(function () { up(); })
+            .catch(function () { schedule(); });
+        }
+
+        function schedule() {
+          var d = attempt < DELAYS.length ? DELAYS[attempt] : 15000;
+          attempt++;
+          timer = setTimeout(ping, d);
+        }
+
+        function up() {
+          down = false; attempt = 0;
+          clearTimeout(timer);
+          show('<div class="kg-callout info">' + kgIcon('check') + '<span>Reconnected.</span></div>');
+          var banner = el('kg-conn-banner').firstChild;
+          setTimeout(function () {   // 2s hold (UX timing), then fade/remove
+            if (!banner || banner.parentNode !== el('kg-conn-banner')) { return; }
+            if (!kgMotionOK()) { banner.parentNode.removeChild(banner); return; }
+            banner.addEventListener('transitionend', function () {
+              if (banner.parentNode) { banner.parentNode.removeChild(banner); }
+            });
+            banner.classList.add('kg-conn-fade');
+          }, 2000);
+          var fns = onUp.splice(0);
+          fns.forEach(function (f) { try { f(); } catch (e) { /* resume is best-effort */ } });
+        }
+
+        return {
+          // Returns true when the error was network-level and is now owned
+          // by the guard; callers keep their own cleanup either way.
+          fail: function (err, resume) {
+            if (!(err instanceof TypeError)) { return false; }
+            if (resume) { onUp.push(resume); }
+            if (!down) {
+              down = true; attempt = 0;
+              show('<div class="kg-callout warn">' + kgIcon('alert-triangle') +
+                   '<span>Compute service unreachable — retrying…</span></div>');
+              schedule();
+            }
+            return true;
+          }
+        };
+      })();
+
       // ── Motion helpers (see docs/ui-notes.md § Motion) ──────────────
       function kgMotionOK() {
         return !!(window.matchMedia &&
@@ -1167,6 +1233,13 @@
           })
           .catch(function (e) {
             if (seq !== kgPreflightSeq) { return; }
+            if (kgConn.fail(e, function () { kgRunPreflight(true); })) {
+              // Guard owns the moment; preflight re-runs on reconnect
+              // (read-only — safe to auto-retry, unlike imports).
+              kgRenderPreflight(null);
+              kgCheckReady();
+              return;
+            }
             kgRenderPreflight({ error: 'Could not reach the compute service: ' + e.message });
             kgCheckReady();
           });
@@ -1502,6 +1575,15 @@
             renderPipeline();
           })
           .catch(function (e) {
+            if (kgConn.fail(e, function () {
+              // Pre-failure state was "polling a running job" — resume it.
+              if (!pollTimer) { pollTimer = setInterval(function () { poll(jobId); }, 1000); }
+            })) {
+              clearInterval(pollTimer);
+              pollTimer = null;
+              el('kg-import-state').textContent = 'Connection lost — the import continues on the service.';
+              return;
+            }
             clearInterval(pollTimer);
             kgImporting = false;
             el('kg-import-spinner').style.display = 'none';
@@ -1568,8 +1650,12 @@
           .catch(function (e) {
             kgImporting = false;
             el('kg-import-spinner').style.display = 'none';
+            kgRenderProgress(null);   // drop the synthetic QUEUED rows
             kgCheckReady();
-            el('kg-import-state').textContent = 'Import request failed: ' + e.message;
+            // No auto-re-run: the user re-triggers once reconnected.
+            el('kg-import-state').textContent = kgConn.fail(e)
+              ? 'Import didn’t start — service unreachable. Re-run once reconnected.'
+              : 'Import request failed: ' + e.message;
           });
       }
 
@@ -1644,7 +1730,7 @@
       function kgInitImportTab() {
         API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=import')
           .then(function (r) { return r.json(); })
-          .catch(function () { return []; })
+          .catch(function (e) { kgConn.fail(e); return []; })
           .then(function (list) {
             var running = (list || []).filter(function (j) { return j.status === 'running'; })[0];
             if (running && !pollTimer) {
@@ -1662,7 +1748,7 @@
             }
             return API.authFetch(computeUrl + '/api/plugins/kaggle/import/state')
               .then(function (r) { return r.json(); })
-              .catch(function () { return { state: 'empty' }; })
+              .catch(function (e) { kgConn.fail(e); return { state: 'empty' }; })
               .then(function (state) {
                 if (state.state === 'success') { kgRenderRevisit(state); }
                 else { kgEnterFormState(); }
