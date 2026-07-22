@@ -737,6 +737,60 @@
       var KG_BTN_RERUN = kgIcon('refresh-cw', 'kgi-16') + '<span>Re-run Import &amp; Validate</span>';
       el('kg-import-btn').innerHTML = KG_BTN_IMPORT;
 
+      // ── Copy diagnostics (see docs/ui-notes.md § Utilities) ─────────
+      // One fenced plaintext block a confused participant can paste into a
+      // forum post / DM / issue. Sections render only when their data
+      // exists in the current state — no placeholders.
+      var kgPluginVersion = '';
+      var kgLastPreflightRaw = null;
+      var kgLastChecks = null;
+      var kgLastJobId = '';
+
+      function kgBuildDiagnostics() {
+        var out = ['```3lc-kaggle-diagnostics'];
+        out.push('plugin: 3lc-compute-plugin-kaggle' + (kgPluginVersion ? ' v' + kgPluginVersion : ''));
+        out.push('os: ' + (navigator.userAgent || 'unknown'));
+        out.push('time: ' + new Date().toISOString());
+        var yaml = (kgRevisitSrc && kgRevisitSrc.yaml) || el('kg-yaml').value.trim();
+        if (yaml) { out.push('yaml: ' + yaml); }
+        if (kgLastJobId) { out.push('job: ' + kgLastJobId); }
+        if (kgLastPreflightRaw) {
+          out.push('', '[preflight]', JSON.stringify(kgLastPreflightRaw, null, 1));
+        }
+        if (kgLastChecks && kgLastChecks.length) {
+          out.push('', '[checks]');
+          kgLastChecks.forEach(function (c) {
+            out.push((c.ok ? 'PASS ' : 'FAIL ') + c.label + (c.detail ? ' — ' + c.detail : ''));
+          });
+        }
+        var log = el('kg-log').textContent;
+        if (log) {
+          out.push('', '[log tail]', log.split('\n').slice(-40).join('\n'));
+        }
+        out.push('```');
+        return out.join('\n');
+      }
+
+      function kgDiagBtn() {
+        return '<button type="button" class="btn btn-secondary btn-sm kgi-btn kg-diag-btn">' +
+               kgIcon('copy') + '<span>Copy diagnostics</span></button>';
+      }
+
+      function kgBindDiag(container) {
+        container.querySelectorAll('.kg-diag-btn').forEach(function (b) {
+          var orig = b.innerHTML;
+          b.addEventListener('click', function () {
+            var text = kgBuildDiagnostics();
+            var p = (navigator.clipboard && navigator.clipboard.writeText)
+              ? navigator.clipboard.writeText(text) : Promise.reject(new Error('no clipboard API'));
+            p.then(function () {
+              kgSwapHtml(b, kgIcon('check') + '<span>Copied</span>');
+              setTimeout(function () { kgSwapHtml(b, orig); }, 1200);
+            }).catch(function () { window.prompt('Copy diagnostics:', text); });
+          });
+        });
+      }
+
       // ── Motion helpers (see docs/ui-notes.md § Motion) ──────────────
       function kgMotionOK() {
         return !!(window.matchMedia &&
@@ -990,15 +1044,23 @@
             problems.push(s + ': ' + esc(sp.error) + (sp.dir ? ' (<code>' + esc(sp.dir) + '</code>)' : '') +
               ' — re-download the starter kit or fix the path in dataset.yaml.');
           } else {
-            problems.push(s + ': expected ' + fmtCount(sp.expected) + ' images, found ' + fmtCount(sp.found) +
-              ' — did the starter kit download complete? Re-download or check <code>images\\' + s + '\\</code>.');
+            if (sp.found !== sp.expected) {
+              problems.push(s + ': expected ' + fmtCount(sp.expected) + ' images, found ' + fmtCount(sp.found) +
+                ' — did the starter kit download complete? Re-download or check <code>images\\' + s + '\\</code>.');
+            }
+            if (sp.unreadable) {
+              problems.push(s + ': ' + fmtCount(sp.unreadable) + ' unreadable image file' +
+                (sp.unreadable === 1 ? '' : 's') + ' — extraction may have failed. Re-extract the starter kit.');
+            }
           }
         });
         var mhtml = '<div class="kg-callout warn">' + kgIcon('alert-triangle') +
                     '<span><strong>Doesn’t match the competition dataset:</strong><br>' +
-                    problems.map(function (p) { return '• ' + p; }).join('<br>') + '</span></div>';
+                    problems.map(function (p) { return '• ' + p; }).join('<br>') +
+                    '<div style="margin-top:8px">' + kgDiagBtn() + '</div></span></div>';
         if (data.test_labels_on_disk) { mhtml += kgTestLabelsNote(); }
         box.innerHTML = '<div class="' + (entering ? 'kgl-enter' : '') + '">' + mhtml + '</div>';
+        kgBindDiag(box);
         kgSplitsPlaceholder();
       }
 
@@ -1022,6 +1084,8 @@
           .then(function (r) { return r.json(); })
           .then(function (data) {
             if (seq !== kgPreflightSeq) { return; }   // superseded by newer input
+            kgLastPreflightRaw = data;
+            if (data.plugin_version) { kgPluginVersion = data.plugin_version; }
             kgPreflight = data.error ? null : data;
             kgRenderPreflight(data);
             kgCheckReady();
@@ -1100,6 +1164,7 @@
       // item index drives the stagger).
       function renderChecks(checks, animate) {
         if (!checks || !checks.length) { el('kg-checks').innerHTML = ''; return; }
+        kgLastChecks = checks;
         var passed = checks.filter(function (c) { return c.ok; }).length;
         var total = checks.length;
         var allOk = passed === total;
@@ -1321,7 +1386,9 @@
           '<div class="alert alert-error' + (animate ? ' kgl-enter' : '') + '">' +
           '<span class="alert-icon">' + kgIcon('x-circle', 'kgi-16') + '</span>' +
           '<div style="flex:1;min-width:0"><strong>Import failed</strong>' +
-          '<div style="margin-top:4px;font-size:12.5px">' + esc(message) + '</div></div></div>';
+          '<div style="margin-top:4px;font-size:12.5px">' + esc(message) + '</div>' +
+          '<div style="margin-top:8px">' + kgDiagBtn() + '</div></div></div>';
+        kgBindDiag(el('kg-import-banner'));
       }
 
       function poll(jobId) {
@@ -1416,6 +1483,7 @@
           .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
           .then(function (res) {
             if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
+            kgLastJobId = res.body.job_id;
             pollTimer = setInterval(function () { poll(res.body.job_id); }, 1000);
           })
           .catch(function (e) {
@@ -1456,6 +1524,7 @@
 
       function kgRenderRevisit(state) {
         var snap = state.snapshot || {};
+        kgLastJobId = String(snap.job_id || '');
         kgRevisitSrc = {
           yaml: snap.dataset_yaml || '',
           project: snap.project || 'exdark-competition',
@@ -1500,6 +1569,7 @@
           .then(function (list) {
             var running = (list || []).filter(function (j) { return j.status === 'running'; })[0];
             if (running && !pollTimer) {
+              kgLastJobId = running.id;
               // Reconnect: imports are disk-persisted background jobs whose
               // worker survives navigation (what makes "safe to navigate
               // away" honest). Restart orphans come back "stale", never
