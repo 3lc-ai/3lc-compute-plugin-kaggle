@@ -205,6 +205,25 @@ def build_settings(params: dict[str, Any]) -> Any:
     )
 
 
+# Canonical per-epoch metrics kept as compact history for the UI's stat
+# chips + sparklines. Short keys on purpose: the history is re-flushed to
+# the job JSON every epoch. mAP50-95 must match before mAP50 (substring).
+def _canonical_metrics(metrics: dict[str, Any]) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for key, val in metrics.items():
+        if not isinstance(val, (int, float)):
+            continue
+        if "mAP50-95" in key:
+            out["m95"] = float(val)
+        elif "mAP50" in key:
+            out["m50"] = float(val)
+        elif "precision" in key:
+            out["p"] = float(val)
+        elif "recall" in key:
+            out["r"] = float(val)
+    return out
+
+
 def _resolve_table(url: str, use_latest: bool, ctx: Any, role: str) -> Any:
     import tlc
 
@@ -263,6 +282,9 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
 
     train_kwargs = build_train_kwargs(params)  # raises on locked-key attempts
     settings = build_settings(params)
+    # The run name is generated here when the field was blank — surface it
+    # immediately so the UI's in-run header can show it from epoch 0.
+    ctx.set_field("run_name", settings.run_name)
 
     use_latest = bool(params.get("use_latest", True))
     train_table = _resolve_table(params["train_table_url"], use_latest, ctx, "train")
@@ -279,7 +301,7 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
 
     model = YOLO(LOCKED_TRAIN_ARGS["model"], task="detect")
 
-    state: dict[str, Any] = {"epoch": 0, "cancelled": False, "train_start": time.time()}
+    state: dict[str, Any] = {"epoch": 0, "cancelled": False, "train_start": time.time(), "history": []}
 
     def _check_cancel(trainer: Any) -> None:
         if ctx.is_cancelled():
@@ -299,6 +321,8 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
             if isinstance(v, (int, float))
         }
         state["epoch"] = epoch
+        # Compact per-epoch history for the UI's stat chips + sparklines.
+        state["history"].append({"e": epoch, **_canonical_metrics(metrics)})
         # ETA from measured epoch time, available once epoch 1 completes.
         elapsed = time.time() - state["train_start"]
         avg_epoch = elapsed / max(epoch, 1)
@@ -306,6 +330,7 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
             "epoch": epoch,
             "total_epochs": total,
             "metrics": metrics,
+            "history": list(state["history"]),
             "avg_epoch_s": round(avg_epoch, 1),
             "eta_s": round(avg_epoch * max(total - epoch, 0)),
         }
