@@ -797,6 +797,27 @@
                   window.matchMedia('(prefers-reduced-motion: no-preference)').matches);
       }
 
+      // Scroll guidance: only when the target is (partly) out of view —
+      // never fight the user — and only called on live events (job start,
+      // terminal banner), never on revisit or ?kgdev renders. Instant jump
+      // under reduced motion.
+      function kgScrollTo(elm) {
+        if (!elm) { return; }
+        var r = elm.getBoundingClientRect();
+        var vh = window.innerHeight || document.documentElement.clientHeight;
+        if (r.top >= 0 && r.bottom <= vh) { return; }
+        elm.scrollIntoView({ behavior: kgMotionOK() ? 'smooth' : 'auto', block: 'nearest' });
+      }
+
+      // Path ergonomics: tolerate Windows Copy-as-path quotes and trailing
+      // separators. The field is rewritten so what runs is what's shown;
+      // folder→dataset.yaml resolution happens server-side and rewrites the
+      // field from the preflight response.
+      function kgCleanYamlPath(v) {
+        var s = (v || '').trim().replace(/^["']+|["']+$/g, '').trim();
+        return s.replace(/[\\\/]+$/, '');
+      }
+
       // Re-triggerable entrance for a PERSISTENT element (fresh innerHTML
       // nodes just include the class in their markup). Single reflow read to
       // restart; cleanup on animationend, not a timer.
@@ -958,7 +979,7 @@
 
       var KG_HINT_HTML =
         '<div class="form-help">Point this at the starter kit’s <code>dataset.yaml</code> ' +
-        '— typically <code>&lt;starter_kit&gt;\\dataset.yaml</code>.</div>';
+        '(or the folder containing it) — typically <code>&lt;starter_kit&gt;\\dataset.yaml</code>.</div>';
 
       function kgSplitsPlaceholder() {
         el('kg-splits-body').innerHTML =
@@ -1072,7 +1093,8 @@
       }
 
       function kgRunPreflight(force) {
-        var yaml = el('kg-yaml').value.trim();
+        var yaml = kgCleanYamlPath(el('kg-yaml').value);
+        if (yaml !== el('kg-yaml').value) { el('kg-yaml').value = yaml; }
         if (!force && yaml === kgLastPreflightYaml) { return; }
         kgLastPreflightYaml = yaml;
         kgPreflight = null;
@@ -1086,6 +1108,12 @@
             if (seq !== kgPreflightSeq) { return; }   // superseded by newer input
             kgLastPreflightRaw = data;
             if (data.plugin_version) { kgPluginVersion = data.plugin_version; }
+            if (!data.error && data.yaml_path && data.yaml_path !== yaml &&
+                kgCleanYamlPath(el('kg-yaml').value) === yaml) {
+              // Folder input resolved server-side — show what actually runs.
+              el('kg-yaml').value = data.yaml_path;
+              kgLastPreflightYaml = data.yaml_path;
+            }
             kgPreflight = data.error ? null : data;
             kgRenderPreflight(data);
             kgCheckReady();
@@ -1423,6 +1451,7 @@
               renderFailBanner(job.error || 'Import failed — see the checks below.', true);
               el('kg-import-btn').innerHTML = KG_BTN_RERUN;
             }
+            kgScrollTo(el('kg-import-banner'));
             renderPipeline();
           })
           .catch(function (e) {
@@ -1446,7 +1475,8 @@
           project = kgRevisitSrc.project;
           table = kgRevisitSrc.table;
         } else {
-          yaml = el('kg-yaml').value.trim();
+          yaml = kgCleanYamlPath(el('kg-yaml').value);
+          if (yaml !== el('kg-yaml').value) { el('kg-yaml').value = yaml; }
           project = el('kg-project').value.trim();
           table = el('kg-table').value.trim();
           // Safety net — the button is disabled until preflight passes.
@@ -1484,6 +1514,8 @@
           .then(function (res) {
             if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
             kgLastJobId = res.body.job_id;
+            kgRenderProgress({ status: 'running', progress: {} });   // all QUEUED until the first poll
+            kgScrollTo(el('kg-import-progress'));
             pollTimer = setInterval(function () { poll(res.body.job_id); }, 1000);
           })
           .catch(function (e) {
