@@ -162,6 +162,8 @@ their log formatting.
 | `kgBindAccordion(toggleId, panelId)` | Button + region accordion (aria-expanded / hidden, animated grid-rows); serves log accordions AND advanced disclosures |
 | `kgAccOpenInstant(toggleId, panelId)` | Open a disclosure with zero motion (page furniture on load) |
 | `kgSparkline(values, w?, h?)` | Tiny inline SVG polyline, no axes/library; one point renders as a dot, flat series renders mid-height |
+| `kgBindTablePicker(inputId, popId, btnId, onPick)` | Revision-picker popover on a table-URL field (fresh `/tables/list` per open, Escape/outside-click close, focus back to the button); `onPick(url, isLatest)` re-runs the field's gate |
+| `kgTableRef(url)` | `dataset/revision` display name parsed from a table URL |
 | `kgScrollTo(elm)` | Attention scroll: only when out of view, only on live events, smooth/instant per motion |
 | `kgCleanYamlPath(v)` | Copy-as-path quote/trailing-separator tolerance; field rewritten so what runs is what's shown (folder→file resolution is server-side) |
 | `kgIcon(name, cls)` | Inline SVG from the icon set |
@@ -234,7 +236,46 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   verified") the moment the record carries them; cascade on live
   arrival only. Screenshot target for the README.
 
-## 10. Known deferred items
+## 10. Predict + Submit additions to the vocabulary (2026-07-21)
+
+- **Two-step gated flow**: when one card mixes a free, repeatable action
+  with a costly one, split it into stages gated left to right. Step 1's
+  results panel is the *decision surface* (verdict + checks, sanity
+  card, hero stat, artifact row); Step 2 stays `.kg-step-muted` (plus
+  real `disabled` attributes — the muting is visual, the gate is real)
+  until a validated artifact exists, and names its **basis** explicitly
+  ("Submitting: <run> · predicted 3m ago · local mAP 0.64"), with
+  "(from a previous session)" when it came from the snapshot. Costly
+  actions get a lightweight confirm that states the price ("This spends
+  1 of your 3 daily submissions."). Budgets render in the connection
+  card ("2 of 3 submissions left today"); an exhausted budget disables
+  the action with the friendly reset note while the free artifacts
+  (Download CSV) stay reachable. This structure superseded the
+  "Generate CSV only" checkbox: the CSV exists after step 1 by
+  construction, so an option to *not* do step 2 is no longer a mode —
+  it's just not clicking step 2.
+- **Segmented either/or**: two mutually exclusive input sources render
+  as a `.kg-seg` toggle showing exactly one input; switching sides
+  clears the other. No more two-fields-side-by-side ambiguity.
+- **Hero stat**: one number the user came for (`.kg-hero`), large
+  numeral + micro-label + muted scope note ("Host-only preview, not the
+  leaderboard"). Render it only when the number exists — absence is the
+  participant-machine behavior, not an empty state.
+- **Revision picker**: table-URL fields carry a trailing layers-icon
+  button opening a `.kg-pop` popover of the project's tables and their
+  lineage-ordered revision chains (rows + LATEST badge + row counts,
+  from `/tables/list`). Picking writes the URL and re-runs the gate;
+  raw URL entry stays the escape hatch. Interplay with "Use latest
+  revision": picking a non-latest revision unchecks it, re-checking
+  re-implies latest, and the gate's green line echoes the resolution
+  ("trains on the latest revision of each" vs "trains on these exact
+  revisions"). This is the fix-labels-then-retrain loop made tangible.
+- **Batch-determinate training bar**: overall fraction =
+  (epochs_done + batch_i/batch_n) / total_epochs from the trainer's
+  throttled batch counter; indeterminate only for the brief moment
+  before the first batch progress lands.
+
+## 11. Known deferred items
 
 - **File-browse endpoint** (server-side directory picker for the YAML path)
 - **Recent-paths dropdown** on the YAML field
@@ -275,6 +316,22 @@ Patterns the Train session added; Submit/Status sessions inherit them.
 | `train-state4` | Live success: banner (pre-drawn check), weights + copy, Continue to Submit, provenance panel, form visible |
 | `train-state5` | Failure: CUDA-OOM banner + Copy diagnostics, epoch 7/50 static, Re-run CTA, form visible |
 | `train-state6` | Revisit summary: form hidden, static strip + provenance, Start new run |
+
+### ?kgdev fixture map — Predict + Submit tab
+
+| Value | Renders |
+|---|---|
+| `submit-state1` | Empty: no runs, no table, gate hint, both steps locked |
+| `submit-gated` | Runs + table verified, Run inference enabled, step 2 muted |
+| `submit-inference` | In-progress: determinate 312/715 bar, elapsed, state chip |
+| `submit-results` | Healthy results panel: 5/5 checks, sanity card + tinted tags, hero 0.6402, CSV row; step 2 unlocked (2 of 3 left) |
+| `submit-results-low` | Same, but degenerate output: amber low-boxes callout, hero 0.0512 |
+| `submit-checks-fail` | Predict failed at validation: 1/2 checks, failure banner + diagnostics, Re-run CTA |
+| `submit-nokaggle` | Results + not-joined connection (amber, join link), submit disabled |
+| `submit-limit` | Results + 0 of 3 left: friendly reset note, submit disabled, Download stays |
+| `submit-success` | Submitted banner (pre-drawn check, ref 54861736, View on Kaggle, Continue to Status) |
+| `submit-fail` | Submission rejected: red banner + Copy diagnostics |
+| `submit-revisit` | Revisit-first: static results summary + submitted callout + New prediction |
 
 The dev dispatch runs at the END of the fragment script so forced states
 apply after every tab's vars and handlers exist; fixtures re-apply after

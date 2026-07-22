@@ -391,6 +391,35 @@
 .kg-spark polyline { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .kg-spark circle { fill: currentColor; stroke: none; }
 
+/* ── Revision picker (table URL fields, Train + Predict) ──────────────
+   Small trailing button opens a popover of the project's tables and
+   their revision chains; picking one writes the URL and re-runs the
+   field's gate. Raw URL entry stays the escape hatch. */
+.kg-url-row { display: flex; gap: 6px; align-items: stretch; }
+.kg-url-row .form-control { flex: 1; min-width: 0; }
+.kg-pick-wrap { position: relative; }
+.kg-pop {
+  position: absolute; z-index: 30; top: 100%; left: 0; right: 0; margin-top: 4px;
+  background: var(--bg-card, #fff); border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 8px); box-shadow: 0 8px 24px rgba(0,0,0,.14);
+  padding: 6px; max-height: 280px; overflow: auto;
+}
+.kg-pop-ds {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .3px; color: var(--text-muted); padding: 6px 8px 2px;
+}
+.kg-pop-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 8px;
+  border: 0; border-radius: 6px; background: none; cursor: pointer;
+  font: inherit; font-size: 12.5px; color: var(--text); text-align: left;
+}
+.kg-pop-row:hover { background: var(--accent-light, rgba(42,74,97,.06)); }
+.kg-pop-row .rows { margin-left: auto; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.kg-pop-badge {
+  font-size: 9.5px; font-weight: 700; padding: 0 6px; border-radius: 999px;
+  background: rgba(5,150,105,.1); color: var(--success); white-space: nowrap;
+}
+
 /* ── Predict + Submit tab (two-step flow) ─────────────────────────────
    Step 1 (inference: free, repeatable) and Step 2 (spends a daily Kaggle
    attempt) are visually distinct sections gated left to right. */
@@ -628,13 +657,25 @@
       <form id="tr-form" onsubmit="return false;">
         <div class="kg-sec-head">Tables</div>
         <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;">
-          <div class="form-group">
+          <div class="form-group kg-pick-wrap">
             <label class="form-label required" for="tr-train-url">Train table URL</label>
-            <input id="tr-train-url" type="text" class="form-control" autocomplete="off" spellcheck="false">
+            <div class="kg-url-row">
+              <input id="tr-train-url" type="text" class="form-control" autocomplete="off" spellcheck="false">
+              <button type="button" class="btn btn-ghost btn-sm kgi-btn" id="tr-train-pick"
+                      title="Pick a table revision" aria-label="Pick a table revision"
+                      aria-haspopup="listbox" aria-expanded="false"><svg class="kgi" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5l6 3-6 3-6-3z"/><path d="M2 8.75l6 3 6-3"/><path d="M2 11.75l6 3 6-3"/></svg></button>
+            </div>
+            <div class="kg-pop" id="tr-train-pop" hidden></div>
           </div>
-          <div class="form-group">
+          <div class="form-group kg-pick-wrap">
             <label class="form-label required" for="tr-val-url">Val table URL</label>
-            <input id="tr-val-url" type="text" class="form-control" autocomplete="off" spellcheck="false">
+            <div class="kg-url-row">
+              <input id="tr-val-url" type="text" class="form-control" autocomplete="off" spellcheck="false">
+              <button type="button" class="btn btn-ghost btn-sm kgi-btn" id="tr-val-pick"
+                      title="Pick a table revision" aria-label="Pick a table revision"
+                      aria-haspopup="listbox" aria-expanded="false"><svg class="kgi" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5l6 3-6 3-6-3z"/><path d="M2 8.75l6 3 6-3"/><path d="M2 11.75l6 3 6-3"/></svg></button>
+            </div>
+            <div class="kg-pop" id="tr-val-pop" hidden></div>
           </div>
         </div>
         <div id="tr-tables-gate"></div>
@@ -894,9 +935,15 @@
             </div>
           </div>
           <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;">
-            <div class="form-group">
+            <div class="form-group kg-pick-wrap">
               <label class="form-label required" for="ps-test-url">Test table URL</label>
-              <input id="ps-test-url" type="text" class="form-control" autocomplete="off" spellcheck="false">
+              <div class="kg-url-row">
+                <input id="ps-test-url" type="text" class="form-control" autocomplete="off" spellcheck="false">
+                <button type="button" class="btn btn-ghost btn-sm kgi-btn" id="ps-test-pick"
+                        title="Pick a table revision" aria-label="Pick a table revision"
+                        aria-haspopup="listbox" aria-expanded="false"><svg class="kgi" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5l6 3-6 3-6-3z"/><path d="M2 8.75l6 3 6-3"/><path d="M2 11.75l6 3 6-3"/></svg></button>
+              </div>
+              <div class="kg-pop" id="ps-test-pop" hidden></div>
               <div id="ps-table-gate"></div>
             </div>
             <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px;">
@@ -1070,6 +1117,7 @@
         'arrow-right': '<path d="M2.5 8h11"/><path d="M9.5 4l4 4-4 4"/>',
         'upload': '<path d="M8 10.5v-8"/><path d="M4.5 6L8 2.5 11.5 6"/><path d="M2.5 13.5h11"/>',
         'download': '<path d="M8 2.5v8"/><path d="M4.5 7L8 10.5 11.5 7"/><path d="M2.5 13.5h11"/>',
+        'layers': '<path d="M8 2.5l6 3-6 3-6-3z"/><path d="M2 8.75l6 3 6-3"/><path d="M2 11.75l6 3 6-3"/>',
         'flag': '<path d="M3.5 14V2.5"/><path d="M3.5 3h8.5l-1.8 2.5L12 8H3.5"/>',
         'refresh-cw': '<path d="M13.5 8a5.5 5.5 0 1 1-1.7-3.97"/><path d="M13.5 2.5V6H10"/>',
         'chevron-right': '<path d="M6 3.5L10.5 8 6 12.5"/>',
@@ -1364,6 +1412,79 @@
         el(toggleId).setAttribute('aria-expanded', 'true');
         el(panelId).classList.add('open');
         el(panelId).hidden = false;
+      }
+
+      // ── Revision picker (see docs/ui-notes.md § Train additions) ────
+      // A trailing button on a table-URL field opens a popover of the
+      // project's tables and their lineage-ordered revision chains
+      // (GET /tables/list, fetched fresh per open). Picking a row writes
+      // the URL into the field and hands off to `onPick` (which re-runs
+      // the field's gate). Raw URL entry stays the escape hatch.
+      function kgBindTablePicker(inputId, popId, btnId, onPick) {
+        var btn = el(btnId);
+        var pop = el(popId);
+        var input = el(inputId);
+
+        function onDocDown(e) {
+          if (!pop.contains(e.target) && !btn.contains(e.target)) { close(); }
+        }
+        function onKeyDown(e) {
+          if (e.key === 'Escape') { close(); btn.focus(); }
+        }
+        function close() {
+          if (pop.hidden) { return; }
+          pop.hidden = true;
+          btn.setAttribute('aria-expanded', 'false');
+          document.removeEventListener('mousedown', onDocDown, true);
+          document.removeEventListener('keydown', onKeyDown, true);
+        }
+        function open() {
+          pop.hidden = false;
+          btn.setAttribute('aria-expanded', 'true');
+          pop.innerHTML = '<div class="form-help" style="padding:4px 8px">Loading tables…</div>';
+          kglEnter(pop);
+          document.addEventListener('mousedown', onDocDown, true);
+          document.addEventListener('keydown', onKeyDown, true);
+          API.authFetch(computeUrl + '/api/plugins/kaggle/tables/list?project=exdark-competition')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (pop.hidden) { return; }
+              var html = '';
+              (data.datasets || []).forEach(function (ds) {
+                html += '<div class="kg-pop-ds">' + esc(ds.name) + '</div>';
+                (ds.tables || []).forEach(function (t) {
+                  html += '<button type="button" class="kg-pop-row" data-url="' + esc(t.url) +
+                          '" data-latest="' + (t.latest ? '1' : '0') + '">' +
+                          '<span>' + esc(t.name) + '</span>' +
+                          (t.latest ? '<span class="kg-pop-badge">LATEST</span>' : '') +
+                          '<span class="rows">' + fmtCount(t.rows) + ' rows</span></button>';
+                });
+              });
+              pop.innerHTML = html ||
+                '<div class="form-help" style="padding:4px 8px">No tables in this project yet. Run Import first.</div>';
+              pop.querySelectorAll('.kg-pop-row').forEach(function (row) {
+                row.addEventListener('click', function () {
+                  input.value = row.getAttribute('data-url');
+                  close();
+                  onPick(row.getAttribute('data-url'), row.getAttribute('data-latest') === '1');
+                });
+              });
+            })
+            .catch(function (e) {
+              if (pop.hidden) { return; }
+              pop.innerHTML = '<div class="form-help" style="padding:4px 8px">Could not list tables: ' +
+                              esc(e.message) + '</div>';
+              kgConn.fail(e);
+            });
+        }
+        btn.addEventListener('click', function () { if (pop.hidden) { open(); } else { close(); } });
+      }
+
+      // dataset/revision display name from a table URL
+      function kgTableRef(url) {
+        var ds = String(url).match(/datasets[\\\/]+([^\\\/]+)/);
+        var rev = String(url).match(/tables[\\\/]+([^\\\/]+)/);
+        return ds ? ds[1] + (rev ? '/' + rev[1] : '') : '';
       }
 
       function kgLogOpen() {
@@ -2386,6 +2507,7 @@
             params: { epochs: total, run_name: '' },
             progress: {
               epoch: epoch, total_epochs: total, history: HIST(epoch),
+              batch_i: status === 'running' ? 148 : 0, batch_n: 370,
               avg_epoch_s: 96.4, eta_s: Math.round(96.4 * (total - epoch))
             },
             facts: { run_name: devRun },
@@ -2831,12 +2953,17 @@
           (status === 'running' && typeof p.eta_s === 'number' && epoch >= 1 && epoch < total)
             ? '≈ ' + fmtDur(p.eta_s) + ' remaining' : '';
         var bar = el('tr-run-bar');
-        if (status === 'running' && epoch === 0) {
+        // Determinate from the first minutes: overall fraction folds the
+        // within-epoch batch counter in. Indeterminate only for the brief
+        // moment before the first batch progress lands.
+        var within = (p.batch_n && p.batch_i) ? Math.min(1, p.batch_i / p.batch_n) : 0;
+        if (status === 'running' && epoch === 0 && !within) {
           bar.classList.add('indeterminate');
           bar.style.width = '30%';
         } else {
           bar.classList.remove('indeterminate');
-          bar.style.width = (total ? Math.min(100, Math.round(100 * epoch / total)) : 0) + '%';
+          bar.style.width =
+            (total ? Math.min(100, Math.round(100 * (epoch + within) / total)) : 0) + '%';
         }
         trRenderMetricStrip(p.history || []);
       }
@@ -3049,11 +3176,6 @@
       var trLastGateKey = null;
       var trRunning = false;
 
-      function trTableName(url) {
-        var m = String(url).match(/datasets[\\\/]+([^\\\/]+)/);
-        return m ? m[1] : '';
-      }
-
       function trRenderGate(data) {
         var box = el('tr-tables-gate');
         var kind = !data ? 'idle'
@@ -3072,11 +3194,15 @@
           return;
         }
         if (data.ok) {
-          var names = [trTableName(data.train_url) || 'train table',
-                       trTableName(data.val_url) || 'val table'];
+          var names = [kgTableRef(data.train_url) || 'train table',
+                       kgTableRef(data.val_url) || 'val table'];
+          // Echo the resolved revision choice (the .latest() interplay).
+          var resolved = el('tr-latest').checked
+            ? 'trains on the latest revision of each'
+            : 'trains on these exact revisions';
           box.innerHTML = '<div class="' + entering + '"><div class="kg-preflight-ok">' +
             kgIcon('check') + '<span>Tables verified: ' + esc(names[0]) + ' · ' +
-            esc(names[1]) + '</span></div></div>';
+            esc(names[1]) + ' · ' + resolved + '</span></div></div>';
           return;
         }
         var problems = data.problems || [];
@@ -3167,6 +3293,22 @@
           clearTimeout(trGateTimer);
           setTimeout(trVerifyTables, 0);   // after the pasted text lands
         });
+      });
+
+      // Revision pickers: choosing an explicit non-latest revision unchecks
+      // "Use latest revision" (the pick means THAT revision); re-checking
+      // the box re-implies latest, echoed in the gate's green line either
+      // way. This is the fix-labels-then-retrain loop made tangible.
+      kgBindTablePicker('tr-train-url', 'tr-train-pop', 'tr-train-pick', function (url, isLatest) {
+        if (!isLatest) { el('tr-latest').checked = false; }
+        trVerifyTables(true);
+      });
+      kgBindTablePicker('tr-val-url', 'tr-val-pop', 'tr-val-pick', function (url, isLatest) {
+        if (!isLatest) { el('tr-latest').checked = false; }
+        trVerifyTables(true);
+      });
+      el('tr-latest').addEventListener('change', function () {
+        if (trGate && trGate.ok) { trRenderGate(trGate); }   // same kind: no re-entrance
       });
 
       // Client-side mirror of the server bounds (trainer._EXPOSED and
@@ -3547,7 +3689,7 @@
         }
         if (data.ok) {
           box.innerHTML = '<div class="' + entering + '"><div class="kg-preflight-ok">' +
-            kgIcon('check') + '<span>Table verified: ' + esc(trTableName(data.url) || 'test table') +
+            kgIcon('check') + '<span>Table verified: ' + esc(kgTableRef(data.url) || 'test table') +
             '</span></div></div>';
           return;
         }
@@ -3609,6 +3751,9 @@
           clearTimeout(psGateTimer);
           psVerifyTable();
         }
+      });
+      kgBindTablePicker('ps-test-url', 'ps-test-pop', 'ps-test-pick', function () {
+        psVerifyTable(true);
       });
 
       // Conf bounds, inline on blur (server clamps too)
