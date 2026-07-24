@@ -452,6 +452,20 @@ apply after every tab's vars and handlers exist; fixtures re-apply after
 the async config load, and the metric curve is deterministic (no
 randomness — identical screenshots every load).
 
+**Fixtures always render the participant experience** (2026-07-24). While
+`?kgdev` is active, host-only affordances stay hidden regardless of the
+live `_meta.host` flag — no fixture opts into host rendering today. Three
+enforcement points in the fragment: the config-load reveal of
+`ps-src-seg` requires `!kgDevMode` (the markup default is `hidden`, so
+nothing can reveal it in a fixture); `psSetSource` coerces `'weights'` to
+`'run'` under `?kgdev`, so the external-weights field and its amber
+callout can never render in a fixture; and the eager `psLoadRuns()` is
+skipped under `?kgdev`, so the live host's real runs never race a
+fixture's dev runs into the selector. Fixtures never write config
+(`saveTabConfig` fires only on action-button clicks), and a plain load
+without the param takes none of these paths — the host view and saved
+config come back untouched.
+
 ### Intentional improvements over the stock Import plugin
 
 - **Pid-stamped stale-job detection**: running records from a dead process

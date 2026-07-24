@@ -1740,9 +1740,12 @@
             kgRenderFooters(cfg._meta);
             // Host-only: the Weights-file source toggle. Participants keep
             // the single Plugin-run source (also enforced server-side).
+            // ?kgdev fixtures always render the participant experience, so
+            // the live host flag never reveals it while a fixture is active
+            // (the markup default is hidden — this is the only reveal).
             kgHost = !!cfg._meta.host;
             var seg = el('ps-src-seg');
-            if (seg) { seg.hidden = !kgHost; }
+            if (seg) { seg.hidden = !kgHost || !!kgDevMode; }
           }
         })
         .catch(function () { /* fresh install or route not mounted yet */ });
@@ -3981,6 +3984,9 @@
 
       // ── Weights source: segmented either/or ─────────────────────────
       function psSetSource(mode) {
+        // Fixtures are participant-view end-to-end: the weights side never
+        // renders under ?kgdev, whatever stale state or a listener asks for.
+        if (mode === 'weights' && kgDevMode) { mode = 'run'; }
         psSource = mode;
         el('ps-src-run-btn').setAttribute('aria-pressed', String(mode === 'run'));
         el('ps-src-weights-btn').setAttribute('aria-pressed', String(mode === 'weights'));
@@ -4080,7 +4086,9 @@
           })
           .then(settle, settle);
       }
-      psLoadRuns();
+      // Forced states own the runs list: the eager load would race the
+      // fixture's apply() and repaint it with the live host's real runs.
+      if (!kgDevMode) { psLoadRuns(); }
       el('ps-run-refresh').addEventListener('click', function () { psLoadRuns(true); });
       el('ps-run').addEventListener('change', function () {
         psRenderRunNote();
