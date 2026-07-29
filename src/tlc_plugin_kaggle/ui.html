@@ -1928,7 +1928,7 @@
 
       function kgCheckReady() {
         var btn = el('kg-import-btn');
-        btn.disabled = kgImporting || !(kgPreflight && kgPreflight.all_ok);
+        btn.disabled = kgImporting || !(kgPreflight && kgPreflight.all_ok) || !!kgDevMode;
         // Guide pulse: the YAML path is the one required field.
         el('kg-yaml').classList.toggle('guide-next', !el('kg-yaml').value.trim() && !kgImporting);
       }
@@ -2410,7 +2410,10 @@
           });
       }
 
-      el('kg-import-btn').addEventListener('click', function () { kgStartImport([]); });
+      el('kg-import-btn').addEventListener('click', function () {
+        if (kgDevMode) { return; }
+        kgStartImport([]);
+      });
 
       // ── Tab-open state resolution (State 6 precedence) ───────────────
       // Order: a still-running import wins (reconnect → State 3), then a
@@ -2511,7 +2514,26 @@
       // fixtures for screenshotting — no fetches, no job side effects.
       // Values: state1, state2, state2-mismatch, state2-error, state3,
       // state4, state5, state6. Documented in docs/ui-notes.md.
+
+      // Fixture pages must never start real work: every job-firing button
+      // renders disabled with a note. The ready-recalc functions OR in
+      // kgDevMode so no later recalc can re-enable, and the click handlers
+      // guard on it as the hard backstop.
+      function kgDevDisableActions() {
+        ['kg-import-btn', 'tr-start-btn', 'ps-predict-btn', 'ps-submit-btn']
+          .forEach(function (id) {
+            var btn = el(id);
+            btn.disabled = true;
+            var note = document.createElement('span');
+            note.textContent = 'demo state — actions disabled';
+            note.style.cssText =
+              'font-size: 11px; font-style: italic; color: var(--text-muted); white-space: nowrap;';
+            btn.parentNode.appendChild(note);
+          });
+      }
+
       function kgDevForce(mode) {
+        kgDevDisableActions();
         if (mode && mode.indexOf('train-') === 0) { trDevForce(mode); return; }
         if (mode && mode.indexOf('submit-') === 0) { psDevForce(mode); return; }
         if (mode && mode.indexOf('predict-') === 0) { psDevForce(mode); return; }
@@ -3736,7 +3758,8 @@
       }
 
       function trCheckReady() {
-        el('tr-start-btn').disabled = trRunning || !(trGate && trGate.ok) || trAnyInvalid();
+        el('tr-start-btn').disabled =
+          trRunning || !(trGate && trGate.ok) || trAnyInvalid() || !!kgDevMode;
       }
 
       function trValidateField(id) {
@@ -3774,6 +3797,7 @@
       trCheckReady();   // Start stays disabled until the gate goes green
 
       el('tr-start-btn').addEventListener('click', function () {
+        if (kgDevMode) { return; }
         var firstBad = trValidateAll();
         if (firstBad) {
           el(firstBad).focus();
@@ -3854,7 +3878,7 @@
       });
 
       el('tr-cancel-btn').addEventListener('click', function () {
-        if (!trainJobId) { return; }
+        if (kgDevMode || !trainJobId) { return; }
         // Cooperative cancel: the worker stops at the next checkpoint and
         // the Run is marked cancelled — confirm before asking for it.
         if (!window.confirm('Stop this training run? It stops at the next checkpoint; ' +
@@ -4214,7 +4238,8 @@
 
       function psCheckPredictReady() {
         el('ps-predict-btn').disabled =
-          psPredicting || !(psGate && psGate.ok) || !!psInvalid['ps-conf'] || !psWeightsChosen();
+          psPredicting || !(psGate && psGate.ok) || !!psInvalid['ps-conf'] ||
+          !psWeightsChosen() || !!kgDevMode;
       }
 
       // Test table default from the same helper the Train tab uses — saved
@@ -4421,6 +4446,7 @@
       }
 
       el('ps-predict-btn').addEventListener('click', function () {
+        if (kgDevMode) { return; }
         if (!psValidateConf()) { el('ps-conf').focus(); return; }
         saveTabConfig('submit');
         var body = {
@@ -4505,7 +4531,8 @@
 
       function psCheckSubmitReady() {
         el('ps-submit-btn').disabled =
-          psSubmitting || !psStep2Enabled || !psBasis || psConnBlocked() || psBudgetExhausted();
+          psSubmitting || !psStep2Enabled || !psBasis || psConnBlocked() ||
+          psBudgetExhausted() || !!kgDevMode;
       }
 
       // Kaggle connection card in the banner vocabulary; budget included.
@@ -4667,7 +4694,7 @@
       }
 
       el('ps-submit-btn').addEventListener('click', function () {
-        if (!psBasis) { return; }
+        if (kgDevMode || !psBasis) { return; }
         var b = psBudget();
         var n = b ? b.limit : 3;
         if (!window.confirm('This spends 1 of your ' + n + ' daily submissions. Submit "' +
