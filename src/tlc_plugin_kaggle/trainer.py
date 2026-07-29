@@ -114,7 +114,16 @@ def ensure_official_checkpoint(ctx: Any = None) -> tuple[Path, str]:
     log(f"Official checkpoint cached: {CHECKPOINT_CACHE} (sha256 {digest[:12]}...)")
     return CHECKPOINT_CACHE, digest
 
-DEFAULT_SAVE_ROOT = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle-plugin"
+# Run artifacts (weights, plots, submissions). The organizer machine keeps
+# its historical location; everywhere else the default must be creatable
+# without elevation — a hardcoded C:\Users\Owner path PermissionErrors the
+# first train job on any other Windows machine.
+_ORGANIZER_SAVE_ROOT = Path(r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle-plugin")
+DEFAULT_SAVE_ROOT = str(
+    _ORGANIZER_SAVE_ROOT
+    if _ORGANIZER_SAVE_ROOT.parent.is_dir()
+    else Path.home() / ".3lc-kaggle-plugin" / "runs"
+)
 
 # Exposed training args: name -> (converter, default, min, max). Bounds are
 # enforced server-side below (participant-facing error naming the bound) and

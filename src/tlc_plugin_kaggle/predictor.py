@@ -10,8 +10,10 @@ The pre-flight validator below re-implements the metric parser's STRICT rules
 with the same participant-facing message style, so a format error can never
 burn a real Kaggle submission — it fails the job locally instead.
 
-Kaggle credentials: read by the kaggle package from ~/.kaggle/kaggle.json
-ONLY — the plugin never stores or forwards credentials. NOTE: kaggle 2.x
+Kaggle credentials: read by the kaggle package from its own auth sources
+(~/.kaggle/access_token KGAT token preferred, legacy ~/.kaggle/kaggle.json,
+or the KAGGLE_* env vars — see kaggle_credentials_present) — the plugin
+never stores or forwards credentials. NOTE: kaggle 2.x
 authenticates AT IMPORT TIME and raises without credentials, so the import
 lives inside the submit step and its failure is treated as "credentials
 missing": steps 1-4 (inference, CSV, validation, save) still complete so the
@@ -33,7 +35,15 @@ COMPETITION_SLUG = "the-3-lc-low-light-object-detection-comepetition-test"
 EXPECTED_TEST_ROWS = 715
 NUM_CLASSES = 12
 SUBMISSION_COLUMNS = ["id", "image_id", "prediction_string"]
-DEFAULT_SAVE_ROOT = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle-plugin"
+# Same portable-default rule as trainer.DEFAULT_SAVE_ROOT (kept in sync by
+# hand): organizer machine keeps its historical location, everywhere else
+# fall back to a per-user dir that mkdir can create without elevation.
+_ORGANIZER_SAVE_ROOT = Path(r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle-plugin")
+DEFAULT_SAVE_ROOT = str(
+    _ORGANIZER_SAVE_ROOT
+    if _ORGANIZER_SAVE_ROOT.parent.is_dir()
+    else Path.home() / ".3lc-kaggle-plugin" / "runs"
+)
 
 
 def competition_url(slug: str) -> str:
