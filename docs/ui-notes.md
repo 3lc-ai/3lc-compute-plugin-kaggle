@@ -1,8 +1,8 @@
-# UI playbook — Kaggle Competition plugin
+# UI playbook: Kaggle Competition plugin
 
 The Import tab (frozen 2026-07-21) is the v1 gold standard. This document is
 the **replication playbook**: a Train/Submit/Status tab session starts with
-"apply the playbook" — the decisions below are settled, not re-litigated.
+"apply the playbook". The decisions below are settled, not re-litigated.
 The stock **Import plugin** remains the interaction reference; it is a Hub
 built-in (`3lc-hub\.venv\Lib\site-packages\tlc_compute\plugins\importer\`),
 not a separate repo.
@@ -27,23 +27,23 @@ snapshot (State 6→4) → form (State 1, saved inputs prefill and re-gate).
 The stepper checkmark and the tab's revisit view must share one backend
 source of truth so they can never disagree.
 
-**Dev affordance**: `?kgdev=<state>` renders each state from static fixtures
-— no fetches, no job side effects; fixtures re-apply after the async config
+**Dev affordance**: `?kgdev=<state>` renders each state from static fixtures:
+no fetches, no job side effects. Fixtures re-apply after the async config
 load. Import values: `state1`, `state2`, `state2-mismatch`, `state2-error`,
 `state3`, `state4`, `state5`, `state6`. New tabs add their own values.
 Since v1.1.1 fixture pages cannot start real work: the four job-firing
 buttons (Import / Start Training / Run inference / Submit) render disabled
-with a "demo state — actions disabled" note, the ready-recalc functions OR
+with a "demo state · actions disabled" note, the ready-recalc functions OR
 in `kgDevMode` so no refetch re-enables them, and their click handlers (plus
 Cancel) return early under `?kgdev` as the hard backstop.
 
 ## 2. Motion
 
 House-style anchors: the stock plugin's `plugin-badge-in` entrance and
-`guide-pulse` — fast, subtle, ease-out. If an animation would be noticed as
-"an animation" on the third use, it's too much.
+`guide-pulse`. Both are fast, subtle, ease-out. If an animation would be
+noticed as "an animation" on the third use, it's too much.
 
-**Tokens** — defined once on `.plugin-page-narrow`; every animated rule
+**Tokens** are defined once on `.plugin-page-narrow`; every animated rule
 references them (no literal durations; exceptions: the stock-copied
 guide-pulse 2s cadence, and JS *hold* durations like the 1200 ms Copied swap
 and the 2 s Reconnected hold, which are UX timing, not animation):
@@ -59,17 +59,17 @@ and the 2 s Reconnected hold, which are UX timing, not animation):
 
 **The four rules:**
 
-1. **Motion is information** — announce a state change, acknowledge an
+1. **Motion is information**: announce a state change, acknowledge an
    action, or direct attention. Nothing ambient, decorative, or page-level.
-2. **No exit animations** — removals/replacements are instant; only arrivals
+2. **No exit animations**: removals/replacements are instant; only arrivals
    animate. (One sanctioned exception: the connection guard's "Reconnected"
-   banner fades out after its hold — transient status, not content.)
-3. **No replay on revisit** — entrances, cascades, and the checkmark draw
+   banner fades out after its hold; it is transient status, not content.)
+3. **No replay on revisit**: entrances, cascades, and the checkmark draw
    play only on live state changes. Revisit and `?kgdev` render static/
    pre-drawn. Same-type re-renders (debounce cycles, poll ticks) never
    re-trigger an entrance: animate on state-type *transitions*, tracked in
    JS (`kgPreflightKind`, `kgPrevStageStatus`).
-4. **Reduced-motion parity** — every animated rule lives inside one
+4. **Reduced-motion parity**: every animated rule lives inside one
    `@media (prefers-reduced-motion: no-preference)` block; under `reduce`
    everything is instant with zero functional difference. JS that waits on
    `transitionend`/`animationend` must check `kgMotionOK()` first (a gated
@@ -84,18 +84,18 @@ animation restart, not a loop.
 
 **No emoji, ever** (deliberate upgrade over stock). Inline monochrome SVGs:
 16px viewBox grid, 1.5px stroke, `stroke="currentColor"`, round caps/joins,
-lucide-style. Tint via the cascade or Hub CSS variables — never hardcoded
+lucide-style. Tint via the cascade or Hub CSS variables: never hardcoded
 hex, never multicolor. No shared sprite exists in the Hub (verified), so the
 set lives in the fragment: `KG_ICONS` + `kgIcon(name, cls)` for JS-rendered
 markup, literal `<svg>` for static markup.
 
 - **Sizes**: `.kgi` 14px inline default · `.kgi-16` CTA/banner · `.kgi-12`
   micro (chips, locks, caret, trailing arrows in small buttons, separators)
-  · `.kgi-20` header identity. Small buttons carry 14/12px icons — optical
+  · `.kgi-20` header identity. Small buttons carry 14/12px icons; optical
   fit overrides the scale rule there.
 - **Alignment**: flex containers (`.kgi-btn`, flex callouts/checks), not
   baseline hacks.
-- **Lock semantics**: muted gray always — locked is a calm fact, not a
+- **Lock semantics**: muted gray always; locked is a calm fact, not a
   warning.
 - **Set**: lock, check, x, check-circle, x-circle, alert-triangle, info,
   copy, arrow-right, upload, flag, refresh-cw, chevron-right, external-link.
@@ -104,23 +104,23 @@ markup, literal `<svg>` for static markup.
 
 **Inform, don't instruct.** Help text states facts and conventions
 ("`initial` is the convention for a first import"), not commands. Exceptions:
-remediation hints under failed checks are deliberately imperative —
-instructions are their job — and error chips may name the blocking fact.
+remediation hints under failed checks are deliberately imperative
+(instructions are their job), and error chips may name the blocking fact.
 Sentence case for labels/buttons/callouts; terminal periods on full
 sentences, none on fragments. "Import & Validate" keeps its capitalization
 as an established CTA name.
 
 **No em dashes in UI copy** (en dashes included). Rewrite the sentence
-instead: period + new sentence, a comma, or parentheses — whichever reads
-naturally case by case, never a blind character swap. Numeric ranges read
+instead: period + new sentence, a comma, or parentheses, whichever reads
+naturally case by case; never a blind character swap. Numeric ranges read
 "1 to 300", not "1–300". Scope is rendered copy (labels, help, callouts,
 titles, banners, state chips); log OUTPUT and the diagnostics fence keep
 their log formatting.
 
 ## 5. Checks / results presentation
 
-- **Verdict line first**: muted headline over the columns — check-circle
-  "9/9 checks passed" or x-circle "7/9 checks passed — 2 failed".
+- **Verdict line first**: a muted headline over the columns, check-circle
+  "9/9 checks passed" or x-circle "7/9 checks passed (2 failed)".
 - **Two-column grouped grid** with uppercase micro-label group heads;
   columns cascade in parallel on live completion only.
 - **Compress on pass**: drop parentheticals that merely echo the assertion
@@ -130,7 +130,7 @@ their log formatting.
   hint (`KG_REMEDIES`, matched by label).
 - **Thousands separators everywhere** (`fmtCount`), matching the Dashboard.
 - **Raw log** lives in a collapsed "Show log" accordion (button + region,
-  `aria-expanded` + `hidden`) — the only monospace anywhere, collapsed by
+  `aria-expanded` + `hidden`), the only monospace anywhere, collapsed by
   default in every state.
 - **Guard notes** (e.g. GT-leak) surface as info callouts in the results,
   never buried in the log.
@@ -143,10 +143,10 @@ their log formatting.
   arrow-right (the "advance the stepper" action).
 - **Secondary**: `btn btn-secondary btn-sm` (Explore links, Copy
   diagnostics).
-- **Ghost/quiet**: `btn btn-ghost btn-sm` (icon-only Copy — needs
+- **Ghost/quiet**: `btn btn-ghost btn-sm` (icon-only Copy, which needs
   `aria-label`; Start over).
 - **Destructive-ish**: ghost + `.kg-btn-danger-hover` (danger tint on hover
-  only; e.g. Re-import fresh) — never equal visual weight with navigation.
+  only; e.g. Re-import fresh). Never equal visual weight with navigation.
 - Transient acknowledgment: `kgSwapHtml(btn, icon+label)` → hold → swap
   back. Fixed-width action slots keep columns aligned when an action is
   conditionally absent.
@@ -159,8 +159,8 @@ their log formatting.
 | `kglEnter(elm)` | Re-triggerable entrance for a persistent element (fresh innerHTML embeds `kgl-enter` in markup instead) |
 | `kgSwapHtml(elm, html)` | Fading label swap on buttons (instant under reduce); relies on the gated opacity transition |
 | `kgSwapText(elm, text)` | Fading text swap for stat values; no-op when unchanged, so poll ticks never blink. Needs a gated opacity transition on the element |
-| `kgConn.fail(err, resume?)` | Connection guard: returns true iff network-level (TypeError); shows retrying banner in EVERY finished tab's `*-conn-banner` slot (one guard, one state), backoff 2/5/10/15s pings, fires `resume` on reconnect (resume polls/preflights/gates — never imports/trains/submits) |
-| `kgBuildDiagnosticsCore(sections)` | Fenced ```3lc-kaggle-diagnostics``` block: version/OS/time header + caller sections (falsy sections skipped — no placeholders). Per-tab builders compose it: `kgBuildDiagnostics` (Import: yaml, preflight JSON, checks, log tail), `trBuildDiagnostics` (Train: job id, HP set, provenance, log tail) |
+| `kgConn.fail(err, resume?)` | Connection guard: returns true iff network-level (TypeError); shows retrying banner in EVERY finished tab's `*-conn-banner` slot (one guard, one state), backoff 2/5/10/15s pings, fires `resume` on reconnect (resume polls/preflights/gates, never imports/trains/submits) |
+| `kgBuildDiagnosticsCore(sections)` | Fenced ```3lc-kaggle-diagnostics``` block: version/OS/time header + caller sections (falsy sections skipped, no placeholders). Per-tab builders compose it: `kgBuildDiagnostics` (Import: yaml, preflight JSON, checks, log tail), `trBuildDiagnostics` (Train: job id, HP set, provenance, log tail) |
 | `kgChecksSection(title, checks)` / `kgLogTailSection(logEl)` | Reusable diagnostics sections (PASS/FAIL lines; last-40-lines log tail) |
 | `kgDiagBtn()` / `kgBindDiag(el, build?)` | Copy-diagnostics button on every failure surface; `build` picks the tab's builder (default Import's) |
 | `kgBindAccordion(toggleId, panelId)` | Button + region accordion (aria-expanded / hidden, animated grid-rows); serves log accordions AND advanced disclosures |
@@ -179,22 +179,22 @@ their log formatting.
 
 - **Two-column balance**: form fields left, options/at-a-glance right; the
   right column must earn its height (e.g. "Dataset at a glance" after a
-  green gate — stats chips + quiet tags + relocated guard note).
+  green gate: stats chips + quiet tags + relocated guard note).
 - **Narrow widths** (≤720px): form and checks collapse to one column; table
   rows wrap with the path on its own line; actions keep right alignment.
-- **Callout geometry**: one internal shape everywhere — icon column + text,
-  `padding: 9px 12px`, `radius-lg`, flex `gap: 8px`.
+- **Callout geometry**: one internal shape everywhere (icon column + text,
+  `padding: 9px 12px`, `radius-lg`, flex `gap: 8px`).
 - **Class-tag palette**: the Hub frontend's categorical CSS variables
   `--chart-1` … `--chart-12` (the set stock run_insights colors from), class
   index → slot, rendered as a quiet tint (`rgba(hue, .10)` background,
   `.35` border, text unchanged). Fallback hexes are the stock plugin's own.
   Chosen over a local palette (decided 2026-07-21): it's the only
-  deterministic Hub-shared assignment reachable from a fragment — tlc value
+  deterministic Hub-shared assignment reachable from a fragment. tlc value
   maps support `display_color` but the imported tables carry none, and the
   Dashboard's bounding-box palette lives in its own bundle, so exact
   Dashboard-overlay parity is plausible-but-unverified.
-- **Overflow**: cards never exceed their container — `min-width: 0`,
-  `word-break: break-all` on paths/`pre`; full paths only in the log/Copy.
+- **Overflow**: cards never exceed their container (`min-width: 0`,
+  `word-break: break-all` on paths/`pre`); full paths only in the log/Copy.
 - Nothing within 4px of a container edge that isn't deliberately flush.
 
 ## 9. Train-tab additions to the vocabulary (2026-07-21)
@@ -203,14 +203,14 @@ Patterns the Train session added; Submit/Status sessions inherit them.
 
 - **Locked-contract banner + locked rows**: constraints render as the
   format-banner geometry (lock icon, one-line contract, enforcement
-  sentence) with read-only `.kg-locked-row`s under it — never
+  sentence) with read-only `.kg-locked-row`s under it, never
   fake-editable disabled inputs. Locks are calm facts: muted gray.
 - **Staged sections**: `.kg-sec-head` uppercase micro-heads + `divider`s
   replace any wall-of-fields; core fields prominent, everything most
   users keep on defaults goes into a collapsed **advanced disclosure**
   (`kgBindAccordion`, same mechanics as the log accordion). A saved
   config with non-default advanced values reopens its disclosure on load
-  (instant — page furniture never animates).
+  (instant; page furniture never animates).
 - **Gate pattern**: cheap read-only existence checks (reuse
   `/import/revisions`) gate the primary CTA; green is a quiet
   `.kg-preflight-ok` line, missing is an amber callout with per-item
@@ -223,8 +223,8 @@ Patterns the Train session added; Submit/Status sessions inherit them.
 - **In-run view**: header row (run name · status badge · Epoch n/N ·
   elapsed · measured ETA) + determinate per-epoch bar (indeterminate
   only during epoch 0) + **metrics strip** (stat chips + `kgSparkline`,
-  values via `kgSwapText`). Structure builds once; values swap in place —
-  nothing re-enters on poll ticks. Cancel confirms (cooperative) and
+  values via `kgSwapText`). Structure builds once; values swap in place,
+  so nothing re-enters on poll ticks. Cancel confirms (cooperative) and
   stays in the action row: one destructive control, not duplicated in
   the header.
 - **In-run reconnect**: tab-open resolution fetches `jobs?kind=<tab>`;
@@ -234,13 +234,13 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   behind "Start new run"; failed/stale keep the form + Re-run CTA;
   cancelled keeps the form + info callout); else the form. Mid-run
   disconnects show "Connection lost. Training continues on the host."
-  and the guard resumes polling on reconnect — never restarts anything.
+  and the guard resumes polling on reconnect; it never restarts anything.
 - **Provenance panel**: the run-record assertions render as verdict +
   checks ("Verified provenance recorded" / group head "Provenance
   verified") the moment the record carries them; cascade on live
   arrival only. Four assertions since the 2026-07-22 contract change
   (model / imgsz / pretrained / checkpoint sha256). Screenshot target
-  for the README — the hash line is the new centerpiece.
+  for the README; the hash line is the new centerpiece.
 
 ## 10. Predict + Submit additions to the vocabulary (2026-07-21)
 
@@ -248,7 +248,7 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   with a costly one, split it into stages gated left to right. Step 1's
   results panel is the *decision surface* (verdict + checks, sanity
   card, hero stat, artifact row); Step 2 stays `.kg-step-muted` (plus
-  real `disabled` attributes — the muting is visual, the gate is real)
+  real `disabled` attributes: the muting is visual, the gate is real)
   until a validated artifact exists, and names its **basis** explicitly
   ("Submitting: <run> · predicted 3m ago · local mAP 0.64"), with
   "(from a previous session)" when it came from the snapshot. Costly
@@ -258,14 +258,14 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   the action with the friendly reset note while the free artifacts
   (Download CSV) stay reachable. This structure superseded the
   "Generate CSV only" checkbox: the CSV exists after step 1 by
-  construction, so an option to *not* do step 2 is no longer a mode —
-  it's just not clicking step 2.
+  construction, so an option to *not* do step 2 is no longer a mode.
+  It's just not clicking step 2.
 - **Segmented either/or**: two mutually exclusive input sources render
   as a `.kg-seg` toggle showing exactly one input; switching sides
   clears the other. No more two-fields-side-by-side ambiguity.
 - **Hero stat**: one number the user came for (`.kg-hero`), large
   numeral + micro-label + muted scope note ("Host-only preview, not the
-  leaderboard"). Render it only when the number exists — absence is the
+  leaderboard"). Render it only when the number exists; absence is the
   participant-machine behavior, not an empty state.
 - **Revision picker**: table-URL fields carry a trailing layers-icon
   button opening a `.kg-pop` popover of the project's tables and their
@@ -285,11 +285,11 @@ Patterns the Train session added; Submit/Status sessions inherit them.
 
 - **Hero strip**: a status surface answers three questions at a glance
   (how good is my best · what happened last · what can I do now) as
-  `.kg-hero` blocks — headline number 4dp with its source beneath,
+  `.kg-hero` blocks: headline number 4dp with its source beneath,
   relative time + badge for latest activity, budget, and a "Live now"
   block that is OMITTED when nothing runs (never an empty placeholder).
 - **Outcome vocabulary**: history rows speak participant language, not
-  job states — "Submitted · #ref" (quiet mono id), "CSV generated (not
+  job states: "Submitted · #ref" (quiet mono id), "CSV generated (not
   submitted / daily limit reached / not joined)", "Validation failed";
   raw reasons ride the row's title attribute. Δ is visual (tinted ▲/▼,
   muted – for flat/first) and measured against the previous SCORED row.
@@ -299,13 +299,13 @@ Patterns the Train session added; Submit/Status sessions inherit them.
 - **Friendly degradation for third-party API failures**: a known
   limitation renders as a quiet info callout naming the limitation and
   the working alternative (external link), with the raw error behind a
-  collapsed "Show details" accordion — never an error tone for
+  collapsed "Show details" accordion. Never an error tone for
   something that isn't the participant's fault. The code path keeps
   trying the API, so the success path self-heals at public launch.
 - **Freshness rules**: every tab refetches its backing data on
   activation, silently (the stepper re-renders on every switch); a
   poll's terminal branch directly refreshes any list it invalidates
-  (stale-on-terminal, plain function calls — no event bus); surfaces
+  (stale-on-terminal, plain function calls, no event bus); surfaces
   that watch a moving target poll while visible (Status: 15s, ticks
   skip when `document.hidden`, immediate refresh on visibility return,
   stopped on tab switch) with an "Updated Ns ago" line; manual refresh
@@ -320,12 +320,12 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   help line under the cost-driving field states the median historical
   rate and the projected total, recomputed live as the field changes;
   omitted entirely without history.
-- **aria-live rule**: announce meaningful transitions, not poll ticks —
-  the epoch counter is a polite region (it only changes at epoch
+- **aria-live rule**: announce meaningful transitions, not poll ticks.
+  The epoch counter is a polite region (it only changes at epoch
   boundaries), fast counters get a visually-hidden announcer throttled
   to quartiles, and terminal banners announce via the existing focus
   move. State chips are polite regions.
-- **Version footer**: every tab ends with one muted 11px line — plugin
+- **Version footer**: every tab ends with one muted 11px line, plugin
   name + version (from `/config` `_meta`) + GitHub/Docs links
   (git-branch glyph; the stroke set carries no brand marks).
 - **Document-title nudge**: "⟳ N% — <title>" while a job runs,
@@ -333,15 +333,15 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   stripped on terminal).
 - **Load order**: the initial `showTab` and all tab-open resolutions
   run in the end-of-script dispatch, after every section's state
-  exists — tab-enter hooks must never run mid-eval.
+  exists; tab-enter hooks must never run mid-eval.
 
 ### Deferred-ledger disposition (v1 close-out)
 
-- Stepper glyph pass — DONE (icon-set SVGs; the filled active dot is
+- Stepper glyph pass: DONE (icon-set SVGs; the filled active dot is
   the one sanctioned `fill`, like the sparkline point).
-- Train/Submit/Status emoji + type/motion/copy retrofit — DONE.
-- `.kg-tab` transition tokenization — DONE (inside the motion gate).
-- File-browse endpoint, recent-paths dropdown — deferred to
+- Train/Submit/Status emoji + type/motion/copy retrofit: DONE.
+- `.kg-tab` transition tokenization: DONE (inside the motion gate).
+- File-browse endpoint, recent-paths dropdown: deferred to
   `docs/v1.1-ideas.md` with reasoning.
 
 ## 12. v1 definition of done
@@ -355,8 +355,8 @@ revisit, full reduced-motion parity); one monochrome 16px stroke icon
 set with zero emoji in rendered UI; copy that informs rather than
 instructs, in participant language, with no em dashes outside logs and
 diagnostics fences; keyboard reachability with visible focus, labeled
-icon buttons, and throttled aria-live progress; and resilience — a
-connection guard that owns network failures and resumes polling without
+icon buttons, and throttled aria-live progress; and resilience, meaning
+a connection guard that owns network failures and resumes polling without
 ever auto-restarting work, Copy-diagnostics on every failure surface
 (version-stamped), friendly degradation for third-party API failures,
 and data that refreshes on tab activation so the UI never needs a
@@ -367,7 +367,7 @@ ships after v1.
 
 The from-scratch rule is retired. The locked contract is now **YOLOv11n
 from the official COCO-pretrained checkpoint (plugin-managed,
-sha256-pinned) at 640px** — identical starting weights for every
+sha256-pinned) at 640px**: identical starting weights for every
 participant; the recorded hash is the proof. Rationale: a ~0.005
 epoch-10 start demoralizes; a ~0.70 start with room to climb keeps the
 competition approachable, and fairness is preserved by pinning the
@@ -389,11 +389,11 @@ Weights-file source: participants get a single Plugin-run source with
 no toggle, and the server rejects direct weights paths from
 non-host machines, so the gate is real, not visual. Legacy
 from-scratch runs render truthfully everywhere ("from-scratch ·
-legacy") and remain predictable/submittable — no data migration.
+legacy") and remain predictable/submittable, with no data migration.
 
 ---
 
-## Appendix — Import-tab reference
+## Appendix: Import-tab reference
 
 ### ?kgdev fixture map
 
@@ -408,7 +408,7 @@ legacy") and remain predictable/submittable — no data migration.
 | `state5` | Failure: val count + GT-leak failed, remediation, Re-run CTA, Copy diagnostics |
 | `state6` | Revisit (form hidden, Start over) |
 
-### ?kgdev fixture map — Train tab
+### ?kgdev fixture map: Train tab
 
 | Value | Renders |
 |---|---|
@@ -421,7 +421,7 @@ legacy") and remain predictable/submittable — no data migration.
 | `train-state5` | Failure: CUDA-OOM banner + Copy diagnostics, epoch 7/50 static, Re-run CTA, form visible |
 | `train-state6` | Revisit summary: form hidden, static strip + provenance, Start new run |
 
-### ?kgdev fixture map — Status tab
+### ?kgdev fixture map: Status tab
 
 | Value | Renders |
 |---|---|
@@ -431,7 +431,7 @@ legacy") and remain predictable/submittable — no data migration.
 | `status-kaggle-live` | Simulated API success: submissions table with public scores, best public, rank |
 | `status-kaggle-403` | Friendly-degradation callout + View leaderboard link + Show details accordion with the raw 403s |
 
-### ?kgdev fixture map — Predict + Submit tab
+### ?kgdev fixture map: Predict + Submit tab
 
 | Value | Renders |
 |---|---|
@@ -452,11 +452,11 @@ legacy") and remain predictable/submittable — no data migration.
 The dev dispatch runs at the END of the fragment script so forced states
 apply after every tab's vars and handlers exist; fixtures re-apply after
 the async config load, and the metric curve is deterministic (no
-randomness — identical screenshots every load).
+randomness, so screenshots are identical every load).
 
 **Fixtures always render the participant experience** (2026-07-24). While
 `?kgdev` is active, host-only affordances stay hidden regardless of the
-live `_meta.host` flag — no fixture opts into host rendering today. Three
+live `_meta.host` flag; no fixture opts into host rendering today. Three
 enforcement points in the fragment: the config-load reveal of
 `ps-src-seg` requires `!kgDevMode` (the markup default is `hidden`, so
 nothing can reveal it in a fixture); `psSetSource` coerces `'weights'` to
@@ -465,14 +465,14 @@ callout can never render in a fixture; and the eager `psLoadRuns()` is
 skipped under `?kgdev`, so the live host's real runs never race a
 fixture's dev runs into the selector. Fixtures never write config
 (`saveTabConfig` fires only on action-button clicks), and a plain load
-without the param takes none of these paths — the host view and saved
+without the param takes none of these paths, so the host view and saved
 config come back untouched.
 
 ### Intentional improvements over the stock Import plugin
 
 - **Pid-stamped stale-job detection**: running records from a dead process
   are proof-of-orphan (hot reloads keep the pid), marked `stale` on read
-  with the decision logged — no timing heuristics, no slow-disk
+  with the decision logged. No timing heuristics, no slow-disk
   misclassification.
 - **Single staged job** instead of stock's three-per-split: the 9 checks are
   cross-split and stay in one job; `run_import` reports stages, the UI
@@ -480,22 +480,23 @@ config come back untouched.
 - **Explicit preflight feedback** (stock silently ignores errors), including
   stat-level unreadable-file counts (half-extracted-kit detection) and
   folder/quote path tolerance.
-- **Continue to Train** actually advances the stepper — no stock analogue.
+- **Continue to Train** actually advances the stepper; stock has no
+  analogue.
 - **GT-leak guard visibility** pre-import (preflight flag) and post-import
   (info callout).
 - **Force re-import with a revision guard**: lineage-walk count in the
   confirm dialog; unknown count always confirms; provably-zero skips.
 - **Connection guard + Copy diagnostics** (stock has neither).
 - **No Insights deep-links**: neither insights plugin reads URL params
-  (verified) — skipped rather than faked.
+  (verified), so the links are skipped rather than faked.
 
 ### Design-fidelity notes (token audit, 2026-07-21)
 
 The Hub's shared CSS lives in the hosted frontend; the fragment-visible
 contract is CSS custom properties + shared class names. No `font-family`
 anywhere in the fragment (matches stock; monospace only via the log `pre`).
-No shared font-size tokens exist — stock hardcodes px (10–14); we use its
-values. Color/radius tokens referenced wherever one exists; fallback
+No shared font-size tokens exist; stock hardcodes px (10 to 14) and we use
+its values. Color/radius tokens referenced wherever one exists; fallback
 literals match stock's own hardcodes (`#d97706`, `#ef4444`, the rgba
 tints). Shared classes relied on: `card*`, `form-*`, `btn*`, `alert*`,
 `badge badge-status-*`, `plugin-progress-*`, `spinner`, `divider`,
