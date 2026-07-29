@@ -30,8 +30,12 @@ source of truth so they can never disagree.
 **Dev affordance**: `?kgdev=<state>` renders each state from static fixtures
 — no fetches, no job side effects; fixtures re-apply after the async config
 load. Import values: `state1`, `state2`, `state2-mismatch`, `state2-error`,
-`state3`, `state4`, `state5`, `state6`. Buttons in forced states are live —
-don't demo-click destructively. New tabs add their own values.
+`state3`, `state4`, `state5`, `state6`. New tabs add their own values.
+Since v1.1.1 fixture pages cannot start real work: the four job-firing
+buttons (Import / Start Training / Run inference / Submit) render disabled
+with a "demo state — actions disabled" note, the ready-recalc functions OR
+in `kgDevMode` so no refetch re-enables them, and their click handlers (plus
+Cancel) return early under `?kgdev` as the hard backstop.
 
 ## 2. Motion
 
@@ -339,8 +343,6 @@ Patterns the Train session added; Submit/Status sessions inherit them.
 - `.kg-tab` transition tokenization — DONE (inside the motion gate).
 - File-browse endpoint, recent-paths dropdown — deferred to
   `docs/v1.1-ideas.md` with reasoning.
-- Post-launch: `gh:github.com:Isha2605` credential removal was
-  recommended after the 2026-07-21 history rewrite (user's call).
 
 ## 12. v1 definition of done
 

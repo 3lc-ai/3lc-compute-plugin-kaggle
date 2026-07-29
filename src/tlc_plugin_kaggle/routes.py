@@ -187,7 +187,7 @@ class KaggleController(Controller):
 
     @post("/train", sync_to_thread=True)
     def start_train(self, data: dict[str, Any]) -> Response:
-        """Start the Train job. Locked server-side: yolo11n.yaml / 640 / no pretrained."""
+        """Start the Train job. Locked server-side: yolo11n.pt (pinned COCO-pretrained init) / 640."""
         from tlc_plugin_kaggle import jobs, trainer
 
         if not isinstance(data, dict):

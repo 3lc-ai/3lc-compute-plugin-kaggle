@@ -100,7 +100,7 @@ all four xywh coords, tolerance 2e-3):
 
 ### 4. Control experiment — same tables, pretrained weights (decisive)
 
-`control_pretrained_sanity.py` (repo root; run name
+`control_pretrained_sanity.py` (competition workspace root, not this repo; run name
 `control_pretrained_DO_NOT_SUBMIT`, 3LC project `control-sanity`) trained
 **COCO-pretrained** `yolo11n.pt` through the *identical* tlc-ultralytics
 path on the *identical* tables — same epochs (10), batch (16), imgsz (640),
@@ -133,8 +133,8 @@ proven end-to-end; the from-scratch number is pure convergence physics.
 
 Calibration points:
 
-- **This repo's own 20-epoch from-scratch baselines** (YOLOv8n,
-  `train_baselines.py`) on five other datasets landed anywhere from mAP50
+- **The competition workspace's 20-epoch from-scratch baselines** (YOLOv8n,
+  `train_baselines.py`, workspace root — not in this repo) on five other datasets landed anywhere from mAP50
   0.04 to 0.93 at epoch 20 depending on dataset difficulty — early
   from-scratch numbers are dominated by dataset hardness, and ExDark
   (low-light, 5.9k train images, 12 classes) is on the hard end.
@@ -151,16 +151,18 @@ Tips page says): a plain from-scratch yolo11n run should land somewhere in
 the **~0.2–0.45 mAP50** band, with data-curation work (the point of the
 competition) pushing beyond that. For reference, a COCO-pretrained yolo11x
 scores 0.640 mAP50 on this test set with no ExDark training at all — that
-ceiling is why `pretrained=False` is locked: it keeps the leaderboard about
-the data work, not checkpoint shopping.
+ceiling is why `pretrained=False` was locked under the retired rule: it kept
+the leaderboard about the data work, not checkpoint shopping. (The current
+contract achieves the same fairness by pinning one checkpoint for everyone.)
 
 So: **10 epochs ≈ 0.004 is on-curve.** 50–150 epochs lands a respectable
 score; nobody should calibrate prize expectations (or file bug reports) on a
 sub-20-epoch run.
 
-## UI consequence
+## UI consequence (historical — removed with the contract change)
 
-The Train tab now sets this expectation in two places (added 2026-07-22):
+The Train tab briefly set this expectation in two places (added 2026-07-22,
+removed the same day when the pinned-pretrained contract landed):
 
 - A static line under **Epochs**: from-scratch runs score near-zero mAP50
   for the first ~10–20 epochs by design.
@@ -172,7 +174,8 @@ The Train tab now sets this expectation in two places (added 2026-07-22):
 1. Open `runs\kaggle-plugin\<run>\train_batch0.jpg` and
    `val_batch0_labels.jpg` — boxes should sit on objects with sensible names.
 2. Plot `results.csv` — losses should fall monotonically, recall rise.
-3. Run `control_pretrained_sanity.py` for the pretrained control. (Under
+3. Run `control_pretrained_sanity.py` (competition workspace root) for the
+   pretrained control. (Under
    the 2026-07-22 contract this is simply what a plugin run does — but
    still never submit its outputs directly: submissions must come from
    plugin-trained runs with recorded provenance.)

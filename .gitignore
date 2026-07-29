@@ -8,3 +8,7 @@ __pycache__/
 *.zip
 scratch/
 *.pt
+*.csv
+*.log
+*.tmp
+/*.js
