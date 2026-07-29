@@ -28,7 +28,7 @@ class KagglePlugin(ComputePlugin):
         "(YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit. "
         "The whole competition loop without leaving the Hub."
     )
-    version = "1.1.0"
+    version = "1.1.1"
     min_service_version = "0.1.0"
     icon = "🏁"  # host fallback when icon_svg is unsupported
     # Same flag as the fragment's header identity icon (16px grid, 1.5px
