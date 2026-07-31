@@ -501,3 +501,50 @@ tints). Shared classes relied on: `card*`, `form-*`, `btn*`, `alert*`,
 `badge badge-status-*`, `plugin-progress-*`, `spinner`, `divider`,
 `plugin-section-number`. Copied component CSS (not importable from stock's
 fragment): `.format-selected-banner` geometry, `guide-pulse` keyframes.
+
+---
+
+## 0.2.x worker model — what replaces the reload loop (port/0.2.x)
+
+The v1.1.x dev loop was: edit -> POST /api/admin/plugins/kaggle/reload (JWT'd,
+so via the Hub page) -> hard-refresh; NEW ROUTES needed a full service
+restart. On the 0.2.x host the plugin runs OUT-OF-PROCESS: the host spawns
+`<plugin venv>\python -m tlc_plugin_sdk.worker --entry tlc_plugin_kaggle:KagglePlugin`
+and reverse-proxies /api/plugins/kaggle/* to it (reserved paths /ui /compute
+/run /jobs/{id}/run /jobs/{id}/cancel are host-owned and match first).
+
+The new loop:
+
+1. Edit code under src/tlc_plugin_kaggle/ (folder-source registration points
+   at the source tree; the provisioned venv imports it from there).
+2. POST /api/admin/plugins/kaggle/reload (Hub Plugins page reload button) —
+   on 0.2.x this KILLS THE WORKER; the next request respawns it against the
+   current source. Routes live in OUR worker app now, so **new/renamed routes
+   need only this worker restart — never a service restart** (the host
+   catch-all proxies any subpath).
+3. Hard-refresh the Hub page for ui.html changes (fragment still cached by
+   the browser, same as before).
+
+Notes:
+- A worker restart wipes in-memory job state; the disk store
+  (~/.3lc-kaggle-plugin/jobs) + the pid stamp mark interrupted jobs stale on
+  next read — same semantics as a service restart used to have. Don't reload
+  mid-train.
+- ui.html is read once per worker process (get_ui_fragment caches); a worker
+  restart also picks up fragment edits.
+- Dependency changes (pyproject [kaggle] extra) need a re-provision of the
+  plugin venv: Plugins page -> the plugin's venv panel -> Rebuild (or
+  POST /api/plugins/kaggle/provision?force=true), then reload.
+
+## Job start contract change (0.2.x)
+
+Starts go through TWO calls now (see kgStartJob in ui.html): our
+/validate/<kind> (keeps the fail-fast 400 + participant-facing message —
+the host /run is fire-and-return and reports param problems only as failed
+jobs) then the host's /api/plugins/kaggle/run with {kind, ...params}. The
+/run job_id IS our store's record id, so all status polling, reconnect,
+freshness, and Status-tab history logic is unchanged. Cancel goes to the
+host: POST /api/plugins/jobs/{job_id}/cancel (our old custom cancel route
+collides with the SDK worker's reserved path and was removed); host cancel
+sets ctx.cancelled, which our JobCtx.is_cancelled() unions with the on-disk
+flag, so pre-port records started under v1.1.x still cancel from disk.

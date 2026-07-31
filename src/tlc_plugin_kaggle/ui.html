@@ -1119,6 +1119,40 @@
       var dashboardUrl = API ? API.getConfig('dashboard_url') : '';
       var pollTimer = null;
 
+      // ── Job start (0.2.x host dispatch) ────────────────────────────
+      // Two steps: our /validate/<kind> keeps the fail-fast form errors
+      // (400 + participant-facing message), then the HOST's /run starts
+      // the job through the dispatch channel (Queue panel, host cancel,
+      // worker keep-alive). Resolves {ok, body} with body.job_id — the
+      // status polling on our custom routes is unchanged (the record id
+      // IS the host job id).
+      function kgStartJob(kind, params) {
+        var validatePath = '/api/plugins/kaggle/validate/' +
+          (kind === 'kaggle_submit' ? 'submit' : kind);
+        return API.authFetch(computeUrl + validatePath, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params)
+        }).then(function (r) {
+          return r.json().then(function (b) {
+            if (!r.ok || b.error) { throw new Error(b.error || 'validation failed'); }
+            var runBody = Object.assign({ kind: kind }, b.params || params);
+            return API.authFetch(computeUrl + '/api/plugins/kaggle/run', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(runBody)
+            });
+          });
+        }).then(function (r) {
+          return r.json().then(function (b) {
+            if (r.ok && !b.job_id && b.provisioning) {
+              throw new Error('The plugin worker is still provisioning its environment — try again in a minute.');
+            }
+            return { ok: r.ok, body: b };
+          });
+        });
+      }
+
       var el = function (id) { return document.getElementById(id); };
 
       // ── Tabs: the tab bar is the pipeline stepper ──────────────────
@@ -2380,17 +2414,12 @@
         el('kg-checks').innerHTML = '';
         el('kg-result').innerHTML = '';
         kgLogReset();
-        API.authFetch(computeUrl + '/api/plugins/kaggle/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            dataset_yaml: yaml,
-            project_name: project,
-            table_name: table,
-            force_splits: forceSplits || []
-          })
+        kgStartJob('import', {
+          dataset_yaml: yaml,
+          project_name: project,
+          table_name: table,
+          force_splits: forceSplits || []
         })
-          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
           .then(function (res) {
             if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
             kgLastJobId = res.body.job_id;
@@ -3850,12 +3879,7 @@
         el('tr-checks').innerHTML = '';
         el('tr-result').innerHTML = '';
         trLogReset();
-        API.authFetch(computeUrl + '/api/plugins/kaggle/train', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        })
-          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+        kgStartJob('train', body)
           .then(function (res) {
             if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
             trainJobId = res.body.job_id;
@@ -3883,7 +3907,7 @@
         // the Run is marked cancelled — confirm before asking for it.
         if (!window.confirm('Stop this training run? It stops at the next checkpoint; ' +
                             'epochs completed so far are kept.')) { return; }
-        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + trainJobId + '/cancel', { method: 'POST' })
+        API.authFetch(computeUrl + '/api/plugins/jobs/' + trainJobId + '/cancel', { method: 'POST' })
           .then(function () { el('tr-state').textContent = 'Cancelling… (stops at the next checkpoint)'; })
           .catch(function () {});
       });
@@ -4463,12 +4487,7 @@
         el('ps-state').textContent = 'Starting…';
         el('ps1-banner').innerHTML = '';
         el('ps-banner').innerHTML = '';
-        API.authFetch(computeUrl + '/api/plugins/kaggle/predict', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        })
-          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+        kgStartJob('predict', body)
           .then(function (res) {
             if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
             psPredictJobId = res.body.job_id;
@@ -4705,16 +4724,11 @@
         el('ps-submit-spinner').style.display = 'inline-block';
         el('ps-submit-state').textContent = 'Starting…';
         el('ps-banner').innerHTML = '';
-        API.authFetch(computeUrl + '/api/plugins/kaggle/submit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            predict_job_id: psBasis.job_id,
-            message: el('ps-message').value.trim(),
-            competition_slug: el('ps-slug').value.trim()
-          })
+        kgStartJob('kaggle_submit', {
+          predict_job_id: psBasis.job_id,
+          message: el('ps-message').value.trim(),
+          competition_slug: el('ps-slug').value.trim()
         })
-          .then(function (r) { return r.json().then(function (b2) { return { ok: r.ok, body: b2 }; }); })
           .then(function (res) {
             if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
             psSubmitJobId = res.body.job_id;

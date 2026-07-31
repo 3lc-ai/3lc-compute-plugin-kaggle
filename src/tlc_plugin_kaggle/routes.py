@@ -1,9 +1,14 @@
-"""REST routes for the Kaggle plugin.
+"""REST routes for the Kaggle plugin (0.2.x worker app).
 
-Mounted once at service startup (installed host collects controllers only in
-create_app) — adding/renaming routes here requires a compute-service restart;
-changing handler BODIES only needs a plugin reload because the implementation
-is lazy-imported per request.
+Paths are RELATIVE: the SDK worker serves this controller in the plugin's own
+Litestar app, and the host proxies /api/plugins/kaggle/<subpath> -> /<subpath>
+via its catch-all — so client-side URLs are unchanged from v1.1.x. Adding or
+renaming routes needs only a worker restart (plugin reload), never a service
+restart. Reserved paths the HOST owns ahead of the proxy: /ui, /compute, /run,
+POST /jobs/{id}/run, POST /jobs/{id}/cancel — job START and CANCEL therefore
+go through the host dispatch channel; the /validate/<kind> handlers below keep
+the fail-fast form UX (400 + participant-facing message) that /run's
+fire-and-return contract does not provide.
 """
 
 from __future__ import annotations
@@ -64,18 +69,7 @@ def _resolve_predict_params(data: Any) -> tuple[dict[str, Any] | None, Response 
 class KaggleController(Controller):
     """Kaggle competition workflow endpoints."""
 
-    path = "/api/plugins/kaggle"
-
-    # This controller shadows the generic wildcard routes for our prefix, so
-    # /ui must be re-exposed explicitly (see ComputePlugin.get_route_handlers
-    # docstring on route shadowing).
-    @get("/ui", media_type="text/html")
-    async def ui(self) -> Response:
-        from tlc_compute.plugins.registry import get_plugin
-
-        plugin = get_plugin("kaggle")
-        html = plugin.get_ui_fragment() if plugin else ""
-        return Response(content=html, media_type="text/html", headers={"Cache-Control": "no-store"})
+    path = ""
 
     @get("/import/preflight", sync_to_thread=True)
     def import_preflight(self, yaml_path: str = "") -> dict[str, Any]:
@@ -92,10 +86,12 @@ class KaggleController(Controller):
         except Exception as exc:
             return {"error": f"{type(exc).__name__}: {exc}"}
 
-    @post("/import", sync_to_thread=True)
-    def start_import(self, data: dict[str, Any]) -> Response:
-        """Start the Import job. Body: {dataset_yaml, project_name?, table_name?}."""
-        from tlc_plugin_kaggle import importer, jobs
+    @post("/validate/import", sync_to_thread=True)
+    def validate_import(self, data: dict[str, Any]) -> Response:
+        """Fail-fast validation for the Import job; the UI then POSTs the
+        returned params (plus kind) to the host's /api/plugins/kaggle/run.
+        Body: {dataset_yaml, project_name?, table_name?}."""
+        from tlc_plugin_kaggle import importer
 
         if not isinstance(data, dict) or not str(data.get("dataset_yaml", "")).strip():
             return Response(
@@ -124,8 +120,7 @@ class KaggleController(Controller):
             "table_name": str(data.get("table_name") or "initial").strip(),
             "force_splits": [s for s in (str(x) for x in raw_force) if s in importer.SPLITS],
         }
-        job_id = jobs.start_job("import", params, importer.run_import)
-        return Response(content={"job_id": job_id}, status_code=200)
+        return Response(content={"ok": True, "params": params}, status_code=200)
 
     @get("/import/state", sync_to_thread=True)
     def import_state(self) -> dict[str, Any]:
@@ -159,15 +154,6 @@ class KaggleController(Controller):
             raise NotFoundException(detail=f"No such job: {job_id}")
         return job
 
-    @post("/jobs/{job_id:str}/cancel", sync_to_thread=True)
-    def cancel_job(self, job_id: str) -> dict[str, Any]:
-        from tlc_plugin_kaggle import jobs
-
-        job = jobs.cancel_job(job_id)
-        if job is None:
-            raise NotFoundException(detail=f"No such job: {job_id}")
-        return {"cancelled": True, "job_id": job_id, "status": job.get("status")}
-
     @get("/jobs")
     async def jobs_list(self, kind: str = "") -> list[dict[str, Any]]:
         from tlc_plugin_kaggle import jobs
@@ -177,18 +163,19 @@ class KaggleController(Controller):
     @get("/tables/defaults", sync_to_thread=True)
     def table_defaults(self, project: str = "exdark-competition", table: str = "initial") -> dict[str, Any]:
         """Canonical table URLs for the pickers' defaults, with exists flags."""
-        import tlc
+        from tlc_plugin_kaggle import importer
 
         out: dict[str, Any] = {"project": project}
         for split in ("train", "val", "test"):
-            url = tlc.Url.create_table_url(table, f"exdark_{split}", project)
+            url = importer._table_url(table, f"exdark_{split}", project)
             out[split] = {"url": str(url), "exists": url.exists()}
         return out
 
-    @post("/train", sync_to_thread=True)
-    def start_train(self, data: dict[str, Any]) -> Response:
-        """Start the Train job. Locked server-side: yolo11n.pt (pinned COCO-pretrained init) / 640."""
-        from tlc_plugin_kaggle import jobs, trainer
+    @post("/validate/train", sync_to_thread=True)
+    def validate_train(self, data: dict[str, Any]) -> Response:
+        """Fail-fast validation for the Train job (locked server-side:
+        yolo11n.pt pinned COCO-pretrained init / 640); UI then POSTs /run."""
+        from tlc_plugin_kaggle import trainer
 
         if not isinstance(data, dict):
             return Response(content={"error": "Body must be a JSON object"}, status_code=HTTP_400_BAD_REQUEST)
@@ -210,8 +197,7 @@ class KaggleController(Controller):
         except ValueError as exc:
             return Response(content={"error": str(exc)}, status_code=HTTP_400_BAD_REQUEST)
 
-        job_id = jobs.start_job("train", dict(data), trainer.run_training)
-        return Response(content={"job_id": job_id}, status_code=200)
+        return Response(content={"ok": True, "params": dict(data)}, status_code=200)
 
     @get("/runs", sync_to_thread=True)
     def list_runs(self) -> list[dict[str, Any]]:
@@ -278,42 +264,28 @@ class KaggleController(Controller):
             )
         return out
 
-    @post("/predict_submit", sync_to_thread=True)
-    def start_predict_submit(self, data: dict[str, Any]) -> Response:
-        """Legacy single-job flow (predict + optional submit). The two-step
-        UI uses /predict and /submit instead."""
-        from tlc_plugin_kaggle import jobs, predictor
-
-        params, err = _resolve_predict_params(data)
-        if err is not None:
-            return err
-        job_id = jobs.start_job("predict_submit", params, predictor.run_predict_submit)
-        return Response(content={"job_id": job_id}, status_code=200)
-
-    @post("/predict", sync_to_thread=True)
-    def start_predict(self, data: dict[str, Any]) -> Response:
-        """Step-1 job: inference -> CSV -> validation -> sanity -> local
-        score. Free and repeatable; never touches Kaggle.
+    @post("/validate/predict", sync_to_thread=True)
+    def validate_predict(self, data: dict[str, Any]) -> Response:
+        """Fail-fast validation for the predict job (step 1: inference ->
+        CSV -> validation -> sanity -> local score); UI then POSTs /run.
 
         Body: {train_job_id? | weights_path?, test_table_url, conf?, device?}
         """
-        from tlc_plugin_kaggle import jobs, predictor
-
         params, err = _resolve_predict_params(data)
         if err is not None:
             return err
-        job_id = jobs.start_job("predict", params, predictor.run_predict)
-        return Response(content={"job_id": job_id}, status_code=200)
+        return Response(content={"ok": True, "params": params}, status_code=200)
 
-    @post("/submit", sync_to_thread=True)
-    def start_submit(self, data: dict[str, Any]) -> Response:
-        """Step-2 job: upload a prior predict job's validated CSV to Kaggle.
+    @post("/validate/submit", sync_to_thread=True)
+    def validate_submit(self, data: dict[str, Any]) -> Response:
+        """Fail-fast validation for the Kaggle-submit job (step 2: upload a
+        prior predict job's validated CSV); UI then POSTs /run.
 
         Body: {predict_job_id, message?, competition_slug?}
         """
         from pathlib import Path
 
-        from tlc_plugin_kaggle import jobs, predictor
+        from tlc_plugin_kaggle import jobs
 
         if not isinstance(data, dict) or not str(data.get("predict_job_id", "")).strip():
             return Response(
@@ -329,8 +301,7 @@ class KaggleController(Controller):
                 content={"error": "No validated prediction CSV found for that job. Run inference first."},
                 status_code=HTTP_400_BAD_REQUEST,
             )
-        job_id = jobs.start_job("kaggle_submit", dict(data), predictor.run_kaggle_submit)
-        return Response(content={"job_id": job_id}, status_code=200)
+        return Response(content={"ok": True, "params": dict(data)}, status_code=200)
 
     @get("/submit/state", sync_to_thread=True)
     def submit_state(self) -> dict[str, Any]:
@@ -394,12 +365,13 @@ class KaggleController(Controller):
         """Last-used form values per tab (re-runs become one click), plus a
         _meta block (version, repository) the fragment renders in the
         footer and stamps into diagnostics."""
-        from tlc_plugin_kaggle import KagglePlugin, config_store, predictor
+        import tlc_plugin_kaggle
+        from tlc_plugin_kaggle import config_store, predictor
 
         out = config_store.load()
         out["_meta"] = {
-            "version": KagglePlugin.version,
-            "repository_url": KagglePlugin.repository_url,
+            "version": tlc_plugin_kaggle.__version__,
+            "repository_url": tlc_plugin_kaggle.REPOSITORY_URL,
             # Host machines (metric + solution on disk) get host-only UI:
             # the direct weights-file source and local scores.
             "host": predictor.is_host(),

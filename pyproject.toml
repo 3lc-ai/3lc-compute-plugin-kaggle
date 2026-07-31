@@ -1,24 +1,44 @@
 [project]
 name = "3lc-compute-plugin-kaggle"
-version = "1.1.1"
+version = "1.2.0"
 description = "End-to-end Kaggle competition workflow for the 3LC Hub: import, train the fixed baseline, predict, submit."
 requires-python = ">=3.10"
-# Installed host (tlc_compute 0.1.1.47) imports in-process: deps must already
-# exist in the host venv. No SDK dependency yet — the installed host has no
-# tlc_plugin_sdk; the ComputePlugin base comes from tlc_compute itself.
-dependencies = []
+# Base = the SDK floor ONLY (the yolo-0.1.3 umbrella pattern). The heavy stack
+# rides the [kaggle] extra below and is installed only into the plugin's
+# provisioned venv. [shared] = the SDK's optional `tlc` data plane.
+dependencies = [
+    "3lc-compute-plugin-sdk[shared]>=0.1.0,<0.2.0",
+]
 
-# ── New-host manifest ──────────────────────────────────────────────────────
-# The installed host (0.1.1.47) NEVER reads this table — its manifest is the
-# class attributes on KagglePlugin in src/tlc_plugin_kaggle/__init__.py.
-# This table is kept in sync by hand for the future catalog/venv host
-# (see docs/deployment-guide.md appendix).
+# The plugin's heavy stack — installed ONLY into the provisioned venv
+# (uv sync --extra kaggle, or 3lc-compute-plugin-kaggle[kaggle]==<ver> from a
+# catalog install). Named by runtime.provision_extra in plugin.toml.
+[project.optional-dependencies]
+kaggle = [
+    "3lc-ultralytics>=0.3.3",
+    "torch",
+    "torchvision",
+    # Settings exposes pacmap/umap embedding reducers; union with [shared]'s
+    # 3lc[pandas] yields 3lc[pandas,pacmap,umap] in the venv (yolo pattern).
+    "3lc[pacmap,umap]>=3.0.0,<4.0.0",
+    # Kaggle API client for entered-check, submission upload, and status.
+    "kaggle>=2.2.3,<3",
+]
+
+# Advertised for the installed-package / catalog discovery path. Value = the
+# import package; its bundled plugin.toml drives id/ui/runtime + the extra.
+[project.entry-points."tlc_compute.plugins"]
+kaggle = "tlc_plugin_kaggle"
+
+# ── Legacy-host manifest (tlc_compute 0.1.x reads class attrs, never this;
+# the 0.2.x host reads src/tlc_plugin_kaggle/plugin.toml, which wins over
+# this table. Kept in sync as documentation of record.) ─────────────────────
 [tool.tlc-compute]
 id = "kaggle"
 name = "Kaggle Competition"
 description = "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit."
-version = "1.1.1"
-min_service_version = "0.1.0"
+version = "1.2.0"
+min_service_version = "0.2.0"
 icon = "🏁"
 repository_url = "https://github.com/3lc-ai/3lc-compute-plugin-kaggle"
 
@@ -36,5 +56,38 @@ provision_extra = "kaggle"
 requires_gpu = true
 training = true
 
-[project.entry-points."tlc_compute.plugins"]
-kaggle = "tlc_plugin_kaggle"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tlc_plugin_kaggle"]
+
+# torch/torchvision from the CUDA 12.8 index on Linux AND Windows — used only
+# when the [kaggle] extra is selected during folder-source venv provisioning
+# (uv sync). Windows needs the explicit index because default-PyPI torch on
+# Windows is CPU-only. macOS falls through to PyPI (no CUDA there).
+# FORCED CHANGE vs the yolo-0.1.3 pattern it copies: cu128, not cu126 —
+# Blackwell GPUs (sm_120, e.g. RTX 5070 Ti) are not supported by cu126 wheels;
+# cu128 wheels run older architectures too. See docs/forced-changes-0.2.md.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+# 3lc releases index — 3lc versions not yet on public PyPI.
+[[tool.uv.index]]
+name = "3lc-releases"
+url = "https://pypi.3lc.ai/public/repositories/releases-public"
+explicit = true
+
+[[tool.uv.index]]
+name = "3lc-prereleases"
+url = "https://pypi.3lc.ai/public/repositories/prereleases-public"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }
+torchvision = { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }
+"3lc" = { index = "3lc-releases" }
+3lc-compute-plugin-sdk = { index = "3lc-prereleases" }

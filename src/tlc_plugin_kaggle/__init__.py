@@ -3,48 +3,27 @@
 Tabbed workflow: Import / Train / Submit / Status — the tab bar doubles as
 the pipeline stepper. All four tabs are functional end-to-end.
 
-Installed-host (tlc_compute 0.1.1.47) plugin: the manifest is these class
-attributes — the [tool.tlc-compute] table in pyproject.toml is a hand-synced
-copy for the future catalog/venv host and is never read by this host.
+0.2.x-host (SDK) plugin: behavior-only. The manifest lives in plugin.toml
+(read import-free by the host); this class subclasses the SDK's ComputePlugin
+and runs out-of-process in the plugin's own provisioned venv (see
+docs/ui-notes.md for the worker-model dev loop). Long jobs run through
+``run_job`` (the host dispatch channel) so they appear in the Hub's generic
+Queue panel, honour host-side cancel, and keep the worker touched for the
+supervisor's (future) idle reaper; the disk-backed job store in jobs.py stays
+the source of truth the tabs poll.
 """
 
 from pathlib import Path
 from typing import Any
 
-from tlc_compute.plugins.base import ComputePlugin, _ICON_SVG
-from tlc_compute.plugins.registry import register
+from tlc_plugin_sdk import ComputePlugin, JobContext
+
+__version__ = "1.2.0"
+REPOSITORY_URL = "https://github.com/3lc-ai/3lc-compute-plugin-kaggle"
 
 
 class KagglePlugin(ComputePlugin):
-    id = "kaggle"
-    # Sidebar identity: one line at sidebar width ("Kaggle Competition"
-    # wrapped over two lines next to one-word siblings). The full name
-    # leads the description (the only hover-text candidate the manifest
-    # offers — there is no dedicated tooltip field); the card header
-    # inside the fragment keeps "Kaggle Competition".
-    name = "Kaggle"
-    description = (
-        "Kaggle Competition: import the dataset, train the fixed baseline "
-        "(YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit. "
-        "The whole competition loop without leaving the Hub."
-    )
-    version = "1.1.1"
-    min_service_version = "0.1.0"
-    icon = "🏁"  # host fallback when icon_svg is unsupported
-    # Same flag as the fragment's header identity icon (16px grid, 1.5px
-    # stroke, currentColor) — two strokes only, stays crisp at 16px.
-    icon_svg = _ICON_SVG + '><path d="M3.5 14V2.5"/><path d="M3.5 3h8.5l-1.8 2.5L12 8H3.5"/></svg>'
-    display_mode = "sidebar"
-    section = "AI Tools"
-    priority = 40
-    compatible_with = ["table"]
-    output_types = ["run"]
-    repository_url = "https://github.com/3lc-ai/3lc-compute-plugin-kaggle"
-    # Import is CPU-only; training (session 2) will move long GPU work onto the
-    # shared GPU queue rather than flipping this flag, so the Import card stays
-    # usable while other GPU plugins run.
-    requires_gpu = False
-    training = True
+    """Behavior class named by plugin.toml's runtime.entrypoint."""
 
     _ui_cache: str | None = None
 
@@ -57,8 +36,8 @@ class KagglePlugin(ComputePlugin):
     def compute(self, params: dict[str, Any]) -> dict[str, Any]:
         """Generic info endpoint — real work goes through the custom routes."""
         return {
-            "plugin": self.id,
-            "version": self.version,
+            "plugin": "kaggle",
+            "version": __version__,
             "tabs": ["import", "train", "submit", "status"],
             "implemented": ["import", "train", "predict_submit", "status"],
         }
@@ -68,10 +47,27 @@ class KagglePlugin(ComputePlugin):
 
         return [KaggleController]
 
-    def get_active_jobs(self, project_name: str = "") -> list[dict[str, Any]]:
-        from tlc_plugin_kaggle.jobs import active_jobs_generic
+    def run_job(self, ctx: JobContext) -> None:
+        """Host-dispatched job entry (POST /api/plugins/kaggle/run).
 
-        return active_jobs_generic(project_name)
+        ``ctx.params`` carries ``{"kind": "import" | "train" | "predict" |
+        "kaggle_submit" | "predict_submit", ...job params}``. The job runs
+        synchronously on the worker's dispatch thread; jobs.run_dispatch
+        bridges our disk-backed store (which the tabs poll) to the ctx event
+        stream (which feeds the Queue panel and keeps the worker alive).
+        """
+        from tlc_plugin_kaggle import importer, jobs, predictor, trainer
 
-
-register(KagglePlugin())
+        targets = {
+            "import": importer.run_import,
+            "train": trainer.run_training,
+            "predict": predictor.run_predict,
+            "kaggle_submit": predictor.run_kaggle_submit,
+            "predict_submit": predictor.run_predict_submit,
+        }
+        kind = str(ctx.params.get("kind", "")).strip()
+        target = targets.get(kind)
+        if target is None:
+            msg = f"Unknown job kind: {kind!r}. Expected one of {sorted(targets)}."
+            raise ValueError(msg)
+        jobs.run_dispatch(kind, dict(ctx.params), target, ctx)

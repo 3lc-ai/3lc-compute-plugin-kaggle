@@ -1,38 +1,45 @@
 """Import card backend: competition dataset -> three 3LC tables + validation.
 
-Import mechanism (decided empirically against tlc 2.22.3.1, 2026-07-20):
+Import mechanism (decided empirically against tlc 2.22.3.1 on 2026-07-20;
+re-verified against tlc 3.1.0 in the Phase-1 port spike, 2026-07-31 —
+3lc-hub-next/spike/PHASE1_VERDICT.md):
 
-* train / val: ``tlc.Table.from_yolo`` on the participant's dataset.yaml, one
-  call per split, dataset names ``exdark_train`` / ``exdark_val``.
+* train / val: ``tlc.Table.from_yolo_url`` on each split's images directory
+  (3.x removed ``from_yolo``; the yaml parsing this module already does now
+  feeds images_url + categories directly), dataset names ``exdark_train`` /
+  ``exdark_val``.
 
 * test: the competition test split is images-only BY DESIGN (hidden GT).
-  Probed behavior that drives the mechanism choice:
-    - ``from_yolo`` on a genuinely labels-less split works fine: 715 rows,
-      one per image, empty ``bb_list``, same schema as train/val. So on a
-      participant machine (no test labels) from_yolo IS the primary path —
-      no fallback needed.
-    - BUT both ``from_yolo`` and ``from_yolo_url`` (folder or images.txt
-      input) auto-discover label files by the YOLO path convention
-      (images/... -> labels/...). If test label files exist locally — the
-      organizer machine has them; a participant might have strays — the
-      hidden GT would silently leak into the test table.
-  Therefore: if the test split has NO label files on disk, use from_yolo
-  (primary). If label files ARE present, skip the from_yolo* family entirely
-  and build the table with ``tlc.TableWriter`` from the sorted image list —
-  an images-only table by construction (fallback). Either way a post-import
-  guard fails the job if the test table contains any boxes.
+  Probed behavior that drives the mechanism choice (re-proven on 3.1.0):
+    - ``from_yolo_url`` on a genuinely labels-less split works fine: one row
+      per image, zero instances, same schema as train/val. So on a
+      participant machine (no test labels) it IS the primary path.
+    - BUT ``from_yolo_url`` auto-discovers label files by the YOLO path
+      convention (images/... -> labels/...). If test label files exist
+      locally — the organizer machine has them; a participant might have
+      strays — the hidden GT would silently leak into the test table.
+  Therefore: if the test split has NO label files on disk, use from_yolo_url
+  (primary). If label files ARE present, skip it entirely and build the table
+  with ``tlc.TableWriter`` from the sorted image list — an images-only table
+  by construction (fallback). Either way a post-import guard fails the job if
+  the test table contains any boxes.
 
-* collisions: ``from_yolo(if_exists="reuse")`` (the SDK default) returns the
-  existing table for an identical (project, dataset, table) triple — verified:
-  the second call returns the same URL, no duplicate revision. We detect
-  "existed before" via ``Url.create_table_url(...).exists()`` and report
-  "reused" instead of "created". Reuse can serve a STALE table if the data on
-  disk changed after the first import, so validation always runs on the
-  returned table — a stale table that no longer matches the competition
-  counts fails the job rather than passing silently.
+* collisions: ``from_yolo_url(if_exists="reuse")`` (the SDK default) returns
+  the existing table for an identical (project, dataset, table) triple —
+  verified on 3.1.0: the second call returns the same URL, no duplicate
+  revision. We detect "existed before" via a constructed table URL's
+  ``.exists()`` (3.x removed ``Url.create_table_url``; ``_table_url`` below
+  rebuilds the deterministic layout from the configured project root). Reuse
+  can serve a STALE table if the data on disk changed after the first import,
+  so validation always runs on the returned table.
+
+* 3.x row shape: boxes live at ``bbs.instances[*].bbs_2d`` (absolute XYXY)
+  with labels in the parallel ``bbs.instances_additional_data.label`` list —
+  the 2.x ``bbs.bb_list`` is gone. Box counting and the value-map path below
+  follow the new shape.
 
 All heavy imports are inside functions: keeps plugin import cheap and makes
-hot reload pick up changes (handlers resolve this module lazily).
+worker restarts pick up changes (handlers resolve this module lazily).
 """
 
 from __future__ import annotations
@@ -172,7 +179,7 @@ def _plugin_version() -> str:
     try:
         from tlc_plugin_kaggle import KagglePlugin
 
-        return str(KagglePlugin.version)
+        return str(__import__("tlc_plugin_kaggle").__version__)
     except Exception:
         return "unknown"
 
@@ -203,20 +210,55 @@ def _list_images(images_dir: Path) -> list[Path]:
     )
 
 
+def _project_root_url() -> str:
+    """The configured 3LC project root (explicit config value, else default).
+
+    3.x note: there is no public names->URL builder (Url.create_table_url is
+    gone) and ROOT_URL's config default is computed lazily, so this falls back
+    to tlcconfig's private default helper. Flagged upstream — swap to the
+    public accessor when one exists.
+    """
+    import tlcconfig.options as tlc_options
+    import tlcconfig.store as tlc_store
+
+    val = tlc_store.ConfigStore.instance().get(tlc_options.ROOT_URL)
+    if val:
+        return str(val)
+    return str(tlc_options._get_default_root_url())
+
+
+def _table_url(table_name: str, dataset_name: str, project: str) -> Any:
+    """Deterministic table URL (the 2.x Url.create_table_url layout), 3.x-built.
+
+    Same argument order as the removed helper so call sites read unchanged:
+    ``.../projects/<project>/datasets/<dataset>/tables/<table>``.
+    """
+    import tlc
+
+    return tlc.Url(_project_root_url()) / project / "datasets" / dataset_name / "tables" / table_name
+
+
+def _categories(info: dict[str, Any]) -> dict[int, str]:
+    """from_yolo_url's categories mapping from the parsed yaml class list."""
+    return {i: name for i, name in enumerate(info["class_names"])}
+
+
 def _value_map_labels(table: Any) -> list[str]:
-    """Class names from a table's bbs value map, in index order."""
-    vm = table.get_value_map("bbs.bb_list.label") or {}
+    """Class names from a table's bbs value map, in index order (3.x path)."""
+    vm = table.get_value_map("bbs.instances_additional_data.label") or {}
     out: list[str] = []
     for key in sorted(vm, key=float):
         v = vm[key]
-        out.append(getattr(v, "internal_name", None) or str(v))
+        name = v.get("internal_name") if isinstance(v, dict) else getattr(v, "internal_name", None)
+        out.append(name or str(v))
     return out
 
 
 def _count_boxes(table: Any) -> int:
+    """Instance count across the table (3.x: one instance = one box)."""
     total = 0
     for i in range(table.row_count):
-        total += len(table.table_rows[i]["bbs"]["bb_list"])
+        total += len(table.table_rows[i]["bbs"]["instances"])
     return total
 
 
@@ -235,11 +277,11 @@ def _import_labeled_split(
     """
     import tlc
 
-    url = tlc.Url.create_table_url(table_name, f"{DATASET_PREFIX}_{split}", project)
+    url = _table_url(table_name, f"{DATASET_PREFIX}_{split}", project)
     reused = url.exists() and not force
-    table = tlc.Table.from_yolo(
-        dataset_yaml_file=info["yaml_path"],
-        split=split,
+    table = tlc.Table.from_yolo_url(
+        info["splits"][split].as_posix(),
+        categories=_categories(info),
         task="detect",
         project_name=project,
         dataset_name=f"{DATASET_PREFIX}_{split}",
@@ -256,7 +298,7 @@ def _import_test_split(
     import tlc
 
     dataset_name = f"{DATASET_PREFIX}_test"
-    url = tlc.Url.create_table_url(table_name, dataset_name, project)
+    url = _table_url(table_name, dataset_name, project)
     if url.exists() and not force:
         # Reuse — validation (row count, zero boxes, unique stems) still runs
         # on the reused table, so a stale or GT-leaked table cannot pass.
@@ -264,23 +306,23 @@ def _import_test_split(
 
     images_dir = info["splits"]["test"]
     if not _split_has_label_files(images_dir):
-        # Primary path (the participant reality): from_yolo tolerates a
-        # labels-less split — 715 rows, empty bb_list, schema-consistent
-        # with train/val. Verified empirically on tlc 2.22.3.1.
-        log("test: no label files on disk — importing via Table.from_yolo (primary path)")
-        table = tlc.Table.from_yolo(
-            dataset_yaml_file=info["yaml_path"],
-            split="test",
+        # Primary path (the participant reality): from_yolo_url tolerates a
+        # labels-less split — one row per image, zero instances,
+        # schema-consistent with train/val. Verified on tlc 2.22.3.1 AND 3.1.0.
+        log("test: no label files on disk — importing via Table.from_yolo_url (primary path)")
+        table = tlc.Table.from_yolo_url(
+            images_dir.as_posix(),
+            categories=_categories(info),
             task="detect",
             project_name=project,
             dataset_name=dataset_name,
             table_name=table_name,
             if_exists="overwrite" if force else "reuse",
         )
-        return table, False, "from_yolo-labelless"
+        return table, False, "from_yolo_url-labelless"
 
     # Fallback: label files exist for test (organizer machine / strays).
-    # from_yolo AND from_yolo_url would auto-discover them (verified) and leak
+    # from_yolo_url would auto-discover them (verified on 3.1.0 too) and leak
     # hidden GT into the table, so build images-only with TableWriter instead.
     log("test: label files detected on disk — building images-only table via TableWriter (GT-leak guard)")
     images = _list_images(images_dir)
@@ -289,7 +331,7 @@ def _import_test_split(
         dataset_name=dataset_name,
         table_name=table_name,
         description="Competition test split (images only — hidden ground truth).",
-        column_schemas={"image": tlc.ImagePath("image")},
+        schema={"image": tlc.schemas.ImageSchema()},
         # Non-force: url.exists() was False above, anything else is a race.
         if_exists="overwrite" if force else "raise",
     )
@@ -366,10 +408,10 @@ def run_import(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
 
     for split in ("train", "val"):
         stage(split)
-        log(f"{split}: importing via Table.from_yolo ...")
+        log(f"{split}: importing via Table.from_yolo_url ...")
         table, reused = _import_labeled_split(info, split, project, table_name, force=split in force_splits)
         tables[split] = {"url": str(table.url), "rows": table.row_count, "reused": reused, "_table": table}
-        mechanisms[split] = "from_yolo" + (
+        mechanisms[split] = "from_yolo_url" + (
             " (forced re-import)" if split in force_splits else " (reused existing)" if reused else ""
         )
         log(f"{split}: {'reused' if reused else 'created'} {table.url} ({table.row_count} rows)")
@@ -473,7 +515,7 @@ def verified_import_state() -> dict[str, Any]:
         import_cfg = cfg.get("import") or {}
         project = str(import_cfg.get("project_name") or "exdark-competition").strip()
         table_name = str(import_cfg.get("table_name") or "initial").strip()
-        urls = {s: tlc.Url.create_table_url(table_name, f"{DATASET_PREFIX}_{s}", project) for s in SPLITS}
+        urls = {s: _table_url(table_name, f"{DATASET_PREFIX}_{s}", project) for s in SPLITS}
         try:
             if all(u.exists() for u in urls.values()):
                 return {
@@ -513,7 +555,7 @@ def verified_import_state() -> dict[str, Any]:
 def list_project_tables(project: str) -> dict[str, Any]:
     """Datasets and their revision chains for the revision picker.
 
-    Layout-derived: tlc's create_table_url gives the deterministic
+    Layout-derived: _table_url rebuilds the deterministic
     ``.../projects/<project>/datasets/<dataset>/tables/<table>`` shape, so
     the datasets root is walked directly (verified live, 2026-07-21; table
     loads are milliseconds at this project's scale). Chain order is lineage
@@ -524,7 +566,7 @@ def list_project_tables(project: str) -> dict[str, Any]:
     """
     import tlc
 
-    probe = tlc.Url.create_table_url("initial", "__probe__", project)
+    probe = _table_url("initial", "__probe__", project)
     datasets_root = Path(str(probe)).parent.parent.parent
     out: dict[str, Any] = {"project": project, "datasets": []}
     if not datasets_root.is_dir():
@@ -577,7 +619,7 @@ def list_project_tables(project: str) -> dict[str, Any]:
         latest_url = ""
         try:
             base = tlc.Table.from_url(tlc.Url(ordered[0]["url"]))
-            latest_url = str(base.latest(wait_for_rescan=False).url)
+            latest_url = str(base.latest().url)
         except Exception:
             latest_url = ordered[-1]["url"]  # lineage tail as fallback
         rows = [
@@ -604,7 +646,7 @@ def table_revisions(table_url: str) -> dict[str, Any]:
         return {"exists": False, "has_revisions": False, "revisions": 0}
     base = tlc.Table.from_url(url)
     try:
-        latest = base.latest(wait_for_rescan=False)
+        latest = base.latest()
     except Exception:
         return {"exists": True, "has_revisions": None, "revisions": None}
     if str(latest.url) == str(base.url):

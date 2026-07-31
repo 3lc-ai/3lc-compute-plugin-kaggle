@@ -7,9 +7,13 @@ generations write to the same JSON file, and cancellation checks READ the file,
 so a cancel issued through the reloaded module still reaches a thread started
 before the reload.
 
-The installed host (tlc_compute 0.1.1.47) has no generic run endpoint or
-JobContext, so plugins own their job lifecycle. The UI polls
-GET /api/plugins/kaggle/jobs/{job_id}.
+v3 (0.2.x port): jobs start through the host dispatch channel
+(POST /api/plugins/kaggle/run -> KagglePlugin.run_job -> run_dispatch below),
+which bridges this store onto the SDK JobContext event stream. The record id
+is the host's job id, so the UI's status polling
+(GET /api/plugins/kaggle/jobs/{job_id}) is unchanged. The pid stamp now
+identifies the WORKER process: a worker restart (reload, crash, future idle
+reap) orphans running records exactly like a service restart used to.
 """
 
 from __future__ import annotations
@@ -156,6 +160,118 @@ def start_job(kind: str, params: dict[str, Any], target: Callable[[dict[str, Any
 
     threading.Thread(target=runner, name=f"kaggle-{kind}-{job_id}", daemon=True).start()
     return job_id
+
+
+class _BridgedJobCtx(JobCtx):
+    """JobCtx that mirrors store writes onto the SDK JobContext event stream.
+
+    The store stays the source of truth the tabs poll; the mirror feeds the
+    Hub's generic Queue panel (progress/metric/log/result events) and keeps
+    the worker's dispatch stream flowing. Cancellation is the union of both
+    channels: host-side cancel (ctx) OR our on-disk flag (tab cancel button
+    on a pre-reload record).
+    """
+
+    def __init__(self, job: dict[str, Any], sdk_ctx: Any) -> None:
+        super().__init__(job)
+        self._sdk = sdk_ctx
+
+    def log(self, message: str) -> None:
+        super().log(message)
+        try:
+            self._sdk.log(message)
+        except Exception:
+            pass  # event stream is best-effort; the store copy is authoritative
+
+    def set_progress(self, progress: dict[str, Any]) -> None:
+        super().set_progress(progress)
+        try:
+            total = float(progress.get("total_epochs") or 0)
+            if total:
+                epoch = float(progress.get("epoch") or 0)
+                self._sdk.progress(percent=100.0 * epoch / total, label=f"Epoch {int(epoch)}/{int(total)}")
+            for key, value in (progress.get("metrics") or {}).items():
+                if isinstance(value, (int, float)):
+                    self._sdk.metric(str(key), value)
+        except Exception:
+            pass
+
+    def set_field(self, key: str, value: Any) -> None:
+        super().set_field(key, value)
+        if key == "run_url" and value:
+            try:
+                self._sdk.result(run_url=str(value))
+            except Exception:
+                pass
+
+    def is_cancelled(self) -> bool:
+        try:
+            if self._sdk.cancelled:
+                return True
+        except Exception:
+            pass
+        return super().is_cancelled()
+
+
+def run_dispatch(
+    kind: str,
+    params: dict[str, Any],
+    target: Callable[[dict[str, Any], JobCtx], dict[str, Any]],
+    sdk_ctx: Any,
+) -> dict[str, Any]:
+    """Run ``target`` synchronously under the host dispatch channel.
+
+    The record id IS the host's job id (``sdk_ctx.job_id``) so the /run
+    response's job_id polls our custom status routes unchanged. Runs on the
+    SDK worker's dispatch thread — returning ends the NDJSON stream, so this
+    must not hand off to another thread. Terminal states mirror start_job's
+    runner; failures re-raise so the stream carries the error event.
+    """
+    job_id = str(sdk_ctx.job_id)
+    job: dict[str, Any] = {
+        "id": job_id,
+        "kind": kind,
+        "status": "running",
+        "pid": os.getpid(),
+        "created_at": time.time(),
+        "finished_at": None,
+        "cancelled": False,
+        "params": dict(params),
+        "log": [],
+        "checks": [],
+        "progress": {},
+        "facts": {},
+        "result": None,
+        "error": None,
+    }
+    job["params"].pop("kind", None)
+    with _lock:
+        _jobs[job_id] = job
+        _flush_locked(job)
+    _prune_disk()
+
+    ctx = _BridgedJobCtx(job, sdk_ctx)
+    try:
+        result = target(job["params"], ctx)
+        was_cancelled = ctx.is_cancelled()
+        with _lock:
+            if was_cancelled:
+                job["cancelled"] = True
+            job["result"] = result
+            job["status"] = "cancelled" if job.get("cancelled") else "completed"
+            _flush_locked(job)
+        return result
+    except Exception as exc:
+        with _lock:
+            job["error"] = f"{type(exc).__name__}: {exc}"
+            job["status"] = "failed"
+            job["log"].append(f"FAILED: {exc}")
+            _flush_locked(job)
+        raise
+    finally:
+        with _lock:
+            job["finished_at"] = time.time()
+            _flush_locked(job)
 
 
 def update_job_facts(job_id: str, key: str, value: Any) -> None:
