@@ -2,7 +2,9 @@
 name = "3lc-compute-plugin-kaggle"
 version = "1.2.0"
 description = "End-to-end Kaggle competition workflow for the 3LC Hub: import, train the fixed baseline, predict, submit."
-requires-python = ">=3.10"
+# >=3.11: the kaggle client (>=2.2.3) floors at 3.11; uv sync resolves for the
+# whole requires-python range, so a 3.10 floor makes the lock unsatisfiable.
+requires-python = ">=3.11"
 # Base = the SDK floor ONLY (the yolo-0.1.3 umbrella pattern). The heavy stack
 # rides the [kaggle] extra below and is installed only into the plugin's
 # provisioned venv. [shared] = the SDK's optional `tlc` data plane.

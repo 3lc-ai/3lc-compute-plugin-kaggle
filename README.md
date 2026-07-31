@@ -18,133 +18,54 @@ table revision, submit, repeat.
 ![Predict results](docs/shots/05_predict_results.png)
 ![Status hero + history](docs/shots/09_status_history.png)
 
+**Version pairing (v1.2.0):** 3LC Hub with `3lc-compute==0.2.1` + `3lc==3.1.0`
+(the 0.2.x plugin platform). For the legacy 0.1.x-host install (plugin v1.1.x),
+see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
+
 ---
 
-## 1. Prerequisites
+## 1. Install — catalog (the primary path)
 
-Target platform: **Windows 11 + NVIDIA GPU** (the reference machine is an RTX 5070 Ti;
-CPU-only works but the 15-minute smoke test becomes an hour). You need:
+**Full walkthrough with the exact pinned commands and a one-shot setup script:
+[docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md).** The short version:
 
-- **Python 3.12** via [uv](https://docs.astral.sh/uv/) (`uv venv` downloads it for you)
-- A **3LC account** (sign-up is part of the Hub login flow; API key from
-  <https://account.3lc.ai/api-key>)
-- A **Kaggle account** (for the auth check and Status tab; you will NOT be submitting)
+1. **Hub venv** (Python 3.12 via uv; `uv` itself is required at runtime — the
+   plugin shop installs run through it):
 
-### 1.1 Create the service venv
+   ```powershell
+   uv venv --python 3.12 C:\3lc-hub-next\.venv
+   uv pip install --python C:\3lc-hub-next\.venv\Scripts\python.exe `
+     --extra-index-url https://pypi.3lc.ai/public/repositories/prereleases-public/ `
+     --extra-index-url https://pypi.3lc.ai/public/repositories/releases-public/ `
+     --index-strategy unsafe-best-match `
+     "3lc-compute==0.2.1" "3lc==3.1.0"
+   C:\3lc-hub-next\.venv\Scripts\3lc.exe login
+   ```
 
-Pick a permanent folder for the Hub services (referred to as `<hub>` below):
+   No torch here — the plugin's heavy stack lives in its own worker venv, installed
+   by the shop. (3lc 3.x uses a **new API-key store**; log in again even if a 2.x
+   Hub was logged in on this machine.)
 
-```powershell
-mkdir <hub>; cd <hub>
-uv venv --python 3.12
-.\.venv\Scripts\activate
-```
+2. **Two Windows-required env vars** in the compute-service shell (worker
+   interpreter workaround + CUDA torch index — details in the tester doc):
 
-### 1.2 Install 3LC packages — order is load-bearing
+   ```powershell
+   $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle\1.2.0\.venv\Scripts\python.exe"
+   $env:TLC_COMPUTE_PLUGIN_INDEX_URLS = "https://download.pytorch.org/whl/cu128"
+   ```
 
-`3lc` is **not on public PyPI** (pulled during the 2026 quarantine); every install
-goes through 3LC's private index. Core comes from `releases-public`, compute from
-`prereleases-public`. Install **core → compute → CUDA torch, in that order** — if
-CUDA torch goes in first, the compute install resolves it back to CPU-only torch and
-training silently runs on CPU.
+3. **Start services** (`3lc service` on :5015, `3lc-compute` on :5020), open the
+   Hub, **Plugins → Available → Catalog sources**, add this repo's
+   [`catalog.json`](catalog.json) (raw URL, or a local path to a checkout — the
+   repo is private, so git/GitHub access is the prerequisite either way), and
+   click **Install** on the *Kaggle Competition* card. First install builds the
+   worker venv (CUDA torch, several GB, one-time). It registers live — **no
+   settings.json editing, no dependency pip installs, no service restart.**
 
-```powershell
-# (a) core — 3lc 2.22.3 (2.23.0 is core-only and CANNOT run a Hub)
-uv pip install "3lc==2.22.3" datasets `
-  --index-strategy unsafe-best-match `
-  --index-url https://pypi.3lc.ai/public/repositories/releases-public `
-  --extra-index-url https://pypi.org/simple
+4. **Kaggle** appears in the sidebar under **AI TOOLS**.
 
-# (b) compute service + 3lc-ultralytics
-uv pip install `
-  --index-strategy unsafe-best-match `
-  --index-url https://pypi.3lc.ai/public/repositories/prereleases-public `
-  --extra-index-url https://pypi.3lc.ai/public/repositories/releases-public `
-  --extra-index-url https://pypi.org/simple `
-  "3lc-compute[timm,sam3]" 3lc-ultralytics-beta
-
-# (c) CUDA torch LAST. This line is for RTX 50-series (Blackwell, sm_120).
-#     Older GPUs: pick your channel at https://pytorch.org/get-started/locally/
-uv pip install torch==2.11.0+cu128 torchvision==0.26.0+cu128 torchaudio==2.11.0+cu128 `
-  --index-url https://download.pytorch.org/whl/cu128
-
-# (d) this plugin's one extra dependency (in-process host = same venv)
-uv pip install kaggle
-```
-
-Verify GPU torch survived:
-
-```powershell
-python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
-# expect: 2.11.0+cu128 True   (RTX 50-series: 'sm_120' in torch.cuda.get_arch_list())
-```
-
-Reference versions (the machine this release was frozen on): `3lc 2.22.3`,
-`3lc_compute 0.1.1.47`, `3lc-ultralytics-beta 0.2.1`, `torch 2.11.0+cu128`,
-`ultralytics 8.4.6`, `kaggle 2.2.3`, Python `3.12.13`.
-
-### 1.3 Log in
-
-```powershell
-3lc login <your-api-key>    # key from https://account.3lc.ai/api-key
-```
-
-A successful login prints "API key verified".
-
-### 1.4 Register this plugin
-
-Clone the repo, then register its `src/` directory (NOT the repo root, NOT the
-package dir) as a plugin root. The settings file **must be written without a UTF-8
-BOM** — PowerShell 5.1's `Out-File -Encoding utf8` writes a BOM and the service then
-*silently* boots with zero plugins. Use this exact block:
-
-```powershell
-git clone https://github.com/3lc-ai/3lc-compute-plugin-kaggle
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.3lc-compute" | Out-Null
-$json = @'
-{
-  "plugin_dirs": [
-    "C:\\path\\to\\3lc-compute-plugin-kaggle\\src"
-  ]
-}
-'@
-[IO.File]::WriteAllText("$env:USERPROFILE\.3lc-compute\settings.json", $json,
-  (New-Object System.Text.UTF8Encoding($false)))
-```
-
-(Edit the path — keep the doubled backslashes, JSON needs them.) Then confirm the
-**host** can parse it before starting anything:
-
-```powershell
-& <hub>\.venv\Scripts\python.exe -c "from tlc_compute.persistent_settings import PersistentSettingsStore; print(PersistentSettingsStore().get_plugin_dirs())"
-# expect: ['C:\\path\\to\\3lc-compute-plugin-kaggle\\src']
-```
-
-### 1.5 Start the two services
-
-Two terminals, both with the venv activated, both left open:
-
-```powershell
-# Terminal 1 — Object Service (:5015)
-cd <hub>; .\.venv\Scripts\activate
-3lc service
-
-# Terminal 2 — Compute Service (:5020) — must start AFTER the plugin is registered
-cd <hub>; .\.venv\Scripts\activate
-3lc-compute
-```
-
-Terminal 2's log must contain `Plugin kaggle runtime initialized`. Quick health check:
-
-```powershell
-Invoke-WebRequest http://localhost:5020/health -UseBasicParsing
-# expect 200: {"status":"ok","service":"3lc-compute", ...}
-```
-
-Open the Hub at **http://localhost:5015**, log in with your 3LC account, and find
-**Kaggle** in the sidebar under **AI TOOLS**.
-<!-- VALIDATE (user): fresh-account first-login flow at localhost:5015 — verified only
-     with an already-logged-in account on this machine. -->
+Updating later: publishing v1.2.x means a new catalog entry — the card grows an
+**Update** button; one click swaps the version.
 
 ---
 
@@ -204,7 +125,8 @@ The strict checklist version of this section, with pass/fail boxes, is
    First run downloads the pinned checkpoint (5.4 MB, one-time). Expected: live
    epoch metrics; **val mAP50 ≈ 0.5 by epoch 2** (reference: 0.533); on completion a
    **Verified provenance recorded** panel with **4/4 assertions**, one of them the
-   checkpoint sha256 `0ebbc80d4a76…`.
+   checkpoint sha256 `0ebbc80d4a76…`. Running jobs also appear in the Hub's generic
+   **Queue & Progress** panel now.
 3. **Predict** — Predict + Submit tab, Step 1: source = your plugin run (participants
    have no other option), test table prefilled, **Run inference**. Expected in ~1–2
    min: results panel, all format checks green, `submission.csv` written (path
@@ -251,41 +173,40 @@ Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
 
 ---
 
-## 6. Troubleshooting — the five likely failures
+## 6. Troubleshooting — the likely failures
 
-1. **Plugin missing from the sidebar; compute log says
-   `Could not parse ... starting with empty persistent settings`.**
-   Cause: `settings.json` was written with a UTF-8 BOM (PowerShell 5.1
-   `Out-File -Encoding utf8` does this) — the host rejects it silently.
-   Fix: rewrite with the `[IO.File]::WriteAllText` block in §1.4, rerun the parse
-   check, restart the compute service.
+1. **Kaggle page 500s on first open / every job start fails.**
+   Cause: the Windows worker-interpreter bug (0.2.1 spawns `<venv>/bin/python`,
+   a POSIX path) — the `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` env var from §1 step 2 is
+   missing or wrong in the compute-service window.
+   Fix: set it (exact path in [docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md))
+   and restart the compute service window.
 
-2. **Kaggle shows "not connected" / auth fails though the token file exists.**
+2. **Catalog install fails: `could not read Username for 'https://github.com'`.**
+   Cause: the repo is private and git has no stored GitHub credential.
+   Fix: `git ls-remote https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git`
+   once (interactive sign-in via Git Credential Manager), retry Install.
+
+3. **Training says CUDA unavailable / crawls on CPU.**
+   Cause: the worker venv was built without `TLC_COMPUTE_PLUGIN_INDEX_URLS`
+   (shop installs resolve plain `torch` from PyPI = CPU-only on Windows).
+   Fix: set the env var (§1 step 2), **Uninstall** the plugin in the shop,
+   reinstall. Verify inside the worker venv:
+   `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle\1.2.0\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.
+
+4. **Kaggle shows "not connected" / auth fails though the token file exists.**
    Cause: the token file isn't byte-exact — a BOM, a trailing newline, or UTF-16
    encoding from a text editor.
    Fix: rewrite with the `Set-Content ... -NoNewline -Encoding ascii` one-liner in
    §2. Don't create the file in Notepad.
 
-3. **Training crawls (many minutes per epoch) or the device field errors.**
-   Cause: CPU-only torch — CUDA torch was installed before `3lc-compute` and got
-   downgraded, or the wrong CUDA channel for your GPU (RTX 50-series needs cu128).
-   Fix: rerun §1.2 step (c), then the `torch.cuda.is_available()` check. CPU still
-   *works* if you accept the wait (set Device to `cpu`).
+5. **`API key not found` when the service starts.**
+   Cause: 3lc 3.x reads a new key-store file; a 2.x-era login doesn't carry over.
+   Fix: `3lc login` from the 0.2.x venv.
 
-4. **Plugin registered but the sidebar entry never appears / API routes 404.**
-   Cause: the compute service wasn't restarted after registration — plugin routes are
-   collected once at startup.
-   Fix: restart Terminal 2 and look for `Plugin kaggle runtime initialized` in its
-   log. (Code/UI iteration afterwards can use the hot-reload endpoint instead —
-   see the deployment guide — but route changes always need a restart.)
-
-5. **Paths with spaces break commands or imports.**
-   Cause: unquoted paths (this project's own workspace has a space in it — it *will*
-   happen). PowerShell needs quotes around any path with spaces; JSON needs doubled
-   backslashes; the Import tab's yaml field is the exception — it cleans pasted
-   quotes itself.
-   Fix: quote paths in shells; in `settings.json` use `\\` and check with the §1.4
-   parse command.
+6. **Paths with spaces break commands.**
+   PowerShell needs quotes around any path with spaces. The Import tab's yaml field
+   cleans pasted quotes itself.
 
 ---
 
@@ -295,30 +216,52 @@ The plugin is one page (`src/tlc_plugin_kaggle/ui.html`) over a small Litestar r
 set (`routes.py`) with per-card backends: `importer.py` (validated import, GT-leak
 guard), `trainer.py` (locked pinned-init training + provenance assertions),
 `predictor.py` (inference → strict CSV validation → optional Kaggle upload),
-`jobs.py` (disk-persisted jobs that survive hot reloads), `config_store.py` (saved
-form state). Depth, in reading order:
+`jobs.py` (disk-persisted jobs bridged onto the host dispatch channel),
+`config_store.py` (saved form state). On the 0.2.x host the plugin runs
+**out-of-process**: an SDK worker in its own uv-provisioned venv, reverse-proxied by
+the compute service; long jobs start through the host's `/run` dispatch (Queue-panel
+progress, host cancel) after a fail-fast `/validate/<kind>` round-trip. Depth, in
+reading order:
 
 - [docs/ui-notes.md](docs/ui-notes.md) — the UI playbook: states, fixtures, motion,
-  a11y; the replication recipe the four tabs were built from.
-- [docs/deployment-guide.md](docs/deployment-guide.md) — operator's guide to the
-  installed host: discovery, registration, JWT reality, hot reload.
+  a11y; plus the 0.2.x worker-model dev loop and the job-start contract change.
+- [docs/forced-changes-0.2.md](docs/forced-changes-0.2.md) — everything the 0.2.x
+  port changed, and why; nothing else moved.
+- [docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md) — fresh-machine setup with
+  the pinned stack + setup script.
+- [docs/deployment-guide.md](docs/deployment-guide.md) — the LEGACY 0.1.x-host
+  operator guide (kept for v1.1.x installs).
 - [docs/training-sanity.md](docs/training-sanity.md) — why the contract is a pinned
   pretrained init, with the from-scratch control evidence.
 - [docs/design-notes.md](docs/design-notes.md) — research-phase notes (host source
   analysis; §7 is a *proposed* skeleton, kept as history).
 
 ```
-src/tlc_plugin_kaggle/   the plugin (manifest = class attrs on KagglePlugin)
-├── __init__.py          plugin class + registration
+src/tlc_plugin_kaggle/   the plugin (manifest = plugin.toml, read import-free)
+├── __init__.py          SDK ComputePlugin subclass + run_job dispatch
+├── plugin.toml          the manifest (id / ui / runtime / provision extra)
 ├── ui.html              the four-tab page (Import / Train / Predict+Submit / Status)
-├── routes.py            REST endpoints under /api/plugins/kaggle
+├── routes.py            worker-app REST endpoints (relative; host proxies them)
 ├── importer.py          tab 1: import + dataset validation (GT-leak guard)
 ├── trainer.py           tab 2: locked pinned-init training + provenance
 ├── predictor.py         tab 3+4: inference, submission.csv, Kaggle API
-├── jobs.py              disk-persisted job store (survives hot reload)
-└── config_store.py      saved form values per tab
-docs/                    design docs (see §7 links above)
-scripts/                 one-off maintenance (job-record migration)
-pyproject.toml           dist metadata + [tool.tlc-compute] manifest for the
-                         future catalog host (hand-synced with the class attrs)
+├── jobs.py              disk-persisted job store + JobContext bridge
+└── config_store.py      saved form values per tab (~/.3lc-kaggle-plugin/)
+catalog.json             the shop listing (id, version, source, manifest copy)
+docs/                    see §7 links above
+scripts/                 setup-0.2-tester.ps1 + one-off maintenance
+pyproject.toml           dist metadata; [kaggle] extra = the worker venv's stack
 ```
+
+---
+
+## Appendix A — legacy 0.1.x-host install (plugin v1.1.x)
+
+Plugin **v1.1.1** targets the previous Hub generation (`3lc-compute 0.1.1.47` +
+`3lc 2.22.3`, in-process plugins, manual registration). That path — venv build
+order, BOM-free `settings.json` registration, service restart, and its
+troubleshooting — is preserved verbatim in the v1.1.1 tag's
+[README](https://github.com/3lc-ai/3lc-compute-plugin-kaggle/blob/v1.1.1/README.md)
+and [docs/deployment-guide.md](docs/deployment-guide.md). Do not mix the two stacks
+in one environment: both hosts read `~/.3lc-compute/settings.json`, and the 0.1.x
+writer silently drops the 0.2.x keys.
