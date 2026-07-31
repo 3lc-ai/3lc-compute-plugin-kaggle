@@ -265,4 +265,6 @@ troubleshooting — is preserved verbatim in the v1.1.1 tag's
 [README](https://github.com/3lc-ai/3lc-compute-plugin-kaggle/blob/v1.1.1/README.md)
 and [docs/deployment-guide.md](docs/deployment-guide.md). Do not mix the two stacks
 in one environment: both hosts read `~/.3lc-compute/settings.json`, and the 0.1.x
-writer silently drops the 0.2.x keys.
+writer silently drops the 0.2.x keys. Also note the 0.1.x host loads the plugin
+live from the repo working copy — keep that checkout on `develop` whenever the
+old service runs; the 0.2.x host installs from the git tag and doesn't care.

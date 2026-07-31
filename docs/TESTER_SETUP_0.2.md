@@ -105,6 +105,7 @@ manual install you may notice:
 | Install fails: `uv executable not found` | uv not on the PATH of the compute-service process |
 | Training says CUDA unavailable | `TLC_COMPUTE_PLUGIN_INDEX_URLS` was not set when the plugin venv was built → uninstall the plugin in the shop, set the env var, reinstall |
 | `API key not found` at service start | run `3lc login` **from this venv** (3.x key store is new) |
+| `The filename, directory name, or volume label syntax is incorrect` on the setup commands | You're in **cmd**, not PowerShell — the setup commands are PowerShell. Type `powershell` first, then re-run the block. |
 
 ## Appendix — machine also runs the 1.1.x Hub
 
@@ -112,3 +113,10 @@ Don't share state: the two stacks fight over `~/.3lc-compute/settings.json`
 (the old service's writer silently drops the new one's keys). Run the 0.2.x
 service with a redirected home (see `3lc-hub-next/PORT_PLAN.md` § switch
 procedure in the research workspace) or on a different machine.
+
+**Working-copy branch rule:** the 0.1.x service loads the plugin **live from
+the repo working copy** (`plugin_dirs` points at `<repo>\src`), so that
+checkout must be on `develop` (v1.1.x code) whenever the old service runs —
+a working copy left on `port/0.2.x` breaks the old host at import. The 0.2.x
+service is immune: it installs from the **git tag** into its own managed venv
+and never reads the working copy.
