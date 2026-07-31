@@ -7,7 +7,7 @@
       "versions": [
         {
           "version": "1.2.0",
-          "source": "github:3lc-ai/3lc-compute-plugin-kaggle@v1.2.0",
+          "source": "3lc-compute-plugin-kaggle[kaggle] @ git+https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git@v1.2.0",
           "wheel_url": "",
           "manifest": {
             "id": "kaggle",
@@ -22,8 +22,12 @@
               "display_mode": "sidebar",
               "section": "AI Tools",
               "priority": 40,
-              "compatible_with": ["table"],
-              "output_types": ["run"]
+              "compatible_with": [
+                "table"
+              ],
+              "output_types": [
+                "run"
+              ]
             },
             "runtime": {
               "isolation": "venv",
