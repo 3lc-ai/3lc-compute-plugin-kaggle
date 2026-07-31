@@ -55,9 +55,10 @@ see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
    ```
 
 3. **Start services** (`3lc service` on :5015, `3lc-compute` on :5020), open the
-   Hub, **Plugins → Available → Catalog sources**, add this repo's
-   [`catalog.json`](catalog.json) (raw URL, or a local path to a checkout — the
-   repo is private, so git/GitHub access is the prerequisite either way), and
+   Hub, **Plugins → Available → Catalog sources**, add the absolute path to
+   [`catalog.json`](catalog.json) from a local clone of this repo (raw GitHub
+   URLs 404 while the repo is private — the Hub fetches catalogs unauthenticated;
+   the install source itself goes through git, which has your credentials), and
    click **Install** on the *Kaggle Competition* card. First install builds the
    worker venv (CUDA torch, several GB, one-time). It registers live — **no
    settings.json editing, no dependency pip installs, no service restart.**
