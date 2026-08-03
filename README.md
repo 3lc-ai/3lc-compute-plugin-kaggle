@@ -55,10 +55,17 @@ see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
    ```
 
 3. **Start services** (`3lc service` on :5015, `3lc-compute` on :5020), open the
-   Hub, **Plugins → Available → Catalog sources**, add the absolute path to
-   [`catalog.json`](catalog.json) from a local clone of this repo (raw GitHub
-   URLs 404 while the repo is private — the Hub fetches catalogs unauthenticated;
-   the install source itself goes through git, which has your credentials), and
+   Hub, **Plugins → Available → Catalog sources**, add the hosted catalog URL
+
+   ```
+   https://gist.githubusercontent.com/Rishikesh-Jadhav/926ead27a6a1ed6429cf86d1924a24ce/raw/catalog.json
+   ```
+
+   (the Hub fetches catalogs unauthenticated, so the catalog is hosted on a
+   public gist while the repo is private — repo raw URLs 404; the install
+   source inside the catalog goes through git, which has your credentials.
+   Fallback: the absolute path to [`catalog.json`](catalog.json) in a local
+   clone also works as a catalog source), and
    click **Install** on the *Kaggle Competition* card. First install builds the
    worker venv (CUDA torch, several GB, one-time). It registers live — **no
    settings.json editing, no dependency pip installs, no service restart.**
@@ -66,7 +73,8 @@ see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
 4. **Kaggle** appears in the sidebar under **AI TOOLS**.
 
 Updating later: publishing v1.2.x means a new catalog entry — the card grows an
-**Update** button; one click swaps the version.
+**Update** button; one click swaps the version. Publishing steps are in
+[RELEASING.md](RELEASING.md).
 
 ---
 

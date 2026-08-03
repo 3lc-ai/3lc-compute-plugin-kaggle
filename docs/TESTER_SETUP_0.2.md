@@ -66,18 +66,27 @@ C:\3lc-hub-next\.venv\Scripts\3lc-compute.exe          # Compute Service :5020 (
 ## 3. Install the plugin from the catalog
 
 1. Open the Hub in your browser and go to **Plugins → Available**.
-2. Under **Catalog sources**, add the **absolute path to `catalog.json` in a
-   local clone of this repo** (local paths are a supported catalog form):
+2. Under **Catalog sources**, paste the hosted catalog URL:
 
-   ```powershell
-   git clone https://github.com/3lc-ai/3lc-compute-plugin-kaggle C:\src\kgplugin   # clone once, anywhere
-   # then add as catalog source in the Hub:  C:\src\kgplugin\catalog.json
+   ```
+   https://gist.githubusercontent.com/Rishikesh-Jadhav/926ead27a6a1ed6429cf86d1924a24ce/raw/catalog.json
    ```
 
-   (The raw GitHub URL form — `https://raw.githubusercontent.com/...` —
-   returns 404 while the repo is private: the Hub fetches catalogs without
-   auth. Verified 2026-07-31. The *install source* inside the catalog is
-   unaffected — it goes through git, which has your credentials.)
+   (That's the latest-revision raw form — the URL never changes; it always
+   serves the newest published catalog. The Hub fetches catalogs without
+   auth, which is why the catalog is hosted on a public gist while the repo
+   is private — repo raw URLs 404. The *install source* inside the catalog
+   is unaffected — it goes through git, which has your credentials; that's
+   what the `git ls-remote` prerequisite above is for.)
+
+   *Fallback (gist unreachable / offline):* local paths are also a
+   supported catalog form — clone the repo and add the absolute path to its
+   `catalog.json`:
+
+   ```powershell
+   git clone https://github.com/3lc-ai/3lc-compute-plugin-kaggle C:\src\kgplugin
+   # then add as catalog source in the Hub:  C:\src\kgplugin\catalog.json
+   ```
 3. The **Kaggle Competition** card appears under Available → **Install**.
    First install builds the worker venv (CUDA torch — several GB; watch the
    card's progress). It registers live; no service restart.
