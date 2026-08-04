@@ -114,16 +114,10 @@ def ensure_official_checkpoint(ctx: Any = None) -> tuple[Path, str]:
     log(f"Official checkpoint cached: {CHECKPOINT_CACHE} (sha256 {digest[:12]}...)")
     return CHECKPOINT_CACHE, digest
 
-# Run artifacts (weights, plots, submissions). The organizer machine keeps
-# its historical location; everywhere else the default must be creatable
-# without elevation — a hardcoded C:\Users\Owner path PermissionErrors the
-# first train job on any other Windows machine.
-_ORGANIZER_SAVE_ROOT = Path(r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle-plugin")
-DEFAULT_SAVE_ROOT = str(
-    _ORGANIZER_SAVE_ROOT
-    if _ORGANIZER_SAVE_ROOT.parent.is_dir()
-    else Path.home() / ".3lc-kaggle-plugin" / "runs"
-)
+# Run artifacts (weights, plots, submissions): a per-user dir that mkdir can
+# create without elevation, identical on every machine. No machine-specific
+# paths in shipped code — the organizer machine uses the same default.
+DEFAULT_SAVE_ROOT = str(Path.home() / ".3lc-kaggle-plugin" / "runs")
 
 # Exposed training args: name -> (converter, default, min, max). Bounds are
 # enforced server-side below (participant-facing error naming the bound) and
@@ -244,9 +238,14 @@ _EMB_DIMS = (0, 2, 3)
 _EMB_REDUCERS = ("pacmap", "umap")
 
 
-def build_settings(params: dict[str, Any]) -> Any:
-    """The 3LC settings block — the point of the competition."""
-    from tlc_ultralytics import Settings
+def validate_settings(params: dict[str, Any]) -> dict[str, Any]:
+    """Bounds/membership validation for the 3LC settings — import-free.
+
+    The /validate/train route calls THIS, never build_settings: constructing
+    a real Settings imports tlc_ultralytics (which imports torch), and a cold
+    worker paying that import inside a form-validation request is exactly the
+    first-train timeout round-1 hit. Returns the validated kwargs;
+    build_settings turns them into a Settings inside the job."""
 
     def _f(key: str, default: Any, conv: Any) -> Any:
         raw = params.get(key, default)
@@ -265,7 +264,7 @@ def build_settings(params: dict[str, Any]) -> Any:
     if str(params.get("image_embeddings_reducer") or "pacmap") not in _EMB_REDUCERS:
         raise ValueError(f"image_embeddings_reducer must be one of {_EMB_REDUCERS}.")
 
-    return Settings(
+    return dict(
         project_name=str(params.get("project_name") or "exdark-competition").strip(),
         run_name=str(params.get("run_name") or f"kaggle_run_{time.strftime('%Y%m%d_%H%M%S')}").strip(),
         conf_thres=_f("conf_thres", 0.1, float),
@@ -283,6 +282,14 @@ def build_settings(params: dict[str, Any]) -> Any:
         collection_epoch_start=_f("collection_epoch_start", None, int),
         collection_epoch_interval=_f("collection_epoch_interval", 1, int),
     )
+
+
+def build_settings(params: dict[str, Any]) -> Any:
+    """The 3LC settings block — the point of the competition. Heavy import
+    stays in here (job-time only; see validate_settings)."""
+    from tlc_ultralytics import Settings
+
+    return Settings(**validate_settings(params))
 
 
 # Canonical per-epoch metrics kept as compact history for the UI's stat
@@ -445,6 +452,17 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
             for k, v in (getattr(trainer, "metrics", {}) or {}).items()
             if isinstance(v, (int, float))
         }
+        # ultralytics' final_eval() re-fires this callback with epoch+1 for
+        # the best-model validation pass (engine/trainer.py: "log best
+        # metrics at step epochs+1"). It is NOT a training epoch: without
+        # this guard a 2-epoch run logs "epoch 3/2" and the run selector
+        # says "3 epochs". Surface it as its own step instead.
+        if total and epoch > total:
+            ctx.set_progress({**state["progress"], "stage": "final_val",
+                              "stage_note": "Final validation (best.pt)"})
+            ctx.log("final validation (best.pt) — " +
+                    ", ".join(f"{k}={v}" for k, v in list(metrics.items())[:4]))
+            return
         state["epoch"] = epoch
         # Compact per-epoch history for the UI's stat chips + sparklines.
         state["history"].append({"e": epoch, **_canonical_metrics(metrics)})
@@ -508,6 +526,15 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
 
     best_exists = bool(best) and Path(best).is_file()
     ctx.log(f"best.pt: {best} (exists: {best_exists})")
+
+    # The worker process is long-lived: release the training model (the
+    # trainer holds a reference too) and hand cached CUDA blocks back so a
+    # follow-up predict job starts from a clean allocator (round-1 OOM:
+    # 12 GB GPU, predict right after train).
+    del model, trainer, run
+    from tlc_plugin_kaggle.predictor import reclaim_gpu_memory
+
+    reclaim_gpu_memory()
 
     return {
         "run_url": run_url,

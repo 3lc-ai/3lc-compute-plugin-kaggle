@@ -190,10 +190,12 @@ class KaggleController(Controller):
         # run here so a locked-key attempt or out-of-bounds value is a 400
         # with the participant-facing message, not a failed job. run_training
         # re-validates (defense in depth: the locked kwargs are merged last
-        # there regardless).
+        # there regardless). validate_settings, NOT build_settings: this
+        # request must never import torch — a cold worker paying that import
+        # here is the round-1 first-train timeout.
         try:
             trainer.build_train_kwargs(data)
-            trainer.build_settings(data)
+            trainer.validate_settings(data)
         except ValueError as exc:
             return Response(content={"error": str(exc)}, status_code=HTTP_400_BAD_REQUEST)
 
@@ -229,6 +231,17 @@ class KaggleController(Controller):
             elif not weights_on_disk:
                 usable, reason = False, "best.pt missing on disk"
 
+            # Display-time clamp for records written before the final-val
+            # guard (trainer.on_fit_epoch_end): ultralytics' best-model
+            # validation pass logged as epochs+1, so old 2-epoch runs say 3.
+            epochs_completed = result.get("epochs_completed") or progress.get("epoch")
+            requested = (job.get("params") or {}).get("epochs")
+            try:
+                if epochs_completed and requested:
+                    epochs_completed = min(int(epochs_completed), int(float(requested)))
+            except (TypeError, ValueError):
+                pass
+
             m50s = [h.get("m50") for h in history if isinstance(h.get("m50"), (int, float))]
             provenance = result.get("provenance") or []
             # Contract era, read from the run's own stored provenance labels:
@@ -251,7 +264,7 @@ class KaggleController(Controller):
                     "run_url": facts.get("run_url"),
                     "status": status,
                     "created_at": job.get("created_at"),
-                    "epochs_completed": result.get("epochs_completed") or progress.get("epoch"),
+                    "epochs_completed": epochs_completed,
                     "best_map50": max(m50s) if m50s else None,
                     "provenance_ok": bool(provenance) and all(c.get("ok") for c in provenance),
                     "contract": contract,
