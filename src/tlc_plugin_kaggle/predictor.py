@@ -35,26 +35,24 @@ COMPETITION_SLUG = "the-3-lc-low-light-object-detection-comepetition-test"
 EXPECTED_TEST_ROWS = 715
 NUM_CLASSES = 12
 SUBMISSION_COLUMNS = ["id", "image_id", "prediction_string"]
-# Same portable-default rule as trainer.DEFAULT_SAVE_ROOT (kept in sync by
-# hand): organizer machine keeps its historical location, everywhere else
-# fall back to a per-user dir that mkdir can create without elevation.
-_ORGANIZER_SAVE_ROOT = Path(r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\runs\kaggle-plugin")
-DEFAULT_SAVE_ROOT = str(
-    _ORGANIZER_SAVE_ROOT
-    if _ORGANIZER_SAVE_ROOT.parent.is_dir()
-    else Path.home() / ".3lc-kaggle-plugin" / "runs"
-)
+# Run artifacts (submissions) — same rule as trainer.DEFAULT_SAVE_ROOT (kept
+# in sync by hand): a per-user dir that mkdir can create without elevation.
+# No machine-specific paths in shipped code — the organizer machine uses the
+# same default as everyone else.
+DEFAULT_SAVE_ROOT = str(Path.home() / ".3lc-kaggle-plugin" / "runs")
 
 
 def competition_url(slug: str) -> str:
     return f"https://www.kaggle.com/competitions/{slug.strip()}"
 
 # Host-machine convenience only: when the competition metric and solution file
-# exist locally (the organizer machine), each submission is also scored
-# locally and the mAP shown next to the CSV. Participant machines don't have
-# these files, so the whole step silently no-ops there.
-LOCAL_METRIC_PY = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\competition_exdark\metric\metric_exdark.py"
-LOCAL_SOLUTION_CSV = r"C:\Users\Owner\Desktop\3LC Kaggle Competitions\competition_exdark\kaggle_upload\solution.csv"
+# exist in the canonical host dir, each submission is also scored locally and
+# the mAP shown next to the CSV. The organizer places these two files there
+# once (they are never shipped); participant machines don't have them, so the
+# whole step silently no-ops there.
+HOST_DIR = Path.home() / ".3lc-kaggle-plugin" / "host"
+LOCAL_METRIC_PY = str(HOST_DIR / "metric_exdark.py")
+LOCAL_SOLUTION_CSV = str(HOST_DIR / "solution.csv")
 
 
 def is_host() -> bool:
@@ -215,6 +213,46 @@ def _test_items(table: Any) -> list[tuple[str, str]]:
     return items
 
 
+def reclaim_gpu_memory() -> None:
+    """Best-effort CUDA reclaim between jobs sharing this worker process.
+
+    The worker is long-lived: a train job's cached allocator blocks would
+    otherwise still be reserved when predict starts. Safe no-op without
+    torch/CUDA. (The SDK may grow its own between-job reclaim — this stays
+    regardless; the plugin must not depend on it.)
+    """
+    import gc
+
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
+def _predict_batch_size(device: Any) -> int:
+    """Inference chunk size from free VRAM (cheap probe, conservative).
+
+    ultralytics batches a LIST source into ONE tensor (autocast_list ->
+    LoadPilAndNumpy, bs=len(list)) — 715 test images at 640 px is a single
+    3.27 GiB allocation, which OOM'd a 12 GB GPU in round-1 testing. So the
+    plugin chunks the list itself; this only picks the chunk size.
+    """
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            idx = int(device) if str(device).strip().isdigit() else 0
+            free, _total = torch.cuda.mem_get_info(idx)
+            return 32 if free >= 6 * (1 << 30) else 16
+    except Exception:
+        pass
+    return 16
+
+
 def run_inference(
     weights: str,
     items: list[tuple[str, str]],
@@ -222,49 +260,63 @@ def run_inference(
     device: Any,
     ctx: Any,
 ) -> dict[str, str]:
-    """YOLO inference -> {image_id: prediction_string}. Locked imgsz=640."""
+    """YOLO inference -> {image_id: prediction_string}. Locked imgsz=640.
+
+    Streamed in bounded chunks: a whole-list source would go through the
+    GPU as one batch of len(items) images (see _predict_batch_size), so the
+    list is sliced here and detections accumulate on the CPU. Peak GPU use
+    is one chunk; the per-image progress counter runs continuously across
+    chunks.
+    """
     from ultralytics import YOLO
 
     model = YOLO(weights)
     pred_map: dict[str, str] = {}
     total = len(items)
-    results = model.predict(
-        source=[p for _, p in items],
-        imgsz=640,
-        conf=conf,
-        device=device,
-        max_det=300,
-        stream=True,
-        verbose=False,
-        # note: no dataloader workers in predict's streaming path — the
-        # Windows workers=0 rule is inherently satisfied here
-    )
+    batch = _predict_batch_size(device)
+    ctx.log(f"Inference batched: {batch} images/chunk ({total} total)")
     # Determinate progress from the first tick: total is known up front,
     # then per-image counts flushed at most ~1/s (each set_progress writes
     # the job JSON) plus a final exact count.
     ctx.set_progress({"images": 0, "total_images": total})
     last_flush = 0.0
-    for n, (item, result) in enumerate(zip(items, results), start=1):
-        image_id = item[0]
-        parts: list[str] = []
-        boxes = result.boxes
-        if boxes is not None and len(boxes):
-            cls = boxes.cls.tolist()
-            confs = boxes.conf.tolist()
-            xywhn = boxes.xywhn.tolist()
-            for c, cf, (xc, yc, w, h) in zip(cls, confs, xywhn):
-                c = int(c)
-                if not 0 <= c < NUM_CLASSES:
-                    continue  # defensive: never emit an out-of-range class
-                clamp = lambda v: min(1.0, max(0.0, float(v)))  # noqa: E731
-                parts.append(
-                    f"{c} {clamp(cf):.6f} {clamp(xc):.6f} {clamp(yc):.6f} {clamp(w):.6f} {clamp(h):.6f}"
-                )
-        pred_map[image_id] = " ".join(parts) if parts else "no box"
-        now = time.time()
-        if n == total or now - last_flush >= 1.0:
-            last_flush = now
-            ctx.set_progress({"images": n, "total_images": total})
+    n = 0
+    for start in range(0, total, batch):
+        chunk = items[start : start + batch]
+        results = model.predict(
+            source=[p for _, p in chunk],
+            imgsz=640,
+            conf=conf,
+            device=device,
+            max_det=300,
+            verbose=False,
+            # note: no dataloader workers in predict's in-memory path — the
+            # Windows workers=0 rule is inherently satisfied here
+        )
+        for item, result in zip(chunk, results):
+            n += 1
+            image_id = item[0]
+            parts: list[str] = []
+            boxes = result.boxes
+            if boxes is not None and len(boxes):
+                cls = boxes.cls.tolist()
+                confs = boxes.conf.tolist()
+                xywhn = boxes.xywhn.tolist()
+                for c, cf, (xc, yc, w, h) in zip(cls, confs, xywhn):
+                    c = int(c)
+                    if not 0 <= c < NUM_CLASSES:
+                        continue  # defensive: never emit an out-of-range class
+                    clamp = lambda v: min(1.0, max(0.0, float(v)))  # noqa: E731
+                    parts.append(
+                        f"{c} {clamp(cf):.6f} {clamp(xc):.6f} {clamp(yc):.6f} {clamp(w):.6f} {clamp(h):.6f}"
+                    )
+            pred_map[image_id] = " ".join(parts) if parts else "no box"
+            now = time.time()
+            if n == total or now - last_flush >= 1.0:
+                last_flush = now
+                ctx.set_progress({"images": n, "total_images": total})
+    del model
+    reclaim_gpu_memory()
     return pred_map
 
 
@@ -601,6 +653,9 @@ def _predict_core(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     if str(device).strip().isdigit():
         device = int(str(device).strip())
 
+    # A train job may have just finished in this same worker process — hand
+    # its cached CUDA blocks back before loading the inference model.
+    reclaim_gpu_memory()
     ctx.log(f"Running inference: {Path(weights).name}, imgsz=640 (locked), conf={conf}, device={device}")
     pred_map = run_inference(weights, items, conf, device, ctx)
 
