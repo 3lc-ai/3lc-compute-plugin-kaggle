@@ -1117,6 +1117,19 @@
       var API = window.PLUGIN_API;
       var computeUrl = API ? API.getConfig('compute_service_url') : '';
       var dashboardUrl = API ? API.getConfig('dashboard_url') : '';
+      // Every outbound dashboard link must carry the configured Object
+      // Service URL: without the param the dashboard silently falls back to
+      // its own localhost:5015 default, which breaks non-default ports and
+      // remote/tunnelled services. Same pattern as the built-in plugins'
+      // _withObjectService (there is no importable helper — the frontend's
+      // TlcApi.dashboardUrl() is out of reach for fragments); the query
+      // param the dashboard reads is object_service.
+      var objectServiceUrl = API ? API.getConfig('object_service_url') : '';
+      function kgWithObjectService(url) {
+        if (!objectServiceUrl || !url) { return url; }
+        return url + (url.indexOf('?') >= 0 ? '&' : '?') +
+          'object_service=' + encodeURIComponent(objectServiceUrl);
+      }
       var pollTimer = null;
 
       // ── Job start (0.2.x host dispatch) ────────────────────────────
@@ -1126,13 +1139,55 @@
       // worker keep-alive). Resolves {ok, body} with body.job_id — the
       // status polling on our custom routes is unchanged (the record id
       // IS the host job id).
+      // Abort translation: the host shell's authFetch may carry a timeout
+      // AbortController, and a COLD worker (first request after install /
+      // service start) can exceed it — the browser then throws the useless
+      // "signal is aborted without reason". Round-1 hit this on the very
+      // first Start Training. The server side is fixed too (validation no
+      // longer imports torch), but any abort that still happens must say
+      // something real.
+      function kgIsAbort(e) {
+        return e && (e.name === 'AbortError' ||
+          /abort/i.test(String(e && e.message || '')));
+      }
+      function kgAbortMessage(stage) {
+        return stage === 'run'
+          ? 'The start request timed out before the service answered. The job may ' +
+            'still have started — this page checks for it automatically; if nothing ' +
+            'appears in a few seconds, retry (retrying is safe).'
+          : 'The service took too long to answer (a just-installed or just-restarted ' +
+            'plugin warms up on its first request). Retry — the retry is safe and ' +
+            'usually instant.';
+      }
+      // After an aborted /run POST the job may exist server-side anyway.
+      // One delayed look at the newest record of this kind decides: adopt
+      // it if it started in the last minute, else report the abort.
+      function kgAdoptFreshJob(kind, stamp) {
+        return new Promise(function (resolve) { setTimeout(resolve, 2500); })
+          .then(function () {
+            return API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=' + encodeURIComponent(kind));
+          })
+          .then(function (r) { return r.json(); })
+          .then(function (list) {
+            var j = (list || [])[0];
+            if (j && j.created_at && (j.created_at * 1000) >= stamp - 5000) {
+              return { ok: true, body: { job_id: j.id, adopted: true } };
+            }
+            throw new Error(kgAbortMessage('run'));
+          }, function () { throw new Error(kgAbortMessage('run')); });
+      }
+
       function kgStartJob(kind, params) {
         var validatePath = '/api/plugins/kaggle/validate/' +
           (kind === 'kaggle_submit' ? 'submit' : kind);
+        var stamp = Date.now();
         return API.authFetch(computeUrl + validatePath, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(params)
+        }).catch(function (e) {
+          if (kgIsAbort(e)) { throw new Error(kgAbortMessage('validate')); }
+          throw e;
         }).then(function (r) {
           return r.json().then(function (b) {
             if (!r.ok || b.error) { throw new Error(b.error || 'validation failed'); }
@@ -1141,9 +1196,13 @@
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(runBody)
+            }).catch(function (e) {
+              if (kgIsAbort(e)) { return null; }   // maybe started anyway — check
+              throw e;
             });
           });
         }).then(function (r) {
+          if (r === null) { return kgAdoptFreshJob(kind, stamp); }
           return r.json().then(function (b) {
             if (r.ok && !b.job_id && b.provisioning) {
               throw new Error('The plugin worker is still provisioning its environment — try again in a minute.');
@@ -1225,12 +1284,17 @@
         }
       );
       if (dashboardUrl) {
-        el('kg-loop-inspect').href = dashboardUrl;
-        el('kg-loop-fixlabels').href = dashboardUrl;
+        el('kg-loop-inspect').href = kgWithObjectService(dashboardUrl);
+        el('kg-loop-fixlabels').href = kgWithObjectService(dashboardUrl);
       }
 
       function dashRunLink(runUrl) {
-        return dashboardUrl ? dashboardUrl + '?run=' + encodeURIComponent(runUrl) : '';
+        return dashboardUrl
+          ? kgWithObjectService(dashboardUrl + '?run=' + encodeURIComponent(runUrl)) : '';
+      }
+      function dashTableLink(tableUrl) {
+        return dashboardUrl
+          ? kgWithObjectService(dashboardUrl + '?table=' + encodeURIComponent(tableUrl)) : '';
       }
 
       function fmtDur(seconds) {
@@ -1637,7 +1701,8 @@
           kglEnter(pop);
           document.addEventListener('mousedown', onDocDown, true);
           document.addEventListener('keydown', onKeyDown, true);
-          API.authFetch(computeUrl + '/api/plugins/kaggle/tables/list?project=exdark-competition')
+          API.authFetch(computeUrl + '/api/plugins/kaggle/tables/list?project=' +
+                        encodeURIComponent(kgCurrentProject()))
             .then(function (r) { return r.json(); })
             .then(function (data) {
               if (pop.hidden) { return; }
@@ -1677,6 +1742,44 @@
         var ds = String(url).match(/datasets[\\\/]+([^\\\/]+)/);
         var rev = String(url).match(/tables[\\\/]+([^\\\/]+)/);
         return ds ? ds[1] + (rev ? '/' + rev[1] : '') : '';
+      }
+
+      // The current 3LC project = whatever the Import tab's Project field
+      // says (saved config restores it). Train/Predict table resolution and
+      // the revision pickers all follow THIS — a renamed project must never
+      // leave the later tabs silently pointing at the old one (round-1).
+      function kgCurrentProject() {
+        var f = el('kg-project');
+        return (f && f.value.trim()) || 'exdark-competition';
+      }
+      // project component of a table/run URL ('' when unrecognizable)
+      function kgUrlProject(url) {
+        var m = String(url).match(/projects[\\\/]+([^\\\/]+)/);
+        return m ? m[1] : '';
+      }
+      // Re-point a table-URL field at the current project's canonical
+      // default when it is empty or still carries another project's URL.
+      // Hand-entered URLs *within* the current project are never touched.
+      // Resolves when the field is settled (then() the gate re-check).
+      function kgSyncFieldToProject(fieldIds) {
+        var cur = kgCurrentProject();
+        var stale = fieldIds.filter(function (id) {
+          var v = el(id).value.trim();
+          return !v || (kgUrlProject(v) && kgUrlProject(v) !== cur);
+        });
+        if (!stale.length) { return Promise.resolve(false); }
+        return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=' +
+                             encodeURIComponent(cur))
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            var split = { 'tr-train-url': 'train', 'tr-val-url': 'val', 'ps-test-url': 'test' };
+            stale.forEach(function (id) {
+              var s = d[split[id]];
+              if (s && s.url) { el(id).value = s.url; }
+            });
+            return true;
+          })
+          .catch(function () { return false; });
       }
 
       function kgLogOpen() {
@@ -2210,7 +2313,7 @@
           var t = result.tables[split];
           if (t && dashboardUrl) {
             banner += '<a class="btn btn-secondary btn-sm" target="_blank" href="' +
-                      dashboardUrl + '?table=' + encodeURIComponent(t.url) + '">Explore ' + split + '</a>';
+                      dashTableLink(t.url) + '">Explore ' + split + '</a>';
           }
         });
         // Start over belongs to the revisit context (form hidden). In live
@@ -2250,7 +2353,7 @@
             '<button type="button" class="btn btn-ghost btn-sm kgi-btn" data-copy="' + esc(t.url) +
               '" title="Copy full table path" aria-label="Copy full table path">' + kgIcon('copy') + '</button>' +
             (dashboardUrl ? '<a class="btn btn-secondary btn-sm kgi-btn" target="_blank" href="' +
-              dashboardUrl + '?table=' + encodeURIComponent(t.url) + '"><span>Explore</span>' +
+              dashTableLink(t.url) + '"><span>Explore</span>' +
               kgIcon('arrow-right', 'kgi-12') + '</a>' : '') +
             '<span class="kg-reimport-slot">' +
             (t.reused ? '<button type="button" class="btn btn-ghost btn-sm kgi-btn kg-btn-danger-hover kg-reimport" ' +
@@ -2567,8 +2670,8 @@
         if (mode && mode.indexOf('submit-') === 0) { psDevForce(mode); return; }
         if (mode && mode.indexOf('predict-') === 0) { psDevForce(mode); return; }
         if (mode && mode.indexOf('status-') === 0) { stDevForce(mode); return; }
-        var devYaml = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\competition_exdark\\package_build\\starter_kit\\dataset.yaml';
-        var base = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
+        var devYaml = 'C:\\Users\\participant\\Downloads\\starter_kit\\dataset.yaml';
+        var base = 'C:/Users/participant/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
         function T(s, rows, reused) {
           return { url: base + 'exdark_' + s + '/tables/initial', rows: rows, reused: reused };
         }
@@ -2707,13 +2810,13 @@
       // static fixtures, no fetches, no job side effects. Documented in
       // docs/ui-notes.md.
       function trDevForce(mode) {
-        var base = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
+        var base = 'C:/Users/participant/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
         var trainUrl = base + 'exdark_train/tables/initial';
         var valUrl = base + 'exdark_val/tables/initial';
         var devRun = 'kaggle_run_20260721_090000';
-        var weights = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\runs\\kaggle-plugin\\' +
+        var weights = 'C:\\Users\\participant\\.3lc-kaggle-plugin\\runs\\' +
                       devRun + '\\weights\\best.pt';
-        var runUrl = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/runs/' + devRun;
+        var runUrl = 'C:/Users/participant/AppData/Local/3LC/3LC/projects/exdark-competition/runs/' + devRun;
 
         // Deterministic improving curve with a mild wobble — fixtures must
         // render identically on every load (no randomness). Shape matches
@@ -2735,7 +2838,7 @@
           return h;
         }
         var devSha = '0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1';
-        var devCkpt = 'C:\\Users\\Owner\\.3lc-kaggle-plugin\\checkpoints\\yolo11n.pt';
+        var devCkpt = 'C:\\Users\\participant\\.3lc-kaggle-plugin\\checkpoints\\yolo11n.pt';
         var PROV = [
           { label: 'run records model == yolo11n.pt (official checkpoint)', ok: true,
             detail: "model='" + devCkpt + "'" },
@@ -2873,10 +2976,10 @@
       // ?kgdev=predict-legacy-run): static fixtures, no fetches, no job
       // side effects. Documented in docs/ui-notes.md.
       function psDevForce(mode) {
-        var base = 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
+        var base = 'C:/Users/participant/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/';
         var testUrl = base + 'exdark_test/tables/initial';
         var devRun = 'kaggle_run_20260721_090000';
-        var csvPath = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\runs\\kaggle-plugin\\' +
+        var csvPath = 'C:\\Users\\participant\\.3lc-kaggle-plugin\\runs\\' +
                       devRun + '\\submissions\\submission_20260721_141530.csv';
         var now = Date.now() / 1000;
 
@@ -3080,7 +3183,7 @@
       // fetches, no job side effects. Documented in docs/ui-notes.md.
       function stDevForce(mode) {
         var now = Date.now() / 1000;
-        var csvBase = 'C:\\Users\\Owner\\Desktop\\3LC Kaggle Competitions\\runs\\kaggle-plugin\\';
+        var csvBase = 'C:\\Users\\participant\\.3lc-kaggle-plugin\\runs\\';
 
         function REC(i, opts) {
           return {
@@ -3112,8 +3215,8 @@
                    sub: { status: 'skipped', reason: 'CSV-only mode.' } })
         ];
         var RUNSBYJOB = {
-          devtrain1: { job_id: 'devtrain1', run_url: 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/runs/kaggle_run_20260721_1500' },
-          devtrain0: { job_id: 'devtrain0', run_url: 'C:/Users/Owner/AppData/Local/3LC/3LC/projects/exdark-competition/runs/kaggle_run_20260721_0900' }
+          devtrain1: { job_id: 'devtrain1', run_url: 'C:/Users/participant/AppData/Local/3LC/3LC/projects/exdark-competition/runs/kaggle_run_20260721_1500' },
+          devtrain0: { job_id: 'devtrain0', run_url: 'C:/Users/participant/AppData/Local/3LC/3LC/projects/exdark-competition/runs/kaggle_run_20260721_0900' }
         };
         var LIVE_TRAIN = { id: 'devlive', kind: 'train', status: 'running', created_at: now - 2400,
                            progress: { epoch: 12, total_epochs: 50 } };
@@ -3220,7 +3323,8 @@
       // whatever landed (config or defaults) so the gate is already green
       // when the tab opens on a healthy install.
       configLoaded.then(function () {
-        return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
+        return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=' +
+                             encodeURIComponent(kgCurrentProject()))
           .then(function (r) { return r.json(); })
           .then(function (d) {
             if (d.train && !el('tr-train-url').value.trim()) { el('tr-train-url').value = d.train.url; }
@@ -3233,7 +3337,7 @@
           // one is known (label edits happen there).
           var trainUrl = el('tr-train-url').value.trim();
           if (trainUrl && dashboardUrl) {
-            el('kg-loop-fixlabels').href = dashboardUrl + '?table=' + encodeURIComponent(trainUrl);
+            el('kg-loop-fixlabels').href = dashTableLink(trainUrl);
           }
         });
 
@@ -3624,6 +3728,9 @@
           kgIcon('alert-triangle') +
           '<span><strong>' + esc(data.headline || 'Tables not found.') + '</strong>' +
           (problems.length ? '<br>' + problems.map(function (p) { return '• ' + p; }).join('<br>') : '') +
+          '<br><span class="form-help">Looking in project <code>' + esc(kgCurrentProject()) +
+          '</code> — no import has produced these tables there yet. If you just changed the ' +
+          'Project name, Import (tab 1) needs one run for that project.</span>' +
           '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm kgi-btn" ' +
           'id="tr-goto-import"><span>Go to Import</span>' + kgIcon('arrow-right', 'kgi-12') +
           '</button></div></span></div></div>';
@@ -3721,7 +3828,12 @@
 
       function trOnTabEnter() {
         if (kgDevMode) { return; }   // forced states own the gate
-        trVerifyTables(false);       // same-values re-entry is a no-op
+        // Activation refetch (v1 pattern): tables may have appeared since
+        // the last check (a fresh Import) — the same-key no-op made that
+        // verdict stick until a reload in round 1. Also follow a renamed
+        // project before re-verifying.
+        kgSyncFieldToProject(['tr-train-url', 'tr-val-url'])
+          .then(function () { trVerifyTables(true); });
         trLoadDurationStats();
       }
       if (!kgDevMode) { trLoadDurationStats(); }
@@ -4150,7 +4262,11 @@
         if (kgDevMode) { return; }   // forced states own this tab
         psLoadRuns();
         renderConnection();
-        psVerifyTable(false);        // same-value re-entry is a no-op
+        // Activation refetch (v1 pattern) + project follow — same rationale
+        // as trOnTabEnter: a stale same-key verdict survived a fresh Import
+        // in round 1, and a renamed project left this field on the old one.
+        kgSyncFieldToProject(['ps-test-url'])
+          .then(function () { psVerifyTable(true); });
       }
 
       // ── Test-table gate (Train's pattern, one URL) ──────────────────
@@ -4176,7 +4292,10 @@
         }
         box.innerHTML = '<div class="' + entering + '"><div class="kg-callout warn">' +
           kgIcon('alert-triangle') + '<span><strong>' + esc(data.headline || 'Table not found.') +
-          '</strong><div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm kgi-btn" ' +
+          '</strong><br><span class="form-help">Looking for the test table in project <code>' +
+          esc(kgCurrentProject()) + '</code>. If you just changed the Project name, Import ' +
+          '(tab 1) needs one run for that project first.</span>' +
+          '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm kgi-btn" ' +
           'id="ps-goto-import"><span>Go to Import</span>' + kgIcon('arrow-right', 'kgi-12') +
           '</button></div></span></div></div>';
         el('ps-goto-import').addEventListener('click', function () { showTab('import'); });
@@ -4269,7 +4388,8 @@
       // Test table default from the same helper the Train tab uses — saved
       // config wins, defaults fill blanks only; then the gate verifies.
       configLoaded.then(function () {
-        return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=exdark-competition')
+        return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=' +
+                             encodeURIComponent(kgCurrentProject()))
           .then(function (r) { return r.json(); })
           .then(function (d) {
             if (d.test && !el('ps-test-url').value.trim()) { el('ps-test-url').value = d.test.url; }
