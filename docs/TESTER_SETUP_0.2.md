@@ -1,4 +1,27 @@
-# Tester setup — 0.2.x Hub + Kaggle plugin v1.2.0 (catalog install)
+# Tester setup — 0.2.x Hub + Kaggle plugin v1.2.1 (catalog install)
+
+> **MIGRATION — round-1 testers only (installed v1.2.0 under the old id `kaggle`).**
+> v1.2.1 renamed the plugin id to **`kaggle-exdark`** (collision safety). The old
+> install won't update in place — do this once, in this order:
+>
+> 1. **Kill the orphan worker first** (known 0.2.1 bug W3: uninstall does NOT stop
+>    the worker process, and the leftover lock breaks reinstall):
+>    in the Hub call **reload** on the old plugin, or from PowerShell:
+>    `Invoke-RestMethod -Method Post http://localhost:5020/api/admin/plugins/kaggle/reload`
+>    (a service restart also works).
+> 2. **Uninstall** the old *Kaggle Competition* card (Plugins → Installed → Uninstall).
+>    Then verify `%USERPROFILE%\.3lc-compute\managed-plugins\kaggle\` is actually gone —
+>    if not, close the service window and delete the folder by hand.
+> 3. **Update the env var** in the compute-service window: the old
+>    `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` is dead; set
+>    `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` as shown in step 2 below, then restart
+>    the compute service.
+> 4. **Re-add the catalog** only if you had the local-clone fallback (pull first);
+>    the gist URL is unchanged. **Install** the new card — it installs under
+>    `managed-plugins\kaggle-exdark\1.2.1\`.
+>
+> Job history, saved form values, and run artifacts live in `~/.3lc-kaggle-plugin/`
+> and survive the rename untouched. *(This note comes out once round-2 starts clean.)*
 
 Fresh-machine path. Every version below is **the exact pairing this build was
 tested against** — don't float them. Time budget: ~15 min + one big download
@@ -48,8 +71,10 @@ Windows-required**:
 # W1: 0.2.1 spawns plugin workers as <venv>/bin/python (POSIX layout) on every
 # OS. On Windows that file doesn't exist and every plugin worker fails with a
 # 500 on first use. This per-plugin override pins the correct interpreter path
-# (pre-stating where the shop materializes the kaggle venv, version 1.2.0):
-$env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle\1.2.0\.venv\Scripts\python.exe"
+# (pre-stating where the shop materializes the venv: id kaggle-exdark,
+# version 1.2.1 — the env-var name is TLC_COMPUTE_PLUGIN_VENV_ +
+# id.upper() with hyphens as underscores):
+$env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.1\.venv\Scripts\python.exe"
 
 # CUDA torch: shop installs (uv pip install) don't read the plugin's own uv
 # index config, so plain `torch` resolves CPU-only on Windows without this:
@@ -109,7 +134,7 @@ manual install you may notice:
 
 | Symptom | Cause / fix |
 |---|---|
-| Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle\1.2.0\.venv\Scripts\python.exe` |
+| Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle-exdark\1.2.1\.venv\Scripts\python.exe`. Round-1 machines: the OLD name `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` no longer does anything. |
 | Install fails: `could not read Username for 'https://github.com'` | git has no GitHub token — prerequisite row 3 |
 | Install fails: `uv executable not found` | uv not on the PATH of the compute-service process |
 | Training says CUDA unavailable | `TLC_COMPUTE_PLUGIN_INDEX_URLS` was not set when the plugin venv was built → uninstall the plugin in the shop, set the env var, reinstall |

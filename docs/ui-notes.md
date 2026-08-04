@@ -510,7 +510,7 @@ The v1.1.x dev loop was: edit -> POST /api/admin/plugins/kaggle/reload (JWT'd,
 so via the Hub page) -> hard-refresh; NEW ROUTES needed a full service
 restart. On the 0.2.x host the plugin runs OUT-OF-PROCESS: the host spawns
 `<plugin venv>\python -m tlc_plugin_sdk.worker --entry tlc_plugin_kaggle:KagglePlugin`
-and reverse-proxies /api/plugins/kaggle/* to it (reserved paths /ui /compute
+and reverse-proxies /api/plugins/kaggle-exdark/* to it (reserved paths /ui /compute
 /run /jobs/{id}/run /jobs/{id}/cancel are host-owned and match first).
 
 The new loop:
@@ -534,14 +534,14 @@ Notes:
   restart also picks up fragment edits.
 - Dependency changes (pyproject [kaggle] extra) need a re-provision of the
   plugin venv: Plugins page -> the plugin's venv panel -> Rebuild (or
-  POST /api/plugins/kaggle/provision?force=true), then reload.
+  POST /api/plugins/kaggle-exdark/provision?force=true), then reload.
 
 ## Job start contract change (0.2.x)
 
 Starts go through TWO calls now (see kgStartJob in ui.html): our
 /validate/<kind> (keeps the fail-fast 400 + participant-facing message —
 the host /run is fire-and-return and reports param problems only as failed
-jobs) then the host's /api/plugins/kaggle/run with {kind, ...params}. The
+jobs) then the host's /api/plugins/kaggle-exdark/run with {kind, ...params}. The
 /run job_id IS our store's record id, so all status polling, reconnect,
 freshness, and Status-tab history logic is unchanged. Cancel goes to the
 host: POST /api/plugins/jobs/{job_id}/cancel (our old custom cancel route

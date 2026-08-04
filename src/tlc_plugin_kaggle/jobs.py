@@ -8,10 +8,10 @@ so a cancel issued through the reloaded module still reaches a thread started
 before the reload.
 
 v3 (0.2.x port): jobs start through the host dispatch channel
-(POST /api/plugins/kaggle/run -> KagglePlugin.run_job -> run_dispatch below),
+(POST /api/plugins/kaggle-exdark/run -> KagglePlugin.run_job -> run_dispatch below),
 which bridges this store onto the SDK JobContext event stream. The record id
 is the host's job id, so the UI's status polling
-(GET /api/plugins/kaggle/jobs/{job_id}) is unchanged. The pid stamp now
+(GET /api/plugins/kaggle-exdark/jobs/{job_id}) is unchanged. The pid stamp now
 identifies the WORKER process: a worker restart (reload, crash, future idle
 reap) orphans running records exactly like a service restart used to.
 """
@@ -415,7 +415,7 @@ def active_jobs_generic(project_name: str = "") -> list[dict[str, Any]]:
         progress = job.get("progress") or {}
         entry: dict[str, Any] = {
             "id": job["id"],
-            "plugin_id": "kaggle",
+            "plugin_id": "kaggle-exdark",
             "plugin_name": "Kaggle Competition",
             "plugin_icon": "🏁",
             "status": job["status"],

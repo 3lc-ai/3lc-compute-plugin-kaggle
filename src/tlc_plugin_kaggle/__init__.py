@@ -18,7 +18,7 @@ from typing import Any
 
 from tlc_plugin_sdk import ComputePlugin, JobContext
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 REPOSITORY_URL = "https://github.com/3lc-ai/3lc-compute-plugin-kaggle"
 
 
@@ -36,7 +36,7 @@ class KagglePlugin(ComputePlugin):
     def compute(self, params: dict[str, Any]) -> dict[str, Any]:
         """Generic info endpoint — real work goes through the custom routes."""
         return {
-            "plugin": "kaggle",
+            "plugin": "kaggle-exdark",
             "version": __version__,
             "tabs": ["import", "train", "submit", "status"],
             "implemented": ["import", "train", "predict_submit", "status"],
@@ -48,7 +48,7 @@ class KagglePlugin(ComputePlugin):
         return [KaggleController]
 
     def run_job(self, ctx: JobContext) -> None:
-        """Host-dispatched job entry (POST /api/plugins/kaggle/run).
+        """Host-dispatched job entry (POST /api/plugins/kaggle-exdark/run).
 
         ``ctx.params`` carries ``{"kind": "import" | "train" | "predict" |
         "kaggle_submit" | "predict_submit", ...job params}``. The job runs

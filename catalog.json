@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-31T00:00:00Z",
+  "generated_at": "2026-08-04T00:00:00Z",
   "plugins": [
     {
-      "id": "kaggle",
+      "id": "kaggle-exdark",
       "versions": [
         {
-          "version": "1.2.0",
-          "source": "3lc-compute-plugin-kaggle[kaggle] @ git+https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git@v1.2.0",
+          "version": "1.2.1",
+          "source": "3lc-compute-plugin-kaggle[kaggle] @ git+https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git@v1.2.1",
           "wheel_url": "",
           "manifest": {
-            "id": "kaggle",
+            "id": "kaggle-exdark",
             "name": "Kaggle Competition",
             "description": "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit. The whole competition loop without leaving the Hub.",
-            "version": "1.2.0",
+            "version": "1.2.1",
             "min_service_version": "0.2.0",
             "icon": "🏁",
             "icon_svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3.5 14V2.5\"/><path d=\"M3.5 3h8.5l-1.8 2.5L12 8H3.5\"/></svg>",

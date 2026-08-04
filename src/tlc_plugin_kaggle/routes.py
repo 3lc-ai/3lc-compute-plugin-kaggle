@@ -1,7 +1,7 @@
 """REST routes for the Kaggle plugin (0.2.x worker app).
 
 Paths are RELATIVE: the SDK worker serves this controller in the plugin's own
-Litestar app, and the host proxies /api/plugins/kaggle/<subpath> -> /<subpath>
+Litestar app, and the host proxies /api/plugins/kaggle-exdark/<subpath> -> /<subpath>
 via its catch-all — so client-side URLs are unchanged from v1.1.x. Adding or
 renaming routes needs only a worker restart (plugin reload), never a service
 restart. Reserved paths the HOST owns ahead of the proxy: /ui, /compute, /run,
@@ -89,7 +89,7 @@ class KaggleController(Controller):
     @post("/validate/import", sync_to_thread=True)
     def validate_import(self, data: dict[str, Any]) -> Response:
         """Fail-fast validation for the Import job; the UI then POSTs the
-        returned params (plus kind) to the host's /api/plugins/kaggle/run.
+        returned params (plus kind) to the host's /api/plugins/kaggle-exdark/run.
         Body: {dataset_yaml, project_name?, table_name?}."""
         from tlc_plugin_kaggle import importer
 

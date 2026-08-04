@@ -16,11 +16,15 @@ working copy or a branch.
 
 ## 2. Update `catalog.json` in this repo
 
-Add a new entry to the `versions` array of the `kaggle` plugin (newest first):
-bump `version`, point `source` at the new tag, and paste in a fresh copy of the
-manifest (it must match the class attributes in
-`src/tlc_plugin_kaggle/plugin.py` — `version` included). Bump `generated_at`.
-Commit and push.
+Add a new entry to the `versions` array of the `kaggle-exdark` plugin (newest
+first): bump `version`, point `source` at the new tag, and paste in a fresh
+copy of the manifest (it must match `src/tlc_plugin_kaggle/plugin.toml` —
+`version` included). Bump `generated_at`. Commit and push.
+
+(v1.2.1 renamed the plugin id `kaggle` → `kaggle-exdark`; the old id's catalog
+entry was removed on purpose — keeping it would advertise a stale installable
+card next to the renamed plugin. The catalog `id` must always equal the
+`plugin.toml` id or the shop shows a phantom "available" card.)
 
 **The repo copy is the source of truth.** The gist (step 3) is only a mirror.
 

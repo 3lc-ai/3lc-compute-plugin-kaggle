@@ -1,6 +1,6 @@
 [project]
 name = "3lc-compute-plugin-kaggle"
-version = "1.2.0"
+version = "1.2.1"
 description = "End-to-end Kaggle competition workflow for the 3LC Hub: import, train the fixed baseline, predict, submit."
 # >=3.11: the kaggle client (>=2.2.3) floors at 3.11; uv sync resolves for the
 # whole requires-python range, so a 3.10 floor makes the lock unsatisfiable.
@@ -29,17 +29,18 @@ kaggle = [
 
 # Advertised for the installed-package / catalog discovery path. Value = the
 # import package; its bundled plugin.toml drives id/ui/runtime + the extra.
+# Key MUST equal the plugin id (the host dedups discovery on ep.name).
 [project.entry-points."tlc_compute.plugins"]
-kaggle = "tlc_plugin_kaggle"
+kaggle-exdark = "tlc_plugin_kaggle"
 
 # ── Legacy-host manifest (tlc_compute 0.1.x reads class attrs, never this;
 # the 0.2.x host reads src/tlc_plugin_kaggle/plugin.toml, which wins over
 # this table. Kept in sync as documentation of record.) ─────────────────────
 [tool.tlc-compute]
-id = "kaggle"
+id = "kaggle-exdark"
 name = "Kaggle Competition"
 description = "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit."
-version = "1.2.0"
+version = "1.2.1"
 min_service_version = "0.2.0"
 icon = "🏁"
 repository_url = "https://github.com/3lc-ai/3lc-compute-plugin-kaggle"

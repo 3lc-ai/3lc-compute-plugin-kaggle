@@ -1165,7 +1165,7 @@
       function kgAdoptFreshJob(kind, stamp) {
         return new Promise(function (resolve) { setTimeout(resolve, 2500); })
           .then(function () {
-            return API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=' + encodeURIComponent(kind));
+            return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs?kind=' + encodeURIComponent(kind));
           })
           .then(function (r) { return r.json(); })
           .then(function (list) {
@@ -1178,7 +1178,7 @@
       }
 
       function kgStartJob(kind, params) {
-        var validatePath = '/api/plugins/kaggle/validate/' +
+        var validatePath = '/api/plugins/kaggle-exdark/validate/' +
           (kind === 'kaggle_submit' ? 'submit' : kind);
         var stamp = Date.now();
         return API.authFetch(computeUrl + validatePath, {
@@ -1192,7 +1192,7 @@
           return r.json().then(function (b) {
             if (!r.ok || b.error) { throw new Error(b.error || 'validation failed'); }
             var runBody = Object.assign({ kind: kind }, b.params || params);
-            return API.authFetch(computeUrl + '/api/plugins/kaggle/run', {
+            return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/run', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(runBody)
@@ -1492,7 +1492,7 @@
         }
 
         function ping() {
-          API.authFetch(computeUrl + '/api/plugins/kaggle/import/state')
+          API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/import/state')
             .then(function () { up(); })
             .catch(function () { schedule(); });
         }
@@ -1701,7 +1701,7 @@
           kglEnter(pop);
           document.addEventListener('mousedown', onDocDown, true);
           document.addEventListener('keydown', onKeyDown, true);
-          API.authFetch(computeUrl + '/api/plugins/kaggle/tables/list?project=' +
+          API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/tables/list?project=' +
                         encodeURIComponent(kgCurrentProject()))
             .then(function (r) { return r.json(); })
             .then(function (data) {
@@ -1768,7 +1768,7 @@
           return !v || (kgUrlProject(v) && kgUrlProject(v) !== cur);
         });
         if (!stale.length) { return Promise.resolve(false); }
-        return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=' +
+        return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/tables/defaults?project=' +
                              encodeURIComponent(cur))
           .then(function (r) { return r.json(); })
           .then(function (d) {
@@ -1827,7 +1827,7 @@
           values[CFG_FIELDS[tab][id]] = node.type === 'checkbox' ? node.checked : node.value;
         });
         var body = {}; body[tab] = values;
-        API.authFetch(computeUrl + '/api/plugins/kaggle/config', {
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
@@ -1866,7 +1866,7 @@
 
       var kgHost = false;   // organizer machine (config _meta.host): host-only UI
 
-      var configLoaded = API.authFetch(computeUrl + '/api/plugins/kaggle/config')
+      var configLoaded = API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/config')
         .then(function (r) { return r.json(); })
         .then(function (cfg) {
           applyConfig(cfg);
@@ -1890,7 +1890,7 @@
       // Stepper states from the pipeline endpoint, in icon-set glyphs:
       // check-circle done, filled dot active, outline circle upcoming.
       function renderPipeline() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/pipeline')
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/pipeline')
           .then(function (r) { return r.json(); })
           .then(function (p) {
             var steps = ['import', 'train', 'submit'];
@@ -2080,7 +2080,7 @@
         if (!yaml) { kgRenderPreflight(null); return; }
         var seq = ++kgPreflightSeq;
         kgRenderPreflight({ checking: true });
-        API.authFetch(computeUrl + '/api/plugins/kaggle/import/preflight?yaml_path=' + encodeURIComponent(yaml))
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/import/preflight?yaml_path=' + encodeURIComponent(yaml))
           .then(function (r) { return r.json(); })
           .then(function (data) {
             if (seq !== kgPreflightSeq) { return; }   // superseded by newer input
@@ -2388,7 +2388,7 @@
       // can prove one; when it can't (revisions=null), always confirm.
       // Provably zero revisions -> nothing to lose, no dialog.
       function kgReimportFresh(split, url) {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/import/revisions?url=' + encodeURIComponent(url))
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/import/revisions?url=' + encodeURIComponent(url))
           .then(function (r) { return r.json(); })
           .catch(function () { return {}; })
           .then(function (info) {
@@ -2423,7 +2423,7 @@
       }
 
       function poll(jobId) {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + jobId)
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs/' + jobId)
           .then(function (r) { return r.json(); })
           .then(function (job) {
             el('kg-log-details').style.display = 'block';
@@ -2601,7 +2601,7 @@
         // table verification already decided this state, a pruned record
         // just means no log.
         if (state.job_available && snap.job_id) {
-          API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + snap.job_id)
+          API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs/' + snap.job_id)
             .then(function (r) { return r.json(); })
             .then(function (job) {
               if (job && job.log && job.log.length && !kgImporting) {
@@ -2614,7 +2614,7 @@
       }
 
       function kgInitImportTab() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=import')
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs?kind=import')
           .then(function (r) { return r.json(); })
           .catch(function (e) { kgConn.fail(e); return []; })
           .then(function (list) {
@@ -2632,7 +2632,7 @@
               pollTimer = setInterval(function () { poll(running.id); }, 1000);
               return;
             }
-            return API.authFetch(computeUrl + '/api/plugins/kaggle/import/state')
+            return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/import/state')
               .then(function (r) { return r.json(); })
               .catch(function (e) { kgConn.fail(e); return { state: 'empty' }; })
               .then(function (state) {
@@ -3323,7 +3323,7 @@
       // whatever landed (config or defaults) so the gate is already green
       // when the tab opens on a healthy install.
       configLoaded.then(function () {
-        return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=' +
+        return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/tables/defaults?project=' +
                              encodeURIComponent(kgCurrentProject()))
           .then(function (r) { return r.json(); })
           .then(function (d) {
@@ -3627,7 +3627,7 @@
       var trHadChecks = false;   // cascade only on live arrival
 
       function pollTrain() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + trainJobId)
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs/' + trainJobId)
           .then(function (r) { return r.json(); })
           .then(function (job) {
             if (!job || !job.status) { return; }   // pruned/odd record: keep polling
@@ -3749,7 +3749,7 @@
         var seq = ++trGateSeq;
         trRenderGate({ checking: true });
         var check = function (url) {
-          return API.authFetch(computeUrl + '/api/plugins/kaggle/import/revisions?url=' +
+          return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/import/revisions?url=' +
                                encodeURIComponent(url))
             .then(function (r) { return r.json(); });
         };
@@ -3808,7 +3808,7 @@
       }
 
       function trLoadDurationStats() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=train')
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs?kind=train')
           .then(function (r) { return r.json(); })
           .then(function (list) {
             var times = (list || [])
@@ -4031,7 +4031,7 @@
       // renders its summary (completed hides the form behind Start new
       // run; failed/cancelled keep the form for a re-run), else the form.
       function trInitTrainTab() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=train')
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs?kind=train')
           .then(function (r) { return r.json(); })
           .catch(function (e) { kgConn.fail(e); return []; })
           .then(function (list) {
@@ -4053,7 +4053,7 @@
             if (!last) { return; }   // no train history: plain form state
             // The list route strips checks and log — fetch the full record
             // for the static terminal render.
-            API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + last.id)
+            API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs/' + last.id)
               .then(function (r) { return r.json(); })
               .then(function (job) {
                 if (!job || !job.status || job.status === 'running') { return; }
@@ -4099,7 +4099,7 @@
       // Download a job's submission CSV through the authenticated API
       // (a plain <a href> would miss the Authorization header).
       function downloadCsv(jobId) {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/submissions/' + jobId + '/download')
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/submissions/' + jobId + '/download')
           .then(function (r) {
             if (!r.ok) { throw new Error('HTTP ' + r.status); }
             var name = 'submission.csv';
@@ -4211,7 +4211,7 @@
         var btn = el('ps-run-refresh');
         if (manual && btn) { btn.classList.add('kg-spin'); }
         var settle = function () { if (btn) { btn.classList.remove('kg-spin'); } };
-        API.authFetch(computeUrl + '/api/plugins/kaggle/runs')
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/runs')
           .then(function (r) { return r.json(); })
           .then(function (runs) {
             psRuns = runs || [];
@@ -4310,7 +4310,7 @@
         if (!url) { psRenderGate(null); return; }
         var seq = ++psGateSeq;
         psRenderGate({ checking: true });
-        API.authFetch(computeUrl + '/api/plugins/kaggle/import/revisions?url=' + encodeURIComponent(url))
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/import/revisions?url=' + encodeURIComponent(url))
           .then(function (r) { return r.json(); })
           .then(function (info) {
             if (seq !== psGateSeq) { return; }
@@ -4388,7 +4388,7 @@
       // Test table default from the same helper the Train tab uses — saved
       // config wins, defaults fill blanks only; then the gate verifies.
       configLoaded.then(function () {
-        return API.authFetch(computeUrl + '/api/plugins/kaggle/tables/defaults?project=' +
+        return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/tables/defaults?project=' +
                              encodeURIComponent(kgCurrentProject()))
           .then(function (r) { return r.json(); })
           .then(function (d) {
@@ -4528,7 +4528,7 @@
       }
 
       function psPollPredict() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + psPredictJobId)
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs/' + psPredictJobId)
           .then(function (r) { return r.json(); })
           .then(function (job) {
             if (!job || !job.status) { return; }
@@ -4677,7 +4677,7 @@
       // Kaggle connection card in the banner vocabulary; budget included.
       // Split fetch/render so ?kgdev fixtures can drive the render directly.
       function renderConnection() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/kaggle/connection?slug=' +
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/kaggle/connection?slug=' +
                       encodeURIComponent(el('ps-slug').value.trim()))
           .then(function (r) { return r.json(); })
           .then(psRenderConnState)
@@ -4785,7 +4785,7 @@
       }
 
       function psPollSubmit() {
-        API.authFetch(computeUrl + '/api/plugins/kaggle/jobs/' + psSubmitJobId)
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs/' + psSubmitJobId)
           .then(function (r) { return r.json(); })
           .then(function (job) {
             if (!job || !job.status) { return; }
@@ -4939,9 +4939,9 @@
       // snapshot (revisit-first), then the form.
       function psInitSubmitTab() {
         Promise.all([
-          API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=predict')
+          API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs?kind=predict')
             .then(function (r) { return r.json(); }).catch(function () { return []; }),
-          API.authFetch(computeUrl + '/api/plugins/kaggle/jobs?kind=kaggle_submit')
+          API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs?kind=kaggle_submit')
             .then(function (r) { return r.json(); }).catch(function () { return []; })
         ]).then(function (lists) {
           var runningPredict = (lists[0] || []).filter(function (j) { return j.status === 'running'; })[0];
@@ -4965,7 +4965,7 @@
             psPollSubmit();
             // fall through: the revisit snapshot still supplies step 1
           }
-          API.authFetch(computeUrl + '/api/plugins/kaggle/submit/state')
+          API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/submit/state')
             .then(function (r) { return r.json(); })
             .catch(function (e) { kgConn.fail(e); return { state: 'empty' }; })
             .then(function (state) {
@@ -5224,7 +5224,7 @@
 
       function renderKaggleLive() {
         var slug = el('ps-slug').value.trim();
-        API.authFetch(computeUrl + '/api/plugins/kaggle/kaggle/status?slug=' + encodeURIComponent(slug))
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/kaggle/status?slug=' + encodeURIComponent(slug))
           .then(function (r) { return r.json(); })
           .then(renderKaggleFrom)
           .catch(function (e) {
@@ -5250,11 +5250,11 @@
             .then(function (r) { return r.json(); }).catch(function () { return []; });
         };
         Promise.all([
-          get('/api/plugins/kaggle/runs'),
-          get('/api/plugins/kaggle/jobs?kind=predict'),
-          get('/api/plugins/kaggle/jobs?kind=predict_submit'),
-          get('/api/plugins/kaggle/jobs?kind=train'),
-          get('/api/plugins/kaggle/jobs?kind=kaggle_submit')
+          get('/api/plugins/kaggle-exdark/runs'),
+          get('/api/plugins/kaggle-exdark/jobs?kind=predict'),
+          get('/api/plugins/kaggle-exdark/jobs?kind=predict_submit'),
+          get('/api/plugins/kaggle-exdark/jobs?kind=train'),
+          get('/api/plugins/kaggle-exdark/jobs?kind=kaggle_submit')
         ]).then(function (res) {
           var runsByJob = {};
           (res[0] || []).forEach(function (run) { runsByJob[run.job_id] = run; });

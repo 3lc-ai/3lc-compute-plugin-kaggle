@@ -18,7 +18,7 @@ table revision, submit, repeat.
 ![Predict results](docs/shots/05_predict_results.png)
 ![Status hero + history](docs/shots/09_status_history.png)
 
-**Version pairing (v1.2.0):** 3LC Hub with `3lc-compute==0.2.1` + `3lc==3.1.0`
+**Version pairing (v1.2.1):** 3LC Hub with `3lc-compute==0.2.1` + `3lc==3.1.0`
 (the 0.2.x plugin platform). For the legacy 0.1.x-host install (plugin v1.1.x),
 see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
 
@@ -50,7 +50,7 @@ see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
    interpreter workaround + CUDA torch index — details in the tester doc):
 
    ```powershell
-   $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle\1.2.0\.venv\Scripts\python.exe"
+   $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.1\.venv\Scripts\python.exe"
    $env:TLC_COMPUTE_PLUGIN_INDEX_URLS = "https://download.pytorch.org/whl/cu128"
    ```
 
@@ -186,8 +186,9 @@ Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
 
 1. **Kaggle page 500s on first open / every job start fails.**
    Cause: the Windows worker-interpreter bug (0.2.1 spawns `<venv>/bin/python`,
-   a POSIX path) — the `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` env var from §1 step 2 is
-   missing or wrong in the compute-service window.
+   a POSIX path) — the `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` env var from §1
+   step 2 is missing or wrong in the compute-service window. (Round-1 machines:
+   the old `..._VENV_KAGGLE` name stopped working with the v1.2.1 id rename.)
    Fix: set it (exact path in [docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md))
    and restart the compute service window.
 
@@ -201,7 +202,7 @@ Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
    (shop installs resolve plain `torch` from PyPI = CPU-only on Windows).
    Fix: set the env var (§1 step 2), **Uninstall** the plugin in the shop,
    reinstall. Verify inside the worker venv:
-   `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle\1.2.0\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.
+   `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.1\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.
 
 4. **Kaggle shows "not connected" / auth fails though the token file exists.**
    Cause: the token file isn't byte-exact — a BOM, a trailing newline, or UTF-16
