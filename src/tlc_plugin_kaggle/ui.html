@@ -627,6 +627,9 @@
               <label class="form-label required" for="kg-yaml">Dataset YAML path</label>
               <input id="kg-yaml" type="text" class="form-control"
                      placeholder="C:\path\to\starter_kit\dataset.yaml" autocomplete="off" spellcheck="false">
+              <div class="form-help">Path on the machine running the compute service.
+                Browsing from another computer? The starter kit must be unzipped on the
+                service's machine, and this is its path there.</div>
               <div id="kg-preflight"></div>
             </div>
             <div class="form-group">
@@ -1002,7 +1005,8 @@
                      placeholder="C:\...\weights\best.pt">
               <div class="kg-callout warn" style="margin-top: 6px;">
                 <svg class="kgi" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.6L14.4 13.4H1.6L8 2.6z"/><path d="M8 6.8v2.8"/><path d="M8 12h.01"/></svg>
-                <span>External weights: provenance cannot be verified by the plugin.</span>
+                <span>External weights: provenance cannot be verified by the plugin.
+                  Path as seen by the compute service's machine.</span>
               </div>
             </div>
           </div>
@@ -2351,7 +2355,7 @@
             '<span class="path" title="' + esc(t.url) + '">' + esc(midTrunc(t.url, 52)) + '</span>' +
             '<span class="kg-row-actions">' +
             '<button type="button" class="btn btn-ghost btn-sm kgi-btn" data-copy="' + esc(t.url) +
-              '" title="Copy full table path" aria-label="Copy full table path">' + kgIcon('copy') + '</button>' +
+              '" title="Copy full table path (a path on the compute service\'s machine)" aria-label="Copy full table path">' + kgIcon('copy') + '</button>' +
             (dashboardUrl ? '<a class="btn btn-secondary btn-sm kgi-btn" target="_blank" href="' +
               dashTableLink(t.url) + '"><span>Explore</span>' +
               kgIcon('arrow-right', 'kgi-12') + '</a>' : '') +
@@ -3538,7 +3542,7 @@
               '<span style="min-width:0;overflow:hidden;white-space:nowrap;color:var(--text-secondary)" ' +
               'title="' + esc(weights) + '">' + esc(midTrunc(weights, 64)) + '</span>' +
               '<button type="button" class="btn btn-ghost btn-sm kgi-btn" data-copy="' + esc(weights) +
-              '" title="Copy weights path" aria-label="Copy weights path">' + kgIcon('copy') + '</button></div>'
+              '" title="Copy weights path (a path on the compute service\'s machine)" aria-label="Copy weights path">' + kgIcon('copy') + '</button></div>'
             : '') +
           '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
           '<button type="button" class="btn btn-primary btn-sm kgi-btn" id="tr-continue-submit">' +
@@ -4489,7 +4493,7 @@
           '<span class="fname">' + esc(fname) + '</span>' +
           '<span class="path" title="' + esc(csvPath) + '">' + esc(midTrunc(csvPath, 56)) + '</span>' +
           '<button type="button" class="btn btn-ghost btn-sm kgi-btn" data-copy="' + esc(csvPath) +
-          '" title="Copy CSV path" aria-label="Copy CSV path">' + kgIcon('copy') + '</button>' +
+          '" title="Copy CSV path (a path on the compute service\'s machine — Download CSV works from anywhere)" aria-label="Copy CSV path">' + kgIcon('copy') + '</button>' +
           '<button type="button" class="btn btn-secondary btn-sm kgi-btn" data-download="' + esc(jobId) +
           '">' + kgIcon('download') + '<span>Download CSV</span></button></div>';
       }

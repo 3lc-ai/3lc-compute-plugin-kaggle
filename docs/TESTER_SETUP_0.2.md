@@ -132,8 +132,17 @@ manual install you may notice:
 
 ## Troubleshooting
 
+> **A traceback in the object-service window at startup is HARMLESS** (known
+> bug W5: `ConfigIndexingTable` / `object_type 'configfile'` — public-examples
+> indexing broken in the 0.2.1 + 3.1.0 pairing, caught and logged). Not a
+> finding; don't report it.
+
 | Symptom | Cause / fix |
 |---|---|
+| `nvcc : The term 'nvcc' is not recognized...` | Wrong command — you don't need the CUDA toolkit. Run `nvidia-smi` and read the top-right **CUDA Version** (driver capability, needs ≥ 12.8). |
+| Install fails: `Repository not found` | git has a **stale** GitHub credential (vs. row below = none at all). Credential Manager → Windows Credentials → delete `git:https://github.com`, re-run the `git ls-remote` prerequisite, sign in fresh. |
+| uv behaves unlike this doc / version mismatch | An older uv shadows the winget one until the shell restarts. `(Get-Command uv).Source` + `uv --version` to see which runs; restart the shell after installing. |
+| `ERROR ... API key` printed before your first login | Normal ordering artifact — clears on the next start after `3lc login`. Only a persistent key error *after* a successful login is a finding. |
 | Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle-exdark\1.2.1\.venv\Scripts\python.exe`. Round-1 machines: the OLD name `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` no longer does anything. |
 | Install fails: `could not read Username for 'https://github.com'` | git has no GitHub token — prerequisite row 3 |
 | Install fails: `uv executable not found` | uv not on the PATH of the compute-service process |

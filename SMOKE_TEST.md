@@ -6,13 +6,17 @@ check it off only if the expectation holds **exactly**, otherwise note what you 
 and keep going. Report the filled checklist plus any **Copy diagnostics** output.
 
 Tester: ______________  Date: ______________  GPU: ______________
-Plugin version shown in the page footer: ______________ (expect **v1.1.1**)
+Plugin version shown in the page footer: ______________ (expect **v1.2.1**)
+
+> Round-1 testers: the plugin id changed to `kaggle-exdark` in v1.2.1 —
+> follow the migration note at the top of
+> [docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md) before anything below.
 
 ## 0. Page loads
 
 - [ ] Sidebar shows **Kaggle** under AI TOOLS; the page opens with four tabs
       (Import / Train / Predict + Submit / Status) and a stepper.
-- [ ] Footer reads `3LC Kaggle Competition plugin v1.1.1`.
+- [ ] Footer reads `3LC Kaggle Competition plugin v1.2.1`.
 
 ## 1. Import (~2–5 min)
 
@@ -32,30 +36,53 @@ Plugin version shown in the page footer: ______________ (expect **v1.1.1**)
       · Image size 640** — not editable anywhere.
 - [ ] Set **Epochs = 2** (all else default) → **Start Training**.
 - [ ] First-ever run: a "Fetching official checkpoint (5.4 MB)" stage appears once.
+      A first-ever start that errors instead of starting is a **finding** in
+      v1.2.1 (the round-1 "signal is aborted" cold-start bug is fixed — report
+      the exact message if you see one).
 - [ ] Live metrics tick per epoch. **Val mAP50 at epoch 2 ≈ 0.5** (reference run:
       0.533; anywhere 0.45–0.60 is a pass — below 0.2 is a failure, report it).
+      8 GB GPUs run a smaller effective batch and take longer — slow ≠ fail.
+- [ ] **Epoch counter tops out at 2/2** and the finished run reads "2 epochs"
+      everywhere (run selector included). A "final validation" line in the log
+      after epoch 2 is expected and is **not** an epoch 3.
 - [ ] On completion: **"Verified provenance recorded" panel, 4/4 assertions green**,
       including the checkpoint sha256.
-- [ ] The run appears in the 3LC Dashboard project (`exdark-competition`).
+- [ ] The run appears in the 3LC Dashboard project (`exdark-competition`) — and
+      the **Open Run in Dashboard** link opens a dashboard that actually shows
+      the run (v1.2.1 appends `object_service=` to every dashboard link; a
+      dashboard that opens empty is a finding).
 
 ## 3. Predict (~1–2 min)
 
 - [ ] Predict + Submit tab, Step 1: weights source lists **your plugin run** (a
       revision/run picker; no free weights-path field — that's organizer-only).
 - [ ] Test table URL is prefilled with `exdark_test`. Click **Run inference**.
+- [ ] Inference streams in VRAM-sized chunks: the per-image counter climbs
+      smoothly to 715 and there is **no CUDA OOM** — including when Predict
+      runs right after Train in the same session (the round-1 12 GB OOM is
+      fixed; an OOM here is a finding, include your GPU + VRAM).
 - [ ] Result panel: **all format checks green**, `submission.csv` path shown,
       sanity summary renders (total boxes / empty images / boxes-per-image mean).
       A soft "boxes unusually low" warning is not a check failure — note it if
       it appears.
-- [ ] **No local mAP score is shown** — expected off the organizer machine.
+- [ ] **No local mAP score is shown** — by design for everyone except the
+      organizer machine. The Kaggle leaderboard score is the real one.
 
-## 4. CSV download — do NOT submit
+## 4. CSV download — and (round 2) optionally submit
 
 - [ ] Click **Download CSV** → file downloads.
 - [ ] Open it: header `id,image_id,prediction_string` + **715 data rows**; ids
       0–714; prediction strings are 6-value groups or `no box`.
-- [ ] **STOP HERE.** Do not click **Submit to Kaggle** (submissions are budgeted;
-      Step 2 stays disabled/"not joined" if you're not invited — that's a pass).
+- [ ] **Round-2 policy:** testers invited to the competition MAY submit to
+      Kaggle to see a score (3/day budget — one is plenty). Expected: the
+      submission is accepted, and the score appears on Kaggle/Status —
+      remember, no local mAP for non-hosts is correct.
+- [ ] **If you have NOT joined the competition on Kaggle** (accepted the rules
+      on the competition page): the plugin should show the friendly
+      **not-joined** state *before* burning an attempt — that's a pass. A raw
+      500/error dump on submit instead of the friendly state is a **finding**
+      (this bit a round-1 tester; the pre-submit GetCompetition probe should
+      catch it).
 
 ## 5. Status
 

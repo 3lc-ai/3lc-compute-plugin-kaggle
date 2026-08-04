@@ -22,6 +22,14 @@ table revision, submit, repeat.
 (the 0.2.x plugin platform). For the legacy 0.1.x-host install (plugin v1.1.x),
 see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
 
+**Platform support — no promises beyond what's tested:**
+
+| Setup | Status |
+|---|---|
+| Windows + NVIDIA GPU, everything local | **Validated** — this README + [docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md) |
+| Remote compute host (Linux GPU box), browse from any machine incl. Mac | **Supported** — guide: [docs/TESTER_SETUP_REMOTE.md](docs/TESTER_SETUP_REMOTE.md); surface audit: [docs/REMOTE_COMPUTE.md](docs/REMOTE_COMPUTE.md) |
+| Mac-local training (Apple Silicon / MPS) | **Uncharted** — `tlc-ultralytics` on MPS is untested by us; the Train tab's Device field accepts free text (e.g. `mps`) if you want to volunteer, but expectations are unset and it's not part of any test round |
+
 ---
 
 ## 1. Install — catalog (the primary path)
@@ -136,6 +144,15 @@ The strict checklist version of this section, with pass/fail boxes, is
    **Verified provenance recorded** panel with **4/4 assertions**, one of them the
    checkpoint sha256 `0ebbc80d4a76…`. Running jobs also appear in the Hub's generic
    **Queue & Progress** panel now.
+   Timing: ~5–8 min for 2 epochs on a 12 GB-class desktop GPU. Smaller cards run
+   at a smaller effective batch to fit VRAM — the round-1 fresh laptop
+   (RTX 3070 Ti, 8 GB) trained at batch 8 and took roughly twice the desktop
+   per-epoch time; slower is normal, only a *failure* is a finding.
+   <!-- VALIDATE (user): fill the measured 3070 Ti per-epoch minutes from the
+        round-1 fresh-laptop run to replace "roughly twice". -->
+   After training the plugin frees GPU memory before Predict; Predict itself
+   streams inference in VRAM-sized chunks (v1.2.1) — the 12 GB OOM from round 1
+   is fixed.
 3. **Predict** — Predict + Submit tab, Step 1: source = your plugin run (participants
    have no other option), test table prefilled, **Run inference**. Expected in ~1–2
    min: results panel, all format checks green, `submission.csv` written (path
@@ -184,6 +201,13 @@ Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
 
 ## 6. Troubleshooting — the likely failures
 
+> **Startup traceback in the object-service window = HARMLESS (known bug W5).**
+> On the 0.2.1 + 3.1.0 pairing the Object Service prints a traceback at startup
+> (`ConfigIndexingTable` rejecting `object_type 'configfile'` — public-examples
+> indexing is broken in this pairing). It is caught and logged, affects nothing
+> in the competition workflow, and is not a finding. Every round-1 tester asked
+> about it, hence this banner.
+
 1. **Kaggle page 500s on first open / every job start fails.**
    Cause: the Windows worker-interpreter bug (0.2.1 spawns `<venv>/bin/python`,
    a POSIX path) — the `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` env var from §1
@@ -218,6 +242,33 @@ Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
    PowerShell needs quotes around any path with spaces. The Import tab's yaml field
    cleans pasted quotes itself.
 
+7. **"Do I have CUDA?" — check `nvidia-smi`, not `nvcc`.**
+   `nvidia-smi`'s top-right **CUDA Version** is the driver's capability and is what
+   matters (needs ≥ 12.8). `nvcc` is the compiler from the CUDA *toolkit*, which
+   you do **not** need — if you typed it you saw
+   `nvcc : The term 'nvcc' is not recognized...`; that is not a missing-CUDA
+   symptom, it's the wrong command.
+
+8. **Catalog install fails: `Repository not found`.**
+   Different from row 2's `could not read Username`: here git *has* a stored
+   GitHub credential, but a stale one (an old account or expired token). Fix:
+   Windows **Credential Manager → Windows Credentials**, delete the
+   `git:https://github.com` entry, then run
+   `git ls-remote https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git` and
+   sign in fresh.
+
+9. **`uv` errors that don't match this README (old version).**
+   A previously installed uv can shadow the winget one until you restart the
+   shell. Check which one runs: `(Get-Command uv).Source` and `uv --version`.
+   If it points somewhere unexpected, **restart the shell** (PATH updates don't
+   reach already-open windows) and check again.
+
+10. **An `ERROR ... API key` line before you've logged in.**
+    Normal ordering artifact: the service checks the key store before your first
+    `3lc login` has run (or in the setup script, before the login step). It
+    clears on the next start after login. Only a *persistent* key error after a
+    successful login is a finding (see row 5).
+
 ---
 
 ## 7. Architecture / for reviewers
@@ -239,6 +290,10 @@ reading order:
   port changed, and why; nothing else moved.
 - [docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md) — fresh-machine setup with
   the pinned stack + setup script.
+- [docs/TESTER_SETUP_REMOTE.md](docs/TESTER_SETUP_REMOTE.md) — remote Linux GPU
+  host setup (browse from a Mac or any laptop).
+- [docs/REMOTE_COMPUTE.md](docs/REMOTE_COMPUTE.md) — the browser≠host audit
+  behind the remote guide (per-surface verdicts).
 - [docs/deployment-guide.md](docs/deployment-guide.md) — the LEGACY 0.1.x-host
   operator guide (kept for v1.1.x installs).
 - [docs/training-sanity.md](docs/training-sanity.md) — why the contract is a pinned
