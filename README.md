@@ -160,11 +160,14 @@ The strict checklist version of this section, with pass/fail boxes, is
    machine no score is expected; that's by design, not a bug.
 4. **Download the CSV** — click **Download CSV** on the results panel and open it:
    715 rows + header, columns `id,image_id,prediction_string`.
-   **Do NOT proceed to Step 2 (Submit to Kaggle).** Submissions are budgeted
-   (3/day on the private competition) and reserved for the organizer. If you're not
-   invited to the private competition you'll see a friendly "not joined" state —
-   also expected. (The competition slug you'll see contains a real typo,
-   `...comepetition-test` — it's in the actual Kaggle URL.)
+   **Round-2 policy: submitting is allowed and encouraged.** If you're invited to
+   the competition and have accepted the rules on the Kaggle page, Step 2
+   (Submit to Kaggle) uploads the CSV and the score shows up on Kaggle and the
+   Status tab (3/day budget — one submission is plenty; remember no local mAP on
+   your machine is by design, the Kaggle score is the real one). If you have
+   **not** joined the competition you'll see a friendly "not joined" state before
+   an attempt is burned — also expected. (The competition slug contains a real
+   typo, `...comepetition-test` — it's in the actual Kaggle URL.)
 5. **Status** — the hero strip shows your latest run/CSV; the history table lists the
    prediction with a Download CSV action. With Kaggle connected, the connection card
    shows your username; the used-today counter may be absent (a known API 403 on the
@@ -268,6 +271,16 @@ Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
     `3lc login` has run (or in the setup script, before the login step). It
     clears on the next start after login. Only a *persistent* key error after a
     successful login is a finding (see row 5).
+
+11. **First training run downloads an extra file, `yolo26n.pt` — needs internet.**
+    ultralytics runs a one-time AMP sanity check at train start that fetches
+    `yolo26n.pt` (~5 MB) from GitHub. This is ultralytics' own health check, not
+    part of the competition contract — separate from our pinned `yolo11n.pt`
+    checkpoint. On a machine with no internet at all the check is skipped with a
+    log warning (harmless); on a firewalled/proxied network the download can
+    stall or error the first run. Workaround: run the first train once on an
+    open network, or place a `yolo26n.pt` in the compute-service working
+    directory — once the file exists it is never downloaded again.
 
 ---
 

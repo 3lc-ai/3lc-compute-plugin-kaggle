@@ -39,6 +39,10 @@ Plugin version shown in the page footer: ______________ (expect **v1.2.1**)
       A first-ever start that errors instead of starting is a **finding** in
       v1.2.1 (the round-1 "signal is aborted" cold-start bug is fixed — report
       the exact message if you see one).
+      *Also expected on the very first train:* ultralytics' AMP check downloads
+      `yolo26n.pt` (~5 MB) once — its own sanity check, **not** part of the
+      contract (the pinned init stays `yolo11n.pt`). Needs internet; on a
+      firewalled network see README troubleshooting #11.
 - [ ] Live metrics tick per epoch. **Val mAP50 at epoch 2 ≈ 0.5** (reference run:
       0.533; anywhere 0.45–0.60 is a pass — below 0.2 is a failure, report it).
       8 GB GPUs run a smaller effective batch and take longer — slow ≠ fail.
