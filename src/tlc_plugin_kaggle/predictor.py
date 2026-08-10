@@ -62,19 +62,45 @@ def is_host() -> bool:
     plugin-run-only for participants) and the local score display."""
     return Path(LOCAL_METRIC_PY).is_file() and Path(LOCAL_SOLUTION_CSV).is_file()
 
-CREDENTIALS_HELP = (
-    "Kaggle credentials not found. Create an API token on kaggle.com "
-    "(Settings -> API -> Create New Token; new tokens look like KGAT_...) "
-    "and save it to ~/.kaggle/access_token. On Windows PowerShell "
-    "(the kaggle.com dialog shows bash commands that will NOT work here): "
-    'mkdir "$env:USERPROFILE\\.kaggle" -Force; '
-    'Set-Content -Path "$env:USERPROFILE\\.kaggle\\access_token" '
-    '-Value "KGAT_<your token>" -NoNewline -Encoding ascii '
-    "(plain text, no BOM, no trailing newline). Alternatively set the "
-    "KAGGLE_API_TOKEN environment variable; legacy ~/.kaggle/kaggle.json "
-    "also works. The generated submission.csv is saved locally, so you can "
-    "always upload it manually on the competition's Submit page."
-)
+def _token_setup_commands() -> str:
+    """Dual-platform token-save commands, compute-host platform first.
+
+    The token file lives on the COMPUTE host, so sys.platform here names the
+    right block even when the browser is a different machine (remote setups).
+    Both blocks always render. Byte-exactness matters on every platform: the
+    file must be plain text, no BOM, no trailing newline — hence -NoNewline
+    on Windows and printf (never echo) on POSIX.
+    """
+    import sys
+
+    win = (
+        'Windows (PowerShell): mkdir "$env:USERPROFILE\\.kaggle" -Force; '
+        'Set-Content -Path "$env:USERPROFILE\\.kaggle\\access_token" '
+        '-Value "KGAT_<your token>" -NoNewline -Encoding ascii.'
+    )
+    posix = (
+        "macOS / Linux: mkdir -p ~/.kaggle && "
+        "printf '%s' \"KGAT_<your token>\" > ~/.kaggle/access_token "
+        "(printf, not echo: echo would append a newline)."
+    )
+    first, second = (win, posix) if sys.platform == "win32" else (posix, win)
+    return (
+        "Create an API token on kaggle.com (Settings -> API -> Create New "
+        "Token; new tokens look like KGAT_...) and save it to "
+        "~/.kaggle/access_token on the machine running the compute service, "
+        f"byte-exact: plain text, no BOM, no trailing newline. {first} "
+        f"{second} (Or set the KAGGLE_API_TOKEN environment variable; legacy "
+        "~/.kaggle/kaggle.json also works.)"
+    )
+
+
+def credentials_help() -> str:
+    """Participant-facing no-credentials message (Submit-tab connection card)."""
+    return (
+        "Kaggle credentials not found. " + _token_setup_commands() +
+        " The generated submission.csv is saved locally, so you can always "
+        "upload it manually on the competition's Submit page."
+    )
 
 
 def kaggle_credentials_present() -> bool:
@@ -95,7 +121,7 @@ def _authenticated_api() -> tuple[Any, str]:
     """(api, "") on success, (None, reason) otherwise. kaggle 2.x
     authenticates at import time — keep the import in here."""
     if not kaggle_credentials_present():
-        return None, CREDENTIALS_HELP
+        return None, credentials_help()
     try:
         from kaggle.api.kaggle_api_extended import KaggleApi
 
@@ -582,12 +608,7 @@ def kaggle_live_status(slug: str) -> dict[str, Any]:
     if not kaggle_credentials_present():
         return {
             "connected": False,
-            "reason": "Connect your Kaggle account: create an API token on kaggle.com "
-            "(Settings -> API -> Create New Token) and save it to ~/.kaggle/access_token. "
-            "Windows PowerShell: "
-            'Set-Content -Path "$env:USERPROFILE\\.kaggle\\access_token" '
-            '-Value "KGAT_<your token>" -NoNewline -Encoding ascii. '
-            "(Or set KAGGLE_API_TOKEN; legacy ~/.kaggle/kaggle.json also works.)",
+            "reason": "Connect your Kaggle account. " + _token_setup_commands(),
         }
     slug = (slug or COMPETITION_SLUG).strip()
     if slug == "[SLUG]":

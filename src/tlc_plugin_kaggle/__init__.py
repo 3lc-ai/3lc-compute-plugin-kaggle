@@ -18,7 +18,7 @@ from typing import Any
 
 from tlc_plugin_sdk import ComputePlugin, JobContext
 
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 REPOSITORY_URL = "https://github.com/3lc-ai/3lc-compute-plugin-kaggle"
 
 

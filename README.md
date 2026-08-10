@@ -18,7 +18,7 @@ table revision, submit, repeat.
 ![Predict results](docs/shots/05_predict_results.png)
 ![Status hero + history](docs/shots/09_status_history.png)
 
-**Version pairing (v1.2.1):** 3LC Hub with `3lc-compute==0.2.1` + `3lc==3.1.0`
+**Version pairing (v1.2.2):** 3LC Hub with `3lc-compute==0.2.1` + `3lc==3.1.0`
 (the 0.2.x plugin platform). For the legacy 0.1.x-host install (plugin v1.1.x),
 see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
 
@@ -59,7 +59,7 @@ see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
    neither is needed on macOS/Linux, though the second is a harmless no-op there):
 
    ```powershell
-   $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.1\.venv\Scripts\python.exe"
+   $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.2\.venv\Scripts\python.exe"
    $env:UV_TORCH_BACKEND = "auto"
    ```
 
@@ -91,18 +91,27 @@ Updating later: publishing v1.2.x means a new catalog entry — the card grows a
 
 The plugin never stores credentials; the `kaggle` client reads them itself. Create a
 token on kaggle.com (**Settings → API → Create New Token** — new tokens look like
-`KGAT_...`), then save it with **exactly** this (the bash commands kaggle.com shows
-will not work on Windows):
+`KGAT_...`), then save it on the machine running the compute service with **exactly**
+one of these. The file must be byte-exact: plain ASCII, **no BOM, no trailing
+newline** — which is why it's `-NoNewline` on Windows and `printf`, never `echo`
+(echo appends a newline), on macOS/Linux:
+
+**Windows (PowerShell)**
 
 ```powershell
 mkdir "$env:USERPROFILE\.kaggle" -Force
 Set-Content -Path "$env:USERPROFILE\.kaggle\access_token" -Value "KGAT_<your token>" -NoNewline -Encoding ascii
 ```
 
-The file must be byte-exact: plain ASCII, **no BOM, no trailing newline** —
-`-NoNewline -Encoding ascii` guarantees that. (Legacy `~/.kaggle/kaggle.json` and the
-`KAGGLE_API_TOKEN` env var also work.) Everything except the actual Kaggle upload
-works with no credentials at all — you get a CSV either way.
+**macOS / Linux**
+
+```bash
+mkdir -p ~/.kaggle && printf '%s' "KGAT_<your token>" > ~/.kaggle/access_token
+```
+
+(Legacy `~/.kaggle/kaggle.json` and the `KAGGLE_API_TOKEN` env var also work.)
+Everything except the actual Kaggle upload works with no credentials at all — you
+get a CSV either way.
 
 ---
 
@@ -231,7 +240,7 @@ Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
    the old `TLC_COMPUTE_PLUGIN_INDEX_URLS` cu128 pin also still works).
    Fix: set the env var (§1 step 2), **Uninstall** the plugin in the shop,
    reinstall. Verify inside the worker venv:
-   `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.1\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.
+   `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.2\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.
 
 4. **Kaggle shows "not connected" / auth fails though the token file exists.**
    Cause: the token file isn't byte-exact — a BOM, a trailing newline, or UTF-16
