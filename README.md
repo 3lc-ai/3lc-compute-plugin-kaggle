@@ -28,7 +28,7 @@ see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
 |---|---|
 | Windows + NVIDIA GPU, everything local | **Validated** — this README + [docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md) |
 | Remote compute host (Linux GPU box), browse from any machine incl. Mac | **Supported** — guide: [docs/TESTER_SETUP_REMOTE.md](docs/TESTER_SETUP_REMOTE.md); surface audit: [docs/REMOTE_COMPUTE.md](docs/REMOTE_COMPUTE.md) |
-| Mac-local training (Apple Silicon / MPS) | **Uncharted** — `tlc-ultralytics` on MPS is untested by us; the Train tab's Device field accepts free text (e.g. `mps`) if you want to volunteer, but expectations are unset and it's not part of any test round |
+| Mac-local training (Apple Silicon / MPS) | **Validated** (2026-08-10, round-2 pairing test on v1.2.2) — blank Device auto-selects `mps`; measured ~4 min/epoch training and ~9 s for the full 715-image predict, pinned-checkpoint sha verified. Setup: [TESTER_SETUP_0.2.md macOS appendix](docs/TESTER_SETUP_0.2.md) — no service env vars needed |
 
 ---
 

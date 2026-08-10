@@ -1,13 +1,13 @@
 # CLAUDE.md — kaggle-exdark plugin (stability phase: round-2 testing)
 
 Vocabulary lives in [CONTEXT.md](CONTEXT.md). This file is the operating
-protocol; depth lives in the docs linked in §D — link, don't duplicate.
+protocol; depth lives in the docs linked in §E — link, don't duplicate.
 Rules marked **[codified]** existed only as working practice until written here.
 
 ## A. Hard rules
 
 1. **No silent assumptions.** If the task is ambiguous or conflicts with any
-   doc in §D, state the conflict and wait. Never pick an interpretation
+   doc in §E, state the conflict and wait. Never pick an interpretation
    silently. [codified]
 2. **No over-engineering.** Smallest change that resolves the finding. If a
    fix wants to exceed ~2x its apparent size, pause and report before
@@ -52,6 +52,13 @@ Rules marked **[codified]** existed only as working practice until written here.
   catalog id must equal plugin id) → tell Rishikesh to mirror the gist.
   Never edit the gist yourself; never retag an existing tag. [codified]
   Version string is identical in pyproject, plugin.toml, and the catalog.
+  - Fixes are **invisible to catalog installs until tagged** — if a fix
+    matters to an active tester, tag immediately; the commit-to-tag gap is
+    where Copeland's round-2 device failure came from. [codified 2026-08-10]
+  - The gist raw URL **lags edits by a few minutes** (CDN cache): verify via
+    an incognito fetch after the lag, and paste the repo file **verbatim** —
+    a hand-paste once introduced a duplicate-key error. Repo `catalog.json`
+    is source of truth; the gist only ever mirrors it. [codified 2026-08-10]
 - **Identity.** Commit as Rishikesh-Jadhav only; no co-author trailers.
   Settings already enforce this — verify `git config user.name` if in doubt.
   [codified]
@@ -83,7 +90,15 @@ Where things live: platform-bug ledger = `../3lc-hub-next/PORT_PLAN.md` (§6
 docs/v1.2-ideas.md · LAUNCH-VERIFY sweep list = docs/v1.1-ideas.md · forced
 changes = docs/forced-changes-0.2.md.
 
-## D. Pointers
+## D. Self-maintenance of these files
+
+At the end of any session that ships a tag, changes a contract/process rule,
+adds vocabulary, or resolves a tester-finding batch: check whether CLAUDE.md /
+CONTEXT.md need a corresponding line, and update them in the same commit
+series. These files are only useful while true. Keep them terse — one line
+per fact, link out for depth. [codified 2026-08-10]
+
+## E. Pointers
 
 | Doc | Answers |
 |---|---|

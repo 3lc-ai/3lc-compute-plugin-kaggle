@@ -39,6 +39,8 @@ One line per term. Depth: docs/ui-notes.md (UI), ../3lc-hub-next/PORT_PLAN.md (p
 
 - **two environments** — `3lc-hub/` = frozen v1.1.x world (3lc-compute 0.1.1.47 + 3lc 2.22.3, real home, :5015/:5020, plugin loaded LIVE from the checkout on `develop`); `3lc-hub-next/` = 0.2.x (0.2.1 + 3lc 3.1.0, REDIRECTED home under `3lc-hub-next/home/`, :5021 or frontend-swap to :5020, installs from git tags).
 - **catalog / gist / source spec** — `catalog.json` lists installable versions; each `source` is a PEP-508 git reference pinned to a tag; the repo copy is truth, the public gist is the live mirror URL hubs consume (private-repo raw URLs 404).
+- **catalog version history** — the `versions` array keeps one entry per released version, newest first (currently 1.2.2 + 1.2.1); when the gist advertises a version newer than the installed one, the installed card grows an **Update** button. Mirror mechanics + pitfalls: CLAUDE.md §B Releasing.
+- **Mac-local (Apple silicon)** — VALIDATED 2026-08-10, round-2 pairing test: blank Device auto-resolves to `mps`; measured ~4 min/epoch training and ~9 s for the full 715-image predict, pinned-checkpoint sha verified; zero service env vars needed (see TESTER_SETUP_0.2 macOS appendix).
 - **worker venv / managed-plugins** — the shop materializes the plugin's venv at `~/.3lc-compute/managed-plugins/kaggle-exdark/<version>/.venv`; the plugin runs out-of-process (`tlc_plugin_sdk.worker`), host reverse-proxies `/api/plugins/kaggle-exdark/*`; reload = kill worker, respawn on next request.
 - **W-series** (Windows/platform bugs, ledgered for the Hub team — W4 was never assigned):
   W1 = 0.2.1 spawns workers as POSIX `<venv>/bin/python` on every OS; per-plugin env-var override (`TLC_COMPUTE_PLUGIN_VENV_<ID>`) is the workaround.
@@ -54,5 +56,5 @@ One line per term. Depth: docs/ui-notes.md (UI), ../3lc-hub-next/PORT_PLAN.md (p
 
 - **run names** — `kaggle_run_<YYYYMMDD_HHMMSS>` when the field is blank; sanity-control runs live apart (project `control-sanity`, run `control_pretrained_DO_NOT_SUBMIT` — never submit non-plugin outputs).
 - **project name** — default 3LC project `exdark-competition`; tables `exdark_train` / `exdark_val` / `exdark_test`.
-- **tags** — `vX.Y.Z`; the version string is identical in pyproject.toml, plugin.toml, and the catalog entry; never retag.
+- **tags** — `vX.Y.Z`; the version string is identical in pyproject.toml, plugin.toml, and the catalog entry; never retag. Current release: **v1.2.2** (tagged + gist-live 2026-08-10; device-auto both tabs, dual-platform Kaggle token copy).
 - **plugin id** — `kaggle-exdark` (since v1.2.1; collision safety). The legacy id `kaggle` is retired and reserved for the future generic multi-competition fork; the W1 env-var name derives as `TLC_COMPUTE_PLUGIN_VENV_` + id upper-cased with `-` → `_`.
