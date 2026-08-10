@@ -77,7 +77,7 @@ TLC_SERVICE_HOST=0.0.0.0 ~/3lc-hub-next/.venv/bin/3lc service
 
 # window/tmux pane 2 — Compute Service on :5020
 TLC_COMPUTE_HOST=0.0.0.0 \
-TLC_COMPUTE_PLUGIN_INDEX_URLS=https://download.pytorch.org/whl/cu128 \
+UV_TORCH_BACKEND=auto \
 ~/3lc-hub-next/.venv/bin/3lc-compute
 ```
 

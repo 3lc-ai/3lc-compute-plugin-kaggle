@@ -233,6 +233,32 @@ def reclaim_gpu_memory() -> None:
         pass
 
 
+def resolve_device(raw: Any) -> Any:
+    """Resolve the participant's Device field to a concrete ultralytics arg.
+
+    Blank = auto: CUDA -> MPS -> CPU. ultralytics' own blank-device path never
+    auto-selects MPS (select_device only uses MPS when asked for it), and an
+    explicit ``device=0`` raises on a CUDA-less machine — so blank is resolved
+    here, in the worker, where torch is importable. Must NOT be called from
+    the host request path (validation stays torch-free).
+    """
+    s = str(raw).strip() if raw is not None else ""
+    if s.isdigit():
+        return int(s)
+    if s:
+        return s
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return 0
+        if torch.backends.mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    return "cpu"
+
+
 def _predict_batch_size(device: Any) -> int:
     """Inference chunk size from free VRAM (cheap probe, conservative).
 
@@ -649,9 +675,7 @@ def _predict_core(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
 
     conf = float(params.get("conf", 0.25) or 0.25)
     ctx.set_field("conf", conf)
-    device = params.get("device", "0")
-    if str(device).strip().isdigit():
-        device = int(str(device).strip())
+    device = resolve_device(params.get("device", ""))
 
     # A train job may have just finished in this same worker process — hand
     # its cached CUDA blocks back before loading the inference model.

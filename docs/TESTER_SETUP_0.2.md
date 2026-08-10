@@ -77,8 +77,12 @@ Windows-required**:
 $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.1\.venv\Scripts\python.exe"
 
 # CUDA torch: shop installs (uv pip install) don't read the plugin's own uv
-# index config, so plain `torch` resolves CPU-only on Windows without this:
-$env:TLC_COMPUTE_PLUGIN_INDEX_URLS = "https://download.pytorch.org/whl/cu128"
+# index config, so plain `torch` resolves CPU-only on Windows without this.
+# "auto" makes uv detect the machine's GPU driver and pick the matching torch
+# wheel index itself (right CUDA version per driver; harmless no-op on
+# machines without an NVIDIA GPU, Macs included). Needs a current uv — the
+# winget one qualifies:
+$env:UV_TORCH_BACKEND = "auto"
 ```
 
 Start the services (two windows):
@@ -146,9 +150,29 @@ manual install you may notice:
 | Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle-exdark\1.2.1\.venv\Scripts\python.exe`. Round-1 machines: the OLD name `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` no longer does anything. |
 | Install fails: `could not read Username for 'https://github.com'` | git has no GitHub token — prerequisite row 3 |
 | Install fails: `uv executable not found` | uv not on the PATH of the compute-service process |
-| Training says CUDA unavailable | `TLC_COMPUTE_PLUGIN_INDEX_URLS` was not set when the plugin venv was built → uninstall the plugin in the shop, set the env var, reinstall |
+| Training says CUDA unavailable | `UV_TORCH_BACKEND=auto` was not set when the plugin venv was built → uninstall the plugin in the shop, set the env var, reinstall. (Round-1/2 machines: the old `TLC_COMPUTE_PLUGIN_INDEX_URLS` cu128 pin still works, but `UV_TORCH_BACKEND=auto` supersedes it.) |
 | `API key not found` at service start | run `3lc login` **from this venv** (3.x key store is new) |
 | `The filename, directory name, or volume label syntax is incorrect` on the setup commands | You're in **cmd**, not PowerShell — the setup commands are PowerShell. Type `powershell` first, then re-run the block. |
+
+## Appendix — macOS (Apple silicon)
+
+Same flow, Windows-isms swapped out:
+
+- **Prerequisites:** `brew install uv git` (or the official installers); Python 3.12
+  via `uv python install 3.12`. No NVIDIA/driver row — there is no CUDA on macOS.
+- **Neither service env var is needed.** W1 is Windows-only (macOS really has the
+  POSIX `<venv>/bin/python` layout the 0.2.1 spawner assumes), and
+  `UV_TORCH_BACKEND=auto` is a harmless no-op on macOS — the default PyPI torch
+  wheels already include MPS (Apple GPU) support. Setting them anyway breaks nothing.
+- **Paths:** venv interpreters are `.venv/bin/python`; the worker venv lands at
+  `~/.3lc-compute/managed-plugins/kaggle-exdark/<version>/.venv/bin/python`.
+- **Device field (Train and Predict):** leave blank — auto resolves
+  CUDA → `mps` → CPU, so Apple silicon trains on the GPU. Typing `0` requests
+  NVIDIA GPU #0 and **fails** on a Mac; `mps` and `cpu` also work explicitly.
+- **Pre-tag testing** (validating branch commits that aren't in a tag yet):
+  clone the repo, edit your local `catalog.json` so the version's `source` ends
+  in `@port/0.2.x` (or a commit sha) instead of `@v1.2.1`, and add that file's
+  absolute path as the catalog source instead of the gist URL.
 
 ## Appendix — machine also runs the 1.1.x Hub
 

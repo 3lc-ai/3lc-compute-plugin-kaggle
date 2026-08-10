@@ -130,7 +130,11 @@ _EXPOSED = {
     "lrf": (float, 0.01, 0.01, 1.0),
     "optimizer": (str, "auto", None, None),
     "patience": (int, 100, 0, 100),
-    "device": (str, "0", None, None),
+    # Blank = auto (CUDA -> MPS -> CPU), resolved in the WORKER at job start
+    # (predictor.resolve_device) — never here: this table also serves the
+    # host's torch-free validation path. An explicit "0" would raise on
+    # CUDA-less machines (Macs), so the default must stay blank.
+    "device": (str, "", None, None),
     "workers": (int, 0, 0, 16),  # Windows: keep dataloader workers at 0
 }
 
@@ -374,7 +378,11 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     """The Train job. Long-running; reports via ctx; cancels cooperatively."""
     from tlc_ultralytics import YOLO
 
+    from tlc_plugin_kaggle.predictor import resolve_device
+
     train_kwargs = build_train_kwargs(params)  # raises on locked-key attempts
+    device_requested = str(train_kwargs["device"]).strip()
+    train_kwargs["device"] = resolve_device(train_kwargs["device"])
     settings = build_settings(params)
     # The run name is generated here when the field was blank — surface it
     # immediately so the UI's in-run header can show it from epoch 0.
@@ -398,7 +406,7 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
         f"Locked: model=yolo11n.pt (official COCO-pretrained, sha256 {ckpt_sha[:12]}...) "
         "· imgsz=640 · pretrained=True. "
         f"Training {train_kwargs['epochs']} epochs, batch {train_kwargs['batch']}, "
-        f"device {train_kwargs['device']}."
+        f"device {train_kwargs['device']}{' (auto)' if not device_requested else ''}."
     )
 
     model = YOLO(str(ckpt_path), task="detect")

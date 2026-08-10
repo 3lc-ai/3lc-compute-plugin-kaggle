@@ -813,9 +813,10 @@
               <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; margin-top: 10px;">
                 <div class="form-group">
                   <label class="form-label" for="tr-device">Device</label>
-                  <input id="tr-device" type="text" class="form-control" value="0">
-                  <div class="form-help">GPU index (0 for the first GPU) or <code>cpu</code>.
-                    Training on CPU is very slow; use the GPU.</div>
+                  <input id="tr-device" type="text" class="form-control" value="" placeholder="auto">
+                  <div class="form-help">Blank = auto-select: CUDA GPU if available, else <code>mps</code>
+                    (Apple silicon GPU), else CPU. Or set a GPU index (<code>0</code> for the first NVIDIA
+                    GPU), <code>mps</code>, or <code>cpu</code>. Training on CPU is very slow.</div>
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="tr-workers">Workers</label>
@@ -1030,7 +1031,8 @@
               </div>
               <div class="form-group">
                 <label class="form-label" for="ps-device">Device</label>
-                <input id="ps-device" type="text" class="form-control" value="0">
+                <input id="ps-device" type="text" class="form-control" value="" placeholder="auto">
+                <div class="form-help">Blank = auto (CUDA &rarr; <code>mps</code> &rarr; CPU).</div>
               </div>
             </div>
           </div>
@@ -3348,7 +3350,7 @@
       // Disclosures default collapsed; a saved config that customized an
       // advanced field reopens its disclosure so nothing saved is invisible.
       configLoaded.then(function () {
-        if (el('tr-device').value !== '0' || el('tr-workers').value !== '0' ||
+        if (el('tr-device').value !== '' || el('tr-workers').value !== '0' ||
             el('tr-extra').value.trim() !== '') {
           kgAccOpenInstant('tr-adv-toggle', 'tr-adv-panel');
         }

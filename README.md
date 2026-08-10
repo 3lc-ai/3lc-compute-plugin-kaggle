@@ -55,11 +55,12 @@ see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
    Hub was logged in on this machine.)
 
 2. **Two Windows-required env vars** in the compute-service shell (worker
-   interpreter workaround + CUDA torch index — details in the tester doc):
+   interpreter workaround + GPU torch selection — details in the tester doc;
+   neither is needed on macOS/Linux, though the second is a harmless no-op there):
 
    ```powershell
    $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.1\.venv\Scripts\python.exe"
-   $env:TLC_COMPUTE_PLUGIN_INDEX_URLS = "https://download.pytorch.org/whl/cu128"
+   $env:UV_TORCH_BACKEND = "auto"
    ```
 
 3. **Start services** (`3lc service` on :5015, `3lc-compute` on :5020), open the
@@ -225,8 +226,9 @@ Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
    once (interactive sign-in via Git Credential Manager), retry Install.
 
 3. **Training says CUDA unavailable / crawls on CPU.**
-   Cause: the worker venv was built without `TLC_COMPUTE_PLUGIN_INDEX_URLS`
-   (shop installs resolve plain `torch` from PyPI = CPU-only on Windows).
+   Cause: the worker venv was built without `UV_TORCH_BACKEND=auto`
+   (shop installs resolve plain `torch` from PyPI = CPU-only on Windows;
+   the old `TLC_COMPUTE_PLUGIN_INDEX_URLS` cu128 pin also still works).
    Fix: set the env var (§1 step 2), **Uninstall** the plugin in the shop,
    reinstall. Verify inside the worker venv:
    `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.1\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.

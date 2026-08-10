@@ -70,5 +70,6 @@ streamed. No hardcoded `localhost` exists in the plugin's shipped code.
 - `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` is **not needed on Linux** — the
   POSIX `<venv>/bin/python` layout the 0.2.1 spawner assumes is the real
   layout there (W1 is Windows-only)
-- `TLC_COMPUTE_PLUGIN_INDEX_URLS=https://download.pytorch.org/whl/cu128`
-  still required for CUDA torch in shop installs
+- `UV_TORCH_BACKEND=auto` still required for CUDA torch in shop installs
+  (uv detects the box's NVIDIA driver and picks the matching CUDA wheel
+  index; supersedes the old `TLC_COMPUTE_PLUGIN_INDEX_URLS` cu128 pin)

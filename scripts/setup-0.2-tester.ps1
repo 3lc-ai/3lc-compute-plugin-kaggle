@@ -23,7 +23,6 @@ $TLC_CORE = "3lc==3.1.0"
 $TLC_COMPUTE = "3lc-compute==0.2.1"
 $INDEX_PRE = "https://pypi.3lc.ai/public/repositories/prereleases-public/"
 $INDEX_REL = "https://pypi.3lc.ai/public/repositories/releases-public/"
-$TORCH_CU128 = "https://download.pytorch.org/whl/cu128"
 
 foreach ($tool in @("python", "uv", "git")) {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
@@ -61,14 +60,16 @@ $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = $managed
 
 # CUDA torch for catalog installs: `uv pip install` does not read the
 # plugin's own [tool.uv.index] config, so without this the worker venv gets
-# CPU-only torch on Windows. Passed to every shop install as an extra index.
-$env:TLC_COMPUTE_PLUGIN_INDEX_URLS = $TORCH_CU128
+# CPU-only torch on Windows. UV_TORCH_BACKEND=auto makes uv detect the GPU
+# driver and pick the matching torch wheel index itself (inherited by the
+# shop's uv subprocess; no-op on machines without an NVIDIA GPU).
+$env:UV_TORCH_BACKEND = "auto"
 
 Write-Host "==> Starting the Object Service (window 1) and Compute Service (window 2)"
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
     "Set-Location '$Root'; .venv\Scripts\3lc.exe service"
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
-    "Set-Location '$Root'; `$env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK='$managed'; `$env:TLC_COMPUTE_PLUGIN_INDEX_URLS='$TORCH_CU128'; .venv\Scripts\3lc-compute.exe"
+    "Set-Location '$Root'; `$env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK='$managed'; `$env:UV_TORCH_BACKEND='auto'; .venv\Scripts\3lc-compute.exe"
 
 Write-Host ""
 Write-Host "Done. Object Service -> http://localhost:5015, Compute Service -> http://localhost:5020."

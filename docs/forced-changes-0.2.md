@@ -51,4 +51,9 @@ and predictor.py in their entirety, config_store.py (stable home
   Windows**. Mitigation for testers: `TLC_COMPUTE_PLUGIN_INDEX_URLS=https://download.pytorch.org/whl/cu128`
   on the service (passed to installs as `--extra-index-url`). Verified in
   Phase 4; also raised as a shop-mechanism gap (stock yolo/timm have the same
-  problem).
+  problem). *Update (2026-08-10):* superseded by `UV_TORCH_BACKEND=auto` in the
+  service env — the shop's `uv pip install` subprocess inherits the service
+  environment, and uv's torch-backend selector picks the right CUDA index per
+  driver (no-op on non-NVIDIA hosts). Verified on uv 0.11.7 with the
+  provisioning flag shape (`--extra-index-url` ×2 + `--index-strategy`):
+  resolved `torch==2.13.0+cu130` on the RTX 5070 Ti box.
