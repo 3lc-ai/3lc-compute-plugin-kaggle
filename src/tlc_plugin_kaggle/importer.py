@@ -1,8 +1,7 @@
 """Import card backend: competition dataset -> three 3LC tables + validation.
 
 Import mechanism (decided empirically against tlc 2.22.3.1 on 2026-07-20;
-re-verified against tlc 3.1.0 in the Phase-1 port spike, 2026-07-31 —
-3lc-hub-next/spike/PHASE1_VERDICT.md):
+re-verified against tlc 3.1.0 in the Phase-1 port spike, 2026-07-31):
 
 * train / val: ``tlc.Table.from_yolo_url`` on each split's images directory
   (3.x removed ``from_yolo``; the yaml parsing this module already does now

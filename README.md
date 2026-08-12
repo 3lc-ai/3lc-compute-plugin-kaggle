@@ -59,7 +59,7 @@ see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
    neither is needed on macOS/Linux, though the second is a harmless no-op there):
 
    ```powershell
-   $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.2\.venv\Scripts\python.exe"
+   $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.4\.venv\Scripts\python.exe"
    $env:UV_TORCH_BACKEND = "auto"
    ```
 
@@ -240,7 +240,7 @@ Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
    the old `TLC_COMPUTE_PLUGIN_INDEX_URLS` cu128 pin also still works).
    Fix: set the env var (§1 step 2), **Uninstall** the plugin in the shop,
    reinstall. Verify inside the worker venv:
-   `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.2\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.
+   `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.4\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.
 
 4. **Kaggle shows "not connected" / auth fails though the token file exists.**
    Cause: the token file isn't byte-exact — a BOM, a trailing newline, or UTF-16
