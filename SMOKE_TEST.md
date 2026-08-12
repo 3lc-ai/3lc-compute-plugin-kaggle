@@ -6,7 +6,7 @@ check it off only if the expectation holds **exactly**, otherwise note what you 
 and keep going. Report the filled checklist plus any **Copy diagnostics** output.
 
 Tester: ______________  Date: ______________  GPU: ______________
-Plugin version shown in the page footer: ______________ (expect **v1.2.4**)
+Plugin version shown in the page footer: ______________ (expect **v1.2.5**)
 
 > Round-1 testers: the plugin id changed to `kaggle-exdark` in v1.2.1 —
 > follow the migration note at the top of
@@ -16,7 +16,7 @@ Plugin version shown in the page footer: ______________ (expect **v1.2.4**)
 
 - [ ] Sidebar shows **Kaggle** under AI TOOLS; the page opens with four tabs
       (Import / Train / Predict + Submit / Status) and a stepper.
-- [ ] Footer reads `3LC Kaggle Competition plugin v1.2.4`.
+- [ ] Footer reads `3LC Kaggle Competition plugin v1.2.5`.
 
 ## 1. Import (~2–5 min)
 

@@ -7,7 +7,7 @@
 id = "kaggle-exdark"
 name = "Kaggle Competition"
 description = "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit. The whole competition loop without leaving the Hub."
-version = "1.2.4"
+version = "1.2.5"
 min_service_version = "0.2.0"
 icon = "🏁"
 # Same flag as the fragment's header identity icon (16px grid, 1.5px stroke,
