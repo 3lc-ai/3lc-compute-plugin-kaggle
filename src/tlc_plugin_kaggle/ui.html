@@ -1800,6 +1800,9 @@
       // default when it is empty or still carries another project's URL.
       // Hand-entered URLs *within* the current project are never touched.
       // Resolves when the field is settled (then() the gate re-check).
+      // Re-pointed fields also re-persist their tab: ui_config.json must
+      // never keep URLs from a project the rest of the config has left
+      // (the round-2 cross-project-mixture finding).
       function kgSyncFieldToProject(fieldIds) {
         var cur = kgCurrentProject();
         var stale = fieldIds.filter(function (id) {
@@ -1812,10 +1815,16 @@
           .then(function (r) { return r.json(); })
           .then(function (d) {
             var split = { 'tr-train-url': 'train', 'tr-val-url': 'val', 'ps-test-url': 'test' };
+            var wroteTrain = false, wroteSubmit = false;
             stale.forEach(function (id) {
               var s = d[split[id]];
-              if (s && s.url) { el(id).value = s.url; }
+              if (s && s.url) {
+                el(id).value = s.url;
+                if (id === 'ps-test-url') { wroteSubmit = true; } else { wroteTrain = true; }
+              }
             });
+            if (wroteTrain) { saveTabConfig('train'); }
+            if (wroteSubmit) { saveTabConfig('submit'); }
             return true;
           })
           .catch(function () { return false; });
@@ -2187,6 +2196,42 @@
       el('kg-yaml').addEventListener('paste', function () {
         clearTimeout(kgPreflightTimer);
         setTimeout(kgRunPreflight, 0);   // after the pasted text lands
+      });
+
+      // ── Import form persistence (round-2 finding) ────────────────────
+      // Saved values previously wrote only when an import RAN: a typed
+      // project name vanished on refresh, and the persisted train/submit
+      // URLs could keep pointing at a previous project (cross-project
+      // mixtures in ui_config.json). The form now persists as it settles
+      // (debounced input + blur). A settled project CHANGE additionally
+      // re-points the other tabs' URL fields (kgSyncFieldToProject, which
+      // now re-persists what it rewrites) and re-runs their gates, so the
+      // Train hint never keeps naming a project the field no longer holds.
+      var kgCfgSaveTimer = null;
+      var kgFollowedProject = null;   // baseline set once config restores
+
+      function kgImportCfgSettled() {
+        if (kgDevMode) { return; }    // fixtures never persist
+        saveTabConfig('import');
+        var cur = kgCurrentProject();
+        if (cur === kgFollowedProject) { return; }
+        kgFollowedProject = cur;
+        kgSyncFieldToProject(['tr-train-url', 'tr-val-url', 'ps-test-url'])
+          .then(function () {
+            trVerifyTables(true);
+            psVerifyTable(true);
+          });
+      }
+      configLoaded.then(function () { kgFollowedProject = kgCurrentProject(); });
+      ['kg-yaml', 'kg-project', 'kg-table'].forEach(function (id) {
+        el(id).addEventListener('input', function () {
+          clearTimeout(kgCfgSaveTimer);
+          kgCfgSaveTimer = setTimeout(kgImportCfgSettled, 600);
+        });
+        el(id).addEventListener('blur', function () {
+          clearTimeout(kgCfgSaveTimer);
+          kgImportCfgSettled();
+        });
       });
 
       // One-line remediation hints per check, shown only when it fails.
