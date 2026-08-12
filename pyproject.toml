@@ -1,6 +1,6 @@
 [project]
 name = "3lc-compute-plugin-kaggle"
-version = "1.2.3"
+version = "1.2.4"
 description = "End-to-end Kaggle competition workflow for the 3LC Hub: import, train the fixed baseline, predict, submit."
 # >=3.11: the kaggle client (>=2.2.3) floors at 3.11; uv sync resolves for the
 # whole requires-python range, so a 3.10 floor makes the lock unsatisfiable.
@@ -40,7 +40,7 @@ kaggle-exdark = "tlc_plugin_kaggle"
 id = "kaggle-exdark"
 name = "Kaggle Competition"
 description = "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit."
-version = "1.2.3"
+version = "1.2.4"
 min_service_version = "0.2.0"
 icon = "🏁"
 repository_url = "https://github.com/3lc-ai/3lc-compute-plugin-kaggle"
