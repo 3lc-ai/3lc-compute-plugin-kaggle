@@ -2868,7 +2868,12 @@
           var now = Date.now() / 1000;
           var job = {
             id: '', kind: 'train', status: status,
-            created_at: now - 2400,
+            // Running: elapsed consistent with avg_epoch_s (epoch + the
+            // in-flight batch fraction, plus a little setup) so the
+            // recomputed "remaining" reads true and ticks down live.
+            created_at: status === 'running'
+              ? now - ((epoch + 148 / 370) * 96.4 + 20)
+              : now - 2400,
             finished_at: status === 'running' ? null : now - 60,
             params: { epochs: total, run_name: '' },
             progress: {
@@ -3451,9 +3456,21 @@
         var end = status === 'running' ? now : (job.finished_at || now);
         el('tr-run-elapsed').textContent = job.created_at
           ? 'elapsed ' + fmtDur(end - job.created_at) : '';
+        // Remaining is recomputed on every poll: max(0, estimate − elapsed).
+        // The per-epoch pace seeds from this machine's history median (the
+        // pre-run hint's number, trEpochSecs) until the first epoch boundary
+        // lands a measured avg_epoch_s — a 1-epoch run has no boundary, so
+        // the seed carries the whole run. Once elapsed overruns the estimate
+        // (final validation, a slower-than-history run) the subtraction goes
+        // impossible — degrade to "finishing up" and let elapsed carry on.
+        var perEpoch = (typeof p.avg_epoch_s === 'number' && p.avg_epoch_s > 0)
+          ? p.avg_epoch_s : trEpochSecs;
+        var remaining = (status === 'running' && perEpoch && total && job.created_at)
+          ? Math.max(0, perEpoch * total - (now - job.created_at)) : null;
         el('tr-run-eta').textContent =
-          (status === 'running' && typeof p.eta_s === 'number' && epoch >= 1 && epoch < total)
-            ? '≈ ' + fmtDur(p.eta_s) + ' remaining' : '';
+          remaining === null ? ''
+            : remaining >= 1 ? '≈ ' + fmtDur(remaining) + ' remaining'
+            : 'finishing up…';
         var bar = el('tr-run-bar');
         // Determinate from the first minutes: overall fraction folds the
         // within-epoch batch counter in. Indeterminate only for the brief

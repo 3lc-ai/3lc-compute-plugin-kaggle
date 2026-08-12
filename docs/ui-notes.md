@@ -221,7 +221,8 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   message shape as the server; fixing clears on input; CTA disabled
   while any field is invalid.
 - **In-run view**: header row (run name · status badge · Epoch n/N ·
-  elapsed · measured ETA) + determinate per-epoch bar (indeterminate
+  elapsed · remaining, recomputed every poll per the ETA recompute rule
+  in CONTEXT.md) + determinate per-epoch bar (indeterminate
   only during epoch 0) + **metrics strip** (stat chips + `kgSparkline`,
   values via `kgSwapText`). Structure builds once; values swap in place —
   nothing re-enters on poll ticks. Cancel confirms (cooperative) and
