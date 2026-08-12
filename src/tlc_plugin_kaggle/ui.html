@@ -11,6 +11,7 @@
    instant). No replays on revisit/forced states. */
 .plugin-page-narrow {
   --kgl-motion-fast: 120ms;   /* button/hover feedback, badge swaps */
+  --kgl-motion-tab: 150ms;    /* tab-switch crossfade (View Transitions) */
   --kgl-motion-base: 180ms;   /* content entrances */
   --kgl-motion-slow: 300ms;   /* accordion, checkmark draw */
   --kgl-motion-spin: 800ms;   /* refresh-button rotation period (in flight) */
@@ -173,6 +174,9 @@
 }
 .kg-verdict .ok { color: var(--success); display: flex; }
 .kg-verdict .bad { color: var(--danger, #ef4444); display: flex; }
+/* Preflight slots reuse the verdict idiom inline under the field: tighter
+   top margin than the results section it borrows from. */
+#kg-preflight .kg-verdict { margin-top: 6px; }
 
 /* Table summary rows. Paths render as plain muted text like the stock
    details strip (no font-family anywhere in this fragment — monospace comes
@@ -246,6 +250,16 @@
   @keyframes guide-pulse {
     0%, 100% { background: var(--bg-card); box-shadow: 0 0 0 0 rgba(217,119,6,0); }
     50% { background: rgba(217,119,6,0.1); box-shadow: 0 0 0 3px rgba(217,119,6,0.25); }
+  }
+
+  /* Tab-switch crossfade (View Transitions API). The JS gate already skips
+     the transition under reduced motion / ?kgdev / no-API; these rules only
+     shape the default root crossfade when one runs. Unchanged pixels
+     (header, stepper) crossfade invisibly — only the panel region reads. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: var(--kgl-motion-tab);
+    animation-timing-function: var(--kgl-ease-out);
   }
 
   /* Entrances: state-change announcements (preflight outcome, banners,
@@ -1224,8 +1238,26 @@
       var TABS = ['import', 'train', 'submit', 'status'];
       var TAB_KEY = 'kg.activeTab';
 
+      // Tab switches crossfade (~150ms, --kgl-motion-tab) via the View
+      // Transitions API. Gated four ways: reduced motion opts out (kgMotionOK),
+      // ?kgdev fixtures never animate, the initial render and same-tab
+      // re-clicks don't replay (no-replay rule), and a missing API is a
+      // straight no-op call (Firefox) — the switch itself never depends on it.
+      var kgShownTab = null;
+
       function showTab(name) {
         if (TABS.indexOf(name) === -1) { name = 'import'; }
+        var crossfade = kgShownTab !== null && name !== kgShownTab &&
+                        !kgDevMode && kgMotionOK() && !!document.startViewTransition;
+        kgShownTab = name;
+        if (crossfade) {
+          document.startViewTransition(function () { kgApplyTab(name); });
+        } else {
+          kgApplyTab(name);
+        }
+      }
+
+      function kgApplyTab(name) {
         TABS.forEach(function (t) {
           var tab = document.querySelector('#kg-tabs .kg-tab[data-tab="' + t + '"]');
           if (tab) {
@@ -1347,6 +1379,7 @@
       // 16px grid, 1.5px stroke, currentColor — tinted by the cascade.
       var KG_ICONS = {
         'lock': '<rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/>',
+        'check-square': '<rect x="2.75" y="2.75" width="10.5" height="10.5" rx="2"/><path d="M5.5 8.25l1.75 1.75L10.75 6"/>',
         'check': '<path d="M3 8.5l3.5 3.5L13 4.5"/>',
         'x': '<path d="M4 4l8 8M12 4l-8 8"/>',
         'check-circle': '<circle cx="8" cy="8" r="6.25"/><path d="M5.4 8.2l1.8 1.8 3.4-4"/>',
@@ -1941,12 +1974,14 @@
       }
 
       function kgRenderSplitsLocked() {
+        // Icon-set check-square, not a disabled native checkbox: the platform
+        // checkbox was the last plain checkmark glyph outside a log accordion.
         var html = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">';
         ['Train', 'Val', 'Test'].forEach(function (s) {
-          html += '<label style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:.75;cursor:default" ' +
+          html += '<span style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:.75;cursor:default" ' +
                   'title="All three splits are required for a valid competition setup.">' +
-                  '<input type="checkbox" checked disabled> ' + s + ' ' +
-                  kgIcon('lock', 'kgi-12 kgi-muted') + '</label>';
+                  kgIcon('check-square', 'kgi-12 kgi-muted') + ' ' + s + ' ' +
+                  kgIcon('lock', 'kgi-12 kgi-muted') + '</span>';
         });
         html += '</div><div class="form-help">All three splits are mandatory for the competition.</div>';
         el('kg-splits-body').innerHTML = html;
@@ -2023,7 +2058,9 @@
             return fmtCount(data.splits[s].found);
           }).join(' / ');
           // GT-guard note (test labels on disk) lives in the glance card here.
-          var html = '<div class="kg-preflight-ok">' + kgIcon('check') +
+          // Results-section verdict idiom: green icon carries the outcome,
+          // the sentence stays in body ink (not all-green prose).
+          var html = '<div class="kg-verdict"><span class="ok">' + kgIcon('check-circle') + '</span>' +
                      '<span>Detected: train / val / test · 12 classes (canonical order) · ' + counts +
                      ' images. Matches the competition dataset.</span></div>';
           box.innerHTML = '<div class="' + (entering ? 'kgl-enter' : '') + '">' + html + '</div>';
@@ -2031,36 +2068,52 @@
           kgRenderGlance(data, !!entering);
           return;
         }
-        // Mismatch: name exactly what's off, with a remediation hint.
+        // Mismatch: name exactly what's off, with a remediation hint —
+        // results-section check rows (icon-set x + italic remedy line), not
+        // text bullets.
         var problems = [];
         if (!data.classes.canonical) {
           var names = data.classes.names || [];
-          problems.push('classes: expected the canonical 12 (Bicycle … Table), found ' +
-            data.classes.count + (names.length ? ' (first: ' + esc(names.slice(0, 3).join(', ')) + '…)' : '') +
-            '. Use the unmodified starter-kit dataset.yaml.');
+          problems.push({
+            label: 'classes: expected the canonical 12 (Bicycle … Table), found ' +
+              data.classes.count + (names.length ? ' (first: ' + esc(names.slice(0, 3).join(', ')) + '…)' : ''),
+            remedy: 'Use the unmodified starter-kit dataset.yaml.'
+          });
         }
         ['train', 'val', 'test'].forEach(function (s) {
           var sp = data.splits[s];
           if (!sp || sp.ok) { return; }
           if (sp.error === 'split not declared in dataset.yaml') {
-            problems.push(s + ': not declared in dataset.yaml. Use the unmodified starter-kit dataset.yaml.');
+            problems.push({ label: s + ': not declared in dataset.yaml',
+                            remedy: 'Use the unmodified starter-kit dataset.yaml.' });
           } else if (sp.error) {
-            problems.push(s + ': ' + esc(sp.error) + (sp.dir ? ' (<code>' + esc(sp.dir) + '</code>)' : '') +
-              '. Re-download the starter kit or fix the path in dataset.yaml.');
+            problems.push({
+              label: s + ': ' + esc(sp.error) + (sp.dir ? ' (<code>' + esc(sp.dir) + '</code>)' : ''),
+              remedy: 'Re-download the starter kit or fix the path in dataset.yaml.'
+            });
           } else {
             if (sp.found !== sp.expected) {
-              problems.push(s + ': expected ' + fmtCount(sp.expected) + ' images, found ' + fmtCount(sp.found) +
-                '. Did the starter kit download complete? Re-download or check <code>images\\' + s + '\\</code>.');
+              problems.push({
+                label: s + ': expected ' + fmtCount(sp.expected) + ' images, found ' + fmtCount(sp.found),
+                remedy: 'Did the starter kit download complete? Re-download or check images\\' + s + '\\.'
+              });
             }
             if (sp.unreadable) {
-              problems.push(s + ': ' + fmtCount(sp.unreadable) + ' unreadable image file' +
-                (sp.unreadable === 1 ? '' : 's') + '. Extraction may have failed. Re-extract the starter kit.');
+              problems.push({
+                label: s + ': ' + fmtCount(sp.unreadable) + ' unreadable image file' +
+                  (sp.unreadable === 1 ? '' : 's') + '. Extraction may have failed',
+                remedy: 'Re-extract the starter kit.'
+              });
             }
           }
         });
         var mhtml = '<div class="kg-callout warn">' + kgIcon('alert-triangle') +
-                    '<span><strong>Doesn’t match the competition dataset:</strong><br>' +
-                    problems.map(function (p) { return '• ' + p; }).join('<br>') +
+                    '<span style="flex:1;min-width:0"><strong>Doesn’t match the competition dataset:</strong>' +
+                    problems.map(function (p) {
+                      return '<div class="kg-check"><span class="bad">' + kgIcon('x') + '</span>' +
+                             '<span class="kg-check-body">' + p.label +
+                             '<span class="remedy">' + esc(p.remedy) + '</span></span></div>';
+                    }).join('') +
                     '<div style="margin-top:8px">' + kgDiagBtn() + '</div></span></div>';
         if (data.test_labels_on_disk) { mhtml += kgTestLabelsNote(); }
         box.innerHTML = '<div class="' + (entering ? 'kgl-enter' : '') + '">' + mhtml + '</div>';
