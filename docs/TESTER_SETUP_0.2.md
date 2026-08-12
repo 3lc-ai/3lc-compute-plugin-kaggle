@@ -73,7 +73,9 @@ Windows-required**:
 # 500 on first use. This per-plugin override pins the correct interpreter path
 # (pre-stating where the shop materializes the venv: id kaggle-exdark,
 # version 1.2.2 — the env-var name is TLC_COMPUTE_PLUGIN_VENV_ +
-# id.upper() with hyphens as underscores):
+# id.upper() with hyphens as underscores. The version segment tracks the
+# INSTALLED plugin version — repoint on every update, see the note after
+# the service-start block):
 $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.2\.venv\Scripts\python.exe"
 
 # CUDA torch: shop installs (uv pip install) don't read the plugin's own uv
@@ -91,6 +93,16 @@ Start the services (two windows):
 C:\3lc-hub-next\.venv\Scripts\3lc.exe service          # Object Service :5015
 C:\3lc-hub-next\.venv\Scripts\3lc-compute.exe          # Compute Service :5020 (env vars above set in THIS window)
 ```
+
+> **Updating the plugin later (Windows):** the venv path in
+> `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` is version-suffixed, so every
+> plugin update moves it. After installing a new version from the catalog:
+> close the compute-service window (this kills the plugin worker — never
+> mid-train), repoint the env var at the new
+> `...\managed-plugins\kaggle-exdark\<new version>\.venv\Scripts\python.exe`,
+> and start the service again. A stale path fails exactly like W1: the
+> worker 500s on first use while the shop still shows the new version
+> installed.
 
 ## 3. Install the plugin from the catalog
 
