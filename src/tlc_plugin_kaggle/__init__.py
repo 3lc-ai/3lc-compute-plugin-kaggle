@@ -18,7 +18,24 @@ from typing import Any
 
 from tlc_plugin_sdk import ComputePlugin, JobContext
 
-__version__ = "1.2.2"
+def _read_version() -> str:
+    # Derived, never hand-synced: a hardcoded copy here shipped v1.2.3 with a
+    # v1.2.2 footer (the bump commits only covered pyproject/plugin.toml).
+    try:
+        from importlib.metadata import version
+
+        return version("3lc-compute-plugin-kaggle")
+    except Exception:  # source runs without an installed dist
+        try:
+            import tomllib
+
+            with open(Path(__file__).resolve().parent / "plugin.toml", "rb") as f:
+                return str(tomllib.load(f)["version"])
+        except Exception:
+            return "unknown"
+
+
+__version__ = _read_version()
 REPOSITORY_URL = "https://github.com/3lc-ai/3lc-compute-plugin-kaggle"
 
 

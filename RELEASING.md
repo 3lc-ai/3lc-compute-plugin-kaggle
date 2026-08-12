@@ -45,6 +45,17 @@ URL never changes — saving the gist is all it takes. Every Hub with this
 catalog source configured sees the new version on its next fetch, and the
 installed card grows an **Update** button.
 
+## 4. Verify the update landed
+
+After installing/updating from the catalog, open any plugin tab: **the
+footer must show the new version.** It renders `_meta.version`, which is
+the installed dist's own metadata (derived `__version__`; never a
+hand-synced constant — a hardcoded copy shipped v1.2.3 with a v1.2.2
+footer). A stale footer means a stale install or worker, not a cosmetic
+glitch — and diagnostics blocks stamp this same version, so triage
+trusts it. The version string is hand-synced in exactly three places:
+pyproject.toml, plugin.toml, and the catalog manifest.
+
 ## Why the gist exists at all
 
 The Hub fetches catalog sources **unauthenticated**, and this repo is private,
