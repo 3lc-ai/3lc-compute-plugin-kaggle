@@ -855,8 +855,13 @@
         <div class="kg-sec-head">3LC settings</div>
         <div class="kg-form-cols" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;">
           <div class="form-group">
-            <label class="form-label" for="tr-project">Project</label>
-            <input id="tr-project" type="text" class="form-control" value="exdark-competition">
+            <label class="form-label">Project</label>
+            <div class="kg-locked-rows" style="margin: 0 0 4px;">
+              <div class="kg-locked-row" title="The run is created in the session project, the same one Import created the tables in. The project name is edited on the Import tab."><span class="lbl">Session</span>
+                <span class="val" id="tr-project-fact"></span>
+                <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></div>
+            </div>
+            <div class="form-help">The run lands in the same project as the imported tables.</div>
           </div>
           <div class="form-group">
             <label class="form-label" for="tr-runname">Run name</label>
@@ -1477,7 +1482,7 @@
 
       function kgBuildDiagnostics() {
         var head = [];
-        var yaml = (kgRevisitSrc && kgRevisitSrc.yaml) || el('kg-yaml').value.trim();
+        var yaml = (kgSession && kgSession.dataset_yaml) || el('kg-yaml').value.trim();
         if (yaml) { head.push('yaml: ' + yaml); }
         if (kgLastJobId) { head.push('job: ' + kgLastJobId); }
         return kgBuildDiagnosticsCore([
@@ -1783,51 +1788,82 @@
         return ds ? ds[1] + (rev ? '/' + rev[1] : '') : '';
       }
 
-      // The current 3LC project = whatever the Import tab's Project field
-      // says (saved config restores it). Train/Predict table resolution and
-      // the revision pickers all follow THIS — a renamed project must never
-      // leave the later tabs silently pointing at the old one (round-1).
+      // ── Canonical session (v1.2.6) ──────────────────────────────────
+      // One object owns the facts every tab shares: project, table name,
+      // dataset yaml, device, the slug decision, and explicit per-field
+      // table-URL overrides. Tabs render projections of it; no tab owns a
+      // default (GET /config always serves a populated session, so no
+      // fallback literal exists in this fragment). The table-URL fields
+      // are DERIVED from (project, table) unless an override says
+      // otherwise — stores that cannot disagree need no self-healer, so
+      // the old coherent-follow machinery is gone.
+      var kgSession = null;        // set once the config restores
+      var kgDefaultSlug = '';      // shipped slug (config _meta)
+
+      function kgSessionSave() {
+        if (kgDevMode || !kgSession) { return; }   // fixtures never persist
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session: kgSession })
+        }).catch(function () { /* persistence is best-effort */ });
+      }
+
       function kgCurrentProject() {
-        var f = el('kg-project');
-        return (f && f.value.trim()) || 'exdark-competition';
+        return kgSession ? kgSession.project_name : el('kg-project').value.trim();
       }
-      // project component of a table/run URL ('' when unrecognizable)
-      function kgUrlProject(url) {
-        var m = String(url).match(/projects[\\\/]+([^\\\/]+)/);
-        return m ? m[1] : '';
-      }
-      // Re-point a table-URL field at the current project's canonical
-      // default when it is empty or still carries another project's URL.
-      // Hand-entered URLs *within* the current project are never touched.
-      // Resolves when the field is settled (then() the gate re-check).
-      // Re-pointed fields also re-persist their tab: ui_config.json must
-      // never keep URLs from a project the rest of the config has left
-      // (the round-2 cross-project-mixture finding).
-      function kgSyncFieldToProject(fieldIds) {
-        var cur = kgCurrentProject();
-        var stale = fieldIds.filter(function (id) {
-          var v = el(id).value.trim();
-          return !v || (kgUrlProject(v) && kgUrlProject(v) !== cur);
+
+      // field id -> [session.overrides key, /tables/defaults split key]
+      var KG_URL_FIELDS = {
+        'tr-train-url': ['train_table_url', 'train'],
+        'tr-val-url': ['val_table_url', 'val'],
+        'ps-test-url': ['test_table_url', 'test']
+      };
+
+      // Render the given URL fields from the session: an explicit override
+      // verbatim, everything else the canonical derivation for the session
+      // project. Writes the DOM only — derived values are never persisted,
+      // overrides already are. Resolves when the fields are settled
+      // (then() the gate re-check).
+      function kgApplyDerivedUrls(fieldIds) {
+        if (!kgSession) { return Promise.resolve(false); }
+        var ov = kgSession.overrides || {};
+        var derived = [];
+        fieldIds.forEach(function (id) {
+          var o = ov[KG_URL_FIELDS[id][0]];
+          if (o) { el(id).value = o; } else { derived.push(id); }
         });
-        if (!stale.length) { return Promise.resolve(false); }
+        if (!derived.length) { return Promise.resolve(true); }
         return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/tables/defaults?project=' +
-                             encodeURIComponent(cur))
+                             encodeURIComponent(kgCurrentProject()))
           .then(function (r) { return r.json(); })
           .then(function (d) {
-            var split = { 'tr-train-url': 'train', 'tr-val-url': 'val', 'ps-test-url': 'test' };
-            var wroteTrain = false, wroteSubmit = false;
-            stale.forEach(function (id) {
-              var s = d[split[id]];
-              if (s && s.url) {
-                el(id).value = s.url;
-                if (id === 'ps-test-url') { wroteSubmit = true; } else { wroteTrain = true; }
-              }
+            derived.forEach(function (id) {
+              var s = d[KG_URL_FIELDS[id][1]];
+              if (s && s.url) { el(id).value = s.url; }
             });
-            if (wroteTrain) { saveTabConfig('train'); }
-            if (wroteSubmit) { saveTabConfig('submit'); }
             return true;
           })
           .catch(function () { return false; });
+      }
+
+      // A user edit to a URL field is an explicit per-field override; an
+      // emptied field returns to derivation. A settled project or table
+      // change clears all overrides (they belonged to the old pair) and
+      // the gates' amber says what that means.
+      function kgSetUrlOverride(id) {
+        if (!kgSession || kgDevMode) { return; }
+        var key = KG_URL_FIELDS[id][0];
+        var v = el(id).value.trim();
+        var ov = kgSession.overrides || (kgSession.overrides = {});
+        if (v ? ov[key] === v : !(key in ov)) { return; }
+        if (v) { ov[key] = v; } else { delete ov[key]; }
+        kgSessionSave();
+        if (!v) { kgApplyDerivedUrls([id]); }
+      }
+
+      function kgRenderProjectFact() {
+        el('tr-project-fact').textContent = kgCurrentProject();
       }
 
       function kgLogOpen() {
@@ -1845,13 +1881,14 @@
 
       // ── Config persistence: last-used values per tab ────────────────
       // element id -> stored key, per tab. Checkboxes detected by type.
+      // Tab snapshots hold TAB-LOCAL fields only; the shared facts
+      // (project, table, yaml, URLs, device, slug) live in the session.
       var CFG_FIELDS = {
-        import: { 'kg-yaml': 'dataset_yaml', 'kg-project': 'project_name', 'kg-table': 'table_name' },
         train: {
-          'tr-train-url': 'train_table_url', 'tr-val-url': 'val_table_url', 'tr-latest': 'use_latest',
+          'tr-latest': 'use_latest',
           'tr-epochs': 'epochs', 'tr-batch': 'batch', 'tr-lr0': 'lr0', 'tr-lrf': 'lrf',
-          'tr-optimizer': 'optimizer', 'tr-patience': 'patience', 'tr-device': 'device',
-          'tr-workers': 'workers', 'tr-extra': 'extra_args', 'tr-project': 'project_name',
+          'tr-optimizer': 'optimizer', 'tr-patience': 'patience',
+          'tr-workers': 'workers', 'tr-extra': 'extra_args',
           'tr-conf': 'conf_thres', 'tr-maxdet': 'max_det',
           'tr-embdim': 'image_embeddings_dim', 'tr-embreducer': 'image_embeddings_reducer',
           'tr-instdim': 'instance_embeddings_dim', 'tr-colstart': 'collection_epoch_start',
@@ -1862,8 +1899,7 @@
           'tr-valonly': 'collection_val_only', 'tr-coldisable': 'collection_disable'
         },
         submit: {
-          'ps-test-url': 'test_table_url', 'ps-conf': 'conf', 'ps-device': 'device',
-          'ps-slug': 'competition_slug'
+          'ps-conf': 'conf'
         }
       };
 
@@ -1893,6 +1929,39 @@
             else if (saved[key] !== '') { node.value = saved[key]; }
           });
         });
+        // Validate on read: a persisted numeric outside the client bounds
+        // mirror falls back to the field's markup default instead of
+        // restoring silently invalid (an old writer once persisted whole
+        // unvalidated forms; the store's "last-used values" claim holds
+        // again from here on).
+        Object.keys(TR_BOUNDS).forEach(function (id) {
+          var node = el(id), spec = TR_BOUNDS[id];
+          var raw = node.value, v = parseFloat(raw);
+          var bad = raw === '' ? !spec[3] : (isNaN(v) || v < spec[1] || v > spec[2]);
+          if (bad && raw !== node.defaultValue) { node.value = node.defaultValue; }
+        });
+        var conf = parseFloat(el('ps-conf').value);
+        if (isNaN(conf) || conf < 0 || conf > 1) { el('ps-conf').value = el('ps-conf').defaultValue; }
+      }
+
+      // Session -> DOM projection, once per page load (field edits flow
+      // back through the settle handlers). The slug field always shows the
+      // EFFECTIVE slug: the override when one exists, else the shipped
+      // default from _meta — nothing is stored for "just track the
+      // default", which is what lets a version bump move every install.
+      function kgApplySession(cfg) {
+        kgSession = cfg.session || {
+          project_name: '', table_name: '', dataset_yaml: '',
+          device: '', slug_override: null, overrides: {}
+        };
+        if (!kgSession.overrides) { kgSession.overrides = {}; }
+        el('kg-project').value = kgSession.project_name;
+        el('kg-table').value = kgSession.table_name;
+        if (kgSession.dataset_yaml) { el('kg-yaml').value = kgSession.dataset_yaml; }
+        el('tr-device').value = kgSession.device;
+        el('ps-device').value = kgSession.device;
+        el('ps-slug').value = kgSession.slug_override || kgDefaultSlug;
+        kgRenderProjectFact();
       }
 
       // Version footer on every tab, from the config _meta block. The
@@ -1917,6 +1986,8 @@
       var configLoaded = API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/config')
         .then(function (r) { return r.json(); })
         .then(function (cfg) {
+          kgDefaultSlug = String((cfg._meta || {}).default_slug || '');
+          kgApplySession(cfg);
           applyConfig(cfg);
           if (cfg._meta) {
             // Diagnostics on every tab carry the version from here on
@@ -2198,31 +2269,34 @@
         setTimeout(kgRunPreflight, 0);   // after the pasted text lands
       });
 
-      // ── Import form persistence (round-2 finding) ────────────────────
-      // Saved values previously wrote only when an import RAN: a typed
-      // project name vanished on refresh, and the persisted train/submit
-      // URLs could keep pointing at a previous project (cross-project
-      // mixtures in ui_config.json). The form now persists as it settles
-      // (debounced input + blur). A settled project CHANGE additionally
-      // re-points the other tabs' URL fields (kgSyncFieldToProject, which
-      // now re-persists what it rewrites) and re-runs their gates, so the
-      // Train hint never keeps naming a project the field no longer holds.
+      // ── Import form = the session's editor ──────────────────────────
+      // The form persists as it settles (debounced input + blur) INTO THE
+      // SESSION — there is no separate "import" snapshot to disagree with.
+      // A settled project or table change clears the URL overrides (they
+      // belonged to the old pair), re-derives the follower fields, and
+      // re-runs their gates. A blanked field keeps the last session value
+      // (an empty project is not a fact worth storing).
       var kgCfgSaveTimer = null;
-      var kgFollowedProject = null;   // baseline set once config restores
 
       function kgImportCfgSettled() {
-        if (kgDevMode) { return; }    // fixtures never persist
-        saveTabConfig('import');
-        var cur = kgCurrentProject();
-        if (cur === kgFollowedProject) { return; }
-        kgFollowedProject = cur;
-        kgSyncFieldToProject(['tr-train-url', 'tr-val-url', 'ps-test-url'])
-          .then(function () {
-            trVerifyTables(true);
-            psVerifyTable(true);
-          });
+        if (kgDevMode || !kgSession) { return; }    // fixtures never persist
+        var project = el('kg-project').value.trim() || kgSession.project_name;
+        var table = el('kg-table').value.trim() || kgSession.table_name;
+        var pairChanged = project !== kgSession.project_name || table !== kgSession.table_name;
+        kgSession.project_name = project;
+        kgSession.table_name = table;
+        kgSession.dataset_yaml = el('kg-yaml').value.trim();
+        if (pairChanged) { kgSession.overrides = {}; }
+        kgSessionSave();
+        if (pairChanged) {
+          kgRenderProjectFact();
+          kgApplyDerivedUrls(['tr-train-url', 'tr-val-url', 'ps-test-url'])
+            .then(function () {
+              trVerifyTables(true);
+              psVerifyTable(true);
+            });
+        }
       }
-      configLoaded.then(function () { kgFollowedProject = kgCurrentProject(); });
       ['kg-yaml', 'kg-project', 'kg-table'].forEach(function (id) {
         el(id).addEventListener('input', function () {
           clearTimeout(kgCfgSaveTimer);
@@ -2232,6 +2306,35 @@
           clearTimeout(kgCfgSaveTimer);
           kgImportCfgSettled();
         });
+      });
+
+      // Device is one machine-level fact rendered in two tabs: editing
+      // either field updates the session and mirrors into the other, so
+      // train and predict can never silently run on different devices.
+      ['tr-device', 'ps-device'].forEach(function (id) {
+        el(id).addEventListener('blur', function () {
+          if (!kgSession || kgDevMode) { return; }
+          var v = el(id).value.trim();
+          if (v === kgSession.device) { return; }
+          kgSession.device = v;
+          el(id === 'tr-device' ? 'ps-device' : 'tr-device').value = v;
+          kgSessionSave();
+        });
+      });
+
+      // The slug field shows the EFFECTIVE slug. A value equal to the
+      // shipped default stores nothing (slug_override = null means "track
+      // the shipped slug", so a version bump moves every install); only a
+      // deliberate divergence persists. A blanked field returns to the
+      // default.
+      el('ps-slug').addEventListener('blur', function () {
+        if (!kgSession || kgDevMode) { return; }
+        var v = el('ps-slug').value.trim();
+        if (!v && kgDefaultSlug) { el('ps-slug').value = kgDefaultSlug; v = kgDefaultSlug; }
+        var override = (v && v !== kgDefaultSlug) ? v : null;
+        if (override === kgSession.slug_override) { return; }
+        kgSession.slug_override = override;
+        kgSessionSave();
       });
 
       // One-line remediation hints per check, shown only when it fails.
@@ -2422,7 +2525,7 @@
         });
         // Start over belongs to the revisit context (form hidden). In live
         // State 4 the form sits right below the results — no reset needed.
-        if (kgRevisitSrc) {
+        if (kgRevisitActive) {
           banner += '<button type="button" class="btn btn-ghost btn-sm" id="kg-start-over">Start over</button>';
         }
         banner += '</div></div></div>';
@@ -2433,7 +2536,7 @@
           showTab('train');
           el('tr-epochs').focus();
         });
-        if (kgRevisitSrc) {
+        if (kgRevisitActive) {
           el('kg-start-over').addEventListener('click', function () { kgEnterFormState(true); });
         }
 
@@ -2584,17 +2687,19 @@
           });
       }
 
-      // Set while the revisit (State 6) view is active: the form is hidden,
-      // so re-imports launched from it take their values from the verified
-      // snapshot instead of the form (the backend re-validates everything).
-      var kgRevisitSrc = null;
+      // True while the revisit (State 6) view is active: the form is
+      // hidden, so re-imports launched from it read the SESSION directly —
+      // the same values every other tab is following, so a re-import can
+      // never target a project the rest of the UI has left (the backend
+      // re-validates everything).
+      var kgRevisitActive = false;
 
       function kgStartImport(forceSplits) {
         var yaml, project, table;
-        if (kgRevisitSrc) {
-          yaml = kgRevisitSrc.yaml;
-          project = kgRevisitSrc.project;
-          table = kgRevisitSrc.table;
+        if (kgRevisitActive && kgSession) {
+          yaml = kgSession.dataset_yaml;
+          project = kgSession.project_name;
+          table = kgSession.table_name;
         } else {
           yaml = kgCleanYamlPath(el('kg-yaml').value);
           if (yaml !== el('kg-yaml').value) { el('kg-yaml').value = yaml; }
@@ -2605,7 +2710,7 @@
             el('kg-import-state').textContent = 'Import needs a passing preflight. The YAML path above hasn’t validated yet.';
             return;
           }
-          saveTabConfig('import');
+          kgImportCfgSettled();   // force-persist the session at start
         }
         if (!yaml) {
           el('kg-import-state').textContent = 'No dataset.yaml recorded for this import. Start over restores the form.';
@@ -2660,7 +2765,7 @@
       // view goes instantly, the incoming form gets the standard entrance.
       // Initial page load passes nothing — page furniture doesn't animate.
       function kgEnterFormState(animate) {
-        kgRevisitSrc = null;
+        kgRevisitActive = false;
         el('kg-import-form').style.display = '';
         el('kg-import-banner').innerHTML = '';
         el('kg-checks').innerHTML = '';
@@ -2680,11 +2785,7 @@
       function kgRenderRevisit(state) {
         var snap = state.snapshot || {};
         kgLastJobId = String(snap.job_id || '');
-        kgRevisitSrc = {
-          yaml: snap.dataset_yaml || '',
-          project: snap.project || 'exdark-competition',
-          table: snap.table_name || 'initial'
-        };
+        kgRevisitActive = true;
         el('kg-import-form').style.display = 'none';
         var result = { tables: {}, mechanisms: snap.mechanisms || {} };
         ['train', 'val', 'test'].forEach(function (s) {
@@ -2825,7 +2926,7 @@
         };
 
         function apply() {
-          kgRevisitSrc = null;
+          kgRevisitActive = false;
           el('kg-import-state').textContent = '';
           if (mode === 'state1') {
             el('kg-yaml').value = '';
@@ -3427,20 +3528,12 @@
         panel.hidden = true;
       }
 
-      // Prefill table pickers with the canonical import outputs — after the
-      // saved config applies, and only into fields it left empty. Verify
-      // whatever landed (config or defaults) so the gate is already green
-      // when the tab opens on a healthy install.
+      // Render the Train URL fields from the session (override or
+      // derivation), then verify, so the gate is already green when the
+      // tab opens on a healthy install.
       configLoaded.then(function () {
-        return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/tables/defaults?project=' +
-                             encodeURIComponent(kgCurrentProject()))
-          .then(function (r) { return r.json(); })
-          .then(function (d) {
-            if (d.train && !el('tr-train-url').value.trim()) { el('tr-train-url').value = d.train.url; }
-            if (d.val && !el('tr-val-url').value.trim()) { el('tr-val-url').value = d.val.url; }
-          });
-      }).catch(function () { /* leave pickers empty */ })
-        .then(function () {
+        return kgApplyDerivedUrls(['tr-train-url', 'tr-val-url']);
+      }).then(function () {
           if (!kgDevMode) { trVerifyTables(true); }
           // The Loop's "fix labels" targets the working train table once
           // one is known (label edits happen there).
@@ -3951,33 +4044,38 @@
         if (kgDevMode) { return; }   // forced states own the gate
         // Activation refetch (v1 pattern): tables may have appeared since
         // the last check (a fresh Import) — the same-key no-op made that
-        // verdict stick until a reload in round 1. Also follow a renamed
-        // project before re-verifying.
-        kgSyncFieldToProject(['tr-train-url', 'tr-val-url'])
+        // verdict stick until a reload in round 1. The fields re-render
+        // from the session (override or derivation) before re-verifying.
+        kgRenderProjectFact();
+        kgApplyDerivedUrls(['tr-train-url', 'tr-val-url'])
           .then(function () { trVerifyTables(true); });
         trLoadDurationStats();
       }
       if (!kgDevMode) { trLoadDurationStats(); }
 
       ['tr-train-url', 'tr-val-url'].forEach(function (id) {
+        // A settled user edit is an explicit override (kgSetUrlOverride);
+        // programmatic derivation writes never pass through these handlers.
         el(id).addEventListener('input', function () {
           clearTimeout(trGateTimer);
-          trGateTimer = setTimeout(trVerifyTables, 500);
+          trGateTimer = setTimeout(function () { kgSetUrlOverride(id); trVerifyTables(); }, 500);
         });
         el(id).addEventListener('blur', function () {
           clearTimeout(trGateTimer);
+          kgSetUrlOverride(id);
           trVerifyTables();
         });
         el(id).addEventListener('keydown', function (e) {
           if (e.key === 'Enter') {
             e.preventDefault();
             clearTimeout(trGateTimer);
+            kgSetUrlOverride(id);
             trVerifyTables();
           }
         });
         el(id).addEventListener('paste', function () {
           clearTimeout(trGateTimer);
-          setTimeout(trVerifyTables, 0);   // after the pasted text lands
+          setTimeout(function () { kgSetUrlOverride(id); trVerifyTables(); }, 0);   // after the pasted text lands
         });
       });
 
@@ -3985,12 +4083,15 @@
       // "Use latest revision" (the pick means THAT revision); re-checking
       // the box re-implies latest, echoed in the gate's green line either
       // way. This is the fix-labels-then-retrain loop made tangible.
+      // A pick is an explicit per-field override, same as a hand-paste.
       kgBindTablePicker('tr-train-url', 'tr-train-pop', 'tr-train-pick', function (url, isLatest) {
         if (!isLatest) { el('tr-latest').checked = false; }
+        kgSetUrlOverride('tr-train-url');
         trVerifyTables(true);
       });
       kgBindTablePicker('tr-val-url', 'tr-val-pop', 'tr-val-pick', function (url, isLatest) {
         if (!isLatest) { el('tr-latest').checked = false; }
+        kgSetUrlOverride('tr-val-url');
         trVerifyTables(true);
       });
       el('tr-latest').addEventListener('change', function () {
@@ -4085,7 +4186,7 @@
           device: el('tr-device').value,
           workers: el('tr-workers').value,
           extra_args: el('tr-extra').value,
-          project_name: el('tr-project').value.trim(),
+          project_name: kgCurrentProject(),
           run_name: el('tr-runname').value.trim(),
           conf_thres: el('tr-conf').value,
           max_det: el('tr-maxdet').value,
@@ -4383,10 +4484,10 @@
         if (kgDevMode) { return; }   // forced states own this tab
         psLoadRuns();
         renderConnection();
-        // Activation refetch (v1 pattern) + project follow — same rationale
-        // as trOnTabEnter: a stale same-key verdict survived a fresh Import
-        // in round 1, and a renamed project left this field on the old one.
-        kgSyncFieldToProject(['ps-test-url'])
+        // Activation refetch (v1 pattern) — same rationale as trOnTabEnter:
+        // a stale same-key verdict survived a fresh Import in round 1. The
+        // field re-renders from the session before re-verifying.
+        kgApplyDerivedUrls(['ps-test-url'])
           .then(function () { psVerifyTable(true); });
       }
 
@@ -4459,21 +4560,25 @@
           });
       }
 
+      // A settled user edit is an explicit override, same as on Train.
       ['input', 'blur', 'paste'].forEach(function (evt) {
         el('ps-test-url').addEventListener(evt, function () {
           clearTimeout(psGateTimer);
-          if (evt === 'input') { psGateTimer = setTimeout(psVerifyTable, 500); }
-          else { setTimeout(psVerifyTable, 0); }
+          var settle = function () { kgSetUrlOverride('ps-test-url'); psVerifyTable(); };
+          if (evt === 'input') { psGateTimer = setTimeout(settle, 500); }
+          else { setTimeout(settle, 0); }
         });
       });
       el('ps-test-url').addEventListener('keydown', function (e) {
         if (e.key === 'Enter') {
           e.preventDefault();
           clearTimeout(psGateTimer);
+          kgSetUrlOverride('ps-test-url');
           psVerifyTable();
         }
       });
       kgBindTablePicker('ps-test-url', 'ps-test-pop', 'ps-test-pick', function () {
+        kgSetUrlOverride('ps-test-url');
         psVerifyTable(true);
       });
 
@@ -4506,17 +4611,11 @@
           !psWeightsChosen() || !!kgDevMode;
       }
 
-      // Test table default from the same helper the Train tab uses — saved
-      // config wins, defaults fill blanks only; then the gate verifies.
+      // Test table field renders from the session (override or derivation),
+      // same helper as the Train tab; then the gate verifies.
       configLoaded.then(function () {
-        return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/tables/defaults?project=' +
-                             encodeURIComponent(kgCurrentProject()))
-          .then(function (r) { return r.json(); })
-          .then(function (d) {
-            if (d.test && !el('ps-test-url').value.trim()) { el('ps-test-url').value = d.test.url; }
-          });
-      }).catch(function () { /* leave the field empty */ })
-        .then(function () { if (!kgDevMode) { psVerifyTable(true); } });
+        return kgApplyDerivedUrls(['ps-test-url']);
+      }).then(function () { if (!kgDevMode) { psVerifyTable(true); } });
 
       // ── Step 1 in-progress + results panel ──────────────────────────
       function psRenderProgress(job) {
@@ -4813,10 +4912,6 @@
 
       function psRenderConnState(s) {
             psConnState = s;
-            // Hardcoded competition default (server constant), still editable.
-            if (!el('ps-slug').value.trim() && s.default_slug) {
-              el('ps-slug').value = s.default_slug;
-            }
             var box = el('ps-kconn');
             if (s.state === 'no_credentials') {
               box.innerHTML = '<div class="kg-callout err">' + kgIcon('x-circle') +
