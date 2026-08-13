@@ -15,7 +15,7 @@ import pytest
 
 from conftest import fixture_config, materialize_tables, write_config
 
-from tlc_plugin_kaggle.config_store import _url_project
+from tlc_plugin_kaggle.config_store import url_project
 
 
 def walk_keys(node, path=""):
@@ -36,7 +36,7 @@ def test_config_coherence_invariant(store, tmp_path, name):
 
     # One project across all intent keys.
     projects = {sess["project_name"]}
-    projects |= {_url_project(u) for u in sess["overrides"].values()}
+    projects |= {url_project(u) for u in sess["overrides"].values()}
     assert len(projects) == 1
 
     # The shared facts exist under exactly one key each: no field named

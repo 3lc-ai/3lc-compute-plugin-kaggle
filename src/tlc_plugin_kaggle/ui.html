@@ -1720,7 +1720,11 @@
       // (GET /tables/list, fetched fresh per open). Picking a row writes
       // the URL into the field and hands off to `onPick` (which re-runs
       // the field's gate). Raw URL entry stays the escape hatch.
-      function kgBindTablePicker(inputId, popId, btnId, onPick) {
+      // `split`: scope the popover to that split's dataset (DP-11). The
+      // splits are fixed and all three are mandatory, so there is no
+      // legitimate cross-split pick — a train field only ever offers
+      // exdark_train revisions. Omit for an unscoped picker (none today).
+      function kgBindTablePicker(inputId, popId, btnId, onPick, split) {
         var btn = el(btnId);
         var pop = el(popId);
         var input = el(inputId);
@@ -1750,8 +1754,11 @@
             .then(function (r) { return r.json(); })
             .then(function (data) {
               if (pop.hidden) { return; }
+              var want = (split && kgDatasetPrefix) ? kgSplitDataset(split) : null;
               var html = '';
-              (data.datasets || []).forEach(function (ds) {
+              (data.datasets || []).filter(function (ds) {
+                return !want || ds.name === want;
+              }).forEach(function (ds) {
                 html += '<div class="kg-pop-ds">' + esc(ds.name) + '</div>';
                 (ds.tables || []).forEach(function (t) {
                   html += '<button type="button" class="kg-pop-row" data-url="' + esc(t.url) +
@@ -1762,7 +1769,8 @@
                 });
               });
               pop.innerHTML = html ||
-                '<div class="form-help" style="padding:4px 8px">No tables in this project yet. Run Import first.</div>';
+                '<div class="form-help" style="padding:4px 8px">No ' + (want ? esc(want) + ' ' : '') +
+                'tables in this project yet. Run Import first.</div>';
               pop.querySelectorAll('.kg-pop-row').forEach(function (row) {
                 row.addEventListener('click', function () {
                   input.value = row.getAttribute('data-url');
@@ -1799,6 +1807,36 @@
       // the old coherent-follow machinery is gone.
       var kgSession = null;        // set once the config restores
       var kgDefaultSlug = '';      // shipped slug (config _meta)
+      var kgDatasetPrefix = '';    // split<->dataset mapping (config _meta)
+
+      // JS mirrors of config_store's URL parsers + classify_override: one
+      // predicate per runtime (a literal shared function is impossible
+      // across languages), cross-pinned by the PRETAG manual steps and
+      // recorded as a mirrored pair alongside TR_BOUNDS.
+      function kgUrlSeg(url, kind) {
+        var re = { project: /[\\\/]projects[\\\/]([^\\\/]+)[\\\/]datasets[\\\/]/,
+                   dataset: /[\\\/]datasets[\\\/]([^\\\/]+)[\\\/]tables[\\\/]/,
+                   table: /[\\\/]tables[\\\/]([^\\\/]+)[\\\/]?$/ }[kind];
+        var m = String(url).trim().match(re);
+        return m ? m[1] : null;
+      }
+      function kgSplitDataset(split) { return kgDatasetPrefix + '_' + split; }
+
+      // "drop" | "suppress" | "keep" — see config_store.classify_override.
+      // Storing a value already judged invalid would mean session.overrides
+      // can hold garbage and every future reader must re-validate — the
+      // self-healer pattern this release deleted. Don't-store keeps
+      // overrides valid-by-construction, which is why the read-time prune
+      // in kgApplySession is nearly vacuous: an invariant holding
+      // structurally, not by repair.
+      function kgOverrideDisposition(id, url) {
+        if (!kgDatasetPrefix) { return 'keep'; }   // degraded: no mapping served
+        var split = KG_URL_FIELDS[id][1];
+        if (kgUrlSeg(url, 'project') !== kgSession.project_name ||
+            kgUrlSeg(url, 'dataset') !== kgSplitDataset(split)) { return 'drop'; }
+        if (kgUrlSeg(url, 'table') === kgSession.table_name) { return 'suppress'; }
+        return 'keep';
+      }
 
       function kgSessionSave() {
         if (kgDevMode || !kgSession) { return; }   // fixtures never persist
@@ -1867,20 +1905,33 @@
           : kgWithObjectService(dashboardUrl);
       }
 
-      // A user edit to a URL field is an explicit per-field override; an
-      // emptied field returns to derivation. A settled project or table
-      // change clears all overrides (they belonged to the old pair) and
-      // the gates' amber says what that means.
+      // A user edit to a URL field becomes an override ONLY if it passes
+      // the predicate. "keep" is stored; "suppress" (equals what
+      // derivation yields) stores nothing and clears any stale override,
+      // so a later table-name change still moves the field (M1); "drop"
+      // (wrong project or wrong split, DP-11) stores nothing — the DOM
+      // keeps the typed value, the gate's amber names the mismatch, and a
+      // reload re-derives. An emptied field returns to derivation. A
+      // settled project or table change clears all overrides.
       function kgSetUrlOverride(id) {
         if (!kgSession || kgDevMode) { return; }
         var key = KG_URL_FIELDS[id][0];
         var v = el(id).value.trim();
         var ov = kgSession.overrides || (kgSession.overrides = {});
-        if (v ? ov[key] === v : !(key in ov)) { return; }
-        if (v) { ov[key] = v; } else { delete ov[key]; }
-        kgSessionSave();
-        if (!v) { kgApplyDerivedUrls([id]); }
-        else if (id === 'tr-train-url') { kgRenderLoopFixLabels(); }
+        if (!v) {
+          if (key in ov) { delete ov[key]; kgSessionSave(); }
+          kgApplyDerivedUrls([id]);
+          return;
+        }
+        var disp = kgOverrideDisposition(id, v);
+        if (disp === 'keep' && ov[key] !== v) {
+          ov[key] = v;
+          kgSessionSave();
+        } else if (disp === 'suppress' && (key in ov)) {
+          delete ov[key];
+          kgSessionSave();
+        }
+        if (id === 'tr-train-url') { kgRenderLoopFixLabels(); }
       }
 
       function kgRenderProjectFact() {
@@ -1976,6 +2027,16 @@
           device: '', slug_override: null, overrides: {}
         };
         if (!kgSession.overrides) { kgSession.overrides = {}; }
+        // Validate on read: drop any stored override today's write
+        // predicate would refuse (heals configs written before the
+        // predicate existed; nearly vacuous by design — ui-notes §14).
+        Object.keys(KG_URL_FIELDS).forEach(function (id) {
+          var key = KG_URL_FIELDS[id][0];
+          var u = kgSession.overrides[key];
+          if (u && kgOverrideDisposition(id, u) !== 'keep') {
+            delete kgSession.overrides[key];
+          }
+        });
         el('kg-project').value = kgSession.project_name;
         el('kg-table').value = kgSession.table_name;
         if (kgSession.dataset_yaml) { el('kg-yaml').value = kgSession.dataset_yaml; }
@@ -2016,6 +2077,7 @@
         .then(function (r) { return r.json(); })
         .then(function (cfg) {
           kgDefaultSlug = String((cfg._meta || {}).default_slug || '');
+          kgDatasetPrefix = String((cfg._meta || {}).dataset_prefix || '');
           kgApplySession(cfg);
           applyConfig(cfg);
           if (cfg._meta) {
@@ -3985,17 +4047,23 @@
           return;
         }
         var problems = data.problems || [];
+        // Split-mismatch ambers (data.noProjectHint) skip the wrong-project
+        // hint and the Go-to-Import action: the remediation is the field or
+        // the picker, not another import.
         box.innerHTML = '<div class="' + entering + '"><div class="kg-callout warn">' +
           kgIcon('alert-triangle') +
           '<span><strong>' + esc(data.headline || 'Tables not found.') + '</strong>' +
           (problems.length ? '<br>' + problems.map(function (p) { return '• ' + p; }).join('<br>') : '') +
-          '<br><span class="form-help">Looking in project <code>' + esc(kgCurrentProject()) +
-          '</code> — no import has produced these tables there yet. If you just changed the ' +
-          'Project name, Import (tab 1) needs one run for that project.</span>' +
-          '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm kgi-btn" ' +
-          'id="tr-goto-import"><span>Go to Import</span>' + kgIcon('arrow-right', 'kgi-12') +
-          '</button></div></span></div></div>';
-        el('tr-goto-import').addEventListener('click', function () { showTab('import'); });
+          (data.noProjectHint ? '' :
+            '<br><span class="form-help">Looking in project <code>' + esc(kgCurrentProject()) +
+            '</code> — no import has produced these tables there yet. If you just changed the ' +
+            'Project name, Import (tab 1) needs one run for that project.</span>' +
+            '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm kgi-btn" ' +
+            'id="tr-goto-import"><span>Go to Import</span>' + kgIcon('arrow-right', 'kgi-12') +
+            '</button></div>') +
+          '</span></div></div>';
+        var goToImport = el('tr-goto-import');
+        if (goToImport) { goToImport.addEventListener('click', function () { showTab('import'); }); }
       }
 
       function trVerifyTables(force) {
@@ -4007,6 +4075,28 @@
         trGate = null;
         trCheckReady();
         if (!trainUrl || !valUrl) { trRenderGate(null); return; }
+        // Split identity before existence (DP-11): a cross-split URL is
+        // individually valid on disk, so the existence check alone renders
+        // a green gate over the wrong dataset. Also enforced server-side.
+        if (kgDatasetPrefix) {
+          var splitProblems = [];
+          [['Train', trainUrl, 'train'], ['Val', valUrl, 'val']].forEach(function (row) {
+            var got = kgUrlSeg(row[1], 'dataset');
+            if (got !== kgSplitDataset(row[2])) {
+              splitProblems.push(esc(row[0] + ' table URL points at ' +
+                (got || 'an unrecognized dataset') + '; expected ' + kgSplitDataset(row[2]) + '.'));
+            }
+          });
+          if (trainUrl.replace(/[\\\/]+$/, '') === valUrl.replace(/[\\\/]+$/, '')) {
+            splitProblems.push('Train and Val point at the same table.');
+          }
+          if (splitProblems.length) {
+            trRenderGate({ ok: false, noProjectHint: true,
+                           headline: 'These URLs don’t match their splits.',
+                           problems: splitProblems });
+            return;
+          }
+        }
         var seq = ++trGateSeq;
         trRenderGate({ checking: true });
         var check = function (url) {
@@ -4138,12 +4228,12 @@
         if (!isLatest) { el('tr-latest').checked = false; }
         kgSetUrlOverride('tr-train-url');
         trVerifyTables(true);
-      });
+      }, 'train');
       kgBindTablePicker('tr-val-url', 'tr-val-pop', 'tr-val-pick', function (url, isLatest) {
         if (!isLatest) { el('tr-latest').checked = false; }
         kgSetUrlOverride('tr-val-url');
         trVerifyTables(true);
-      });
+      }, 'val');
       el('tr-latest').addEventListener('change', function () {
         if (trGate && trGate.ok) { trRenderGate(trGate); }   // same kind: no re-entrance
       });
@@ -4565,13 +4655,17 @@
         }
         box.innerHTML = '<div class="' + entering + '"><div class="kg-callout warn">' +
           kgIcon('alert-triangle') + '<span><strong>' + esc(data.headline || 'Table not found.') +
-          '</strong><br><span class="form-help">Looking for the test table in project <code>' +
-          esc(kgCurrentProject()) + '</code>. If you just changed the Project name, Import ' +
-          '(tab 1) needs one run for that project first.</span>' +
-          '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm kgi-btn" ' +
-          'id="ps-goto-import"><span>Go to Import</span>' + kgIcon('arrow-right', 'kgi-12') +
-          '</button></div></span></div></div>';
-        el('ps-goto-import').addEventListener('click', function () { showTab('import'); });
+          '</strong>' +
+          (data.noProjectHint ? '' :
+            '<br><span class="form-help">Looking for the test table in project <code>' +
+            esc(kgCurrentProject()) + '</code>. If you just changed the Project name, Import ' +
+            '(tab 1) needs one run for that project first.</span>' +
+            '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm kgi-btn" ' +
+            'id="ps-goto-import"><span>Go to Import</span>' + kgIcon('arrow-right', 'kgi-12') +
+            '</button></div>') +
+          '</span></div></div>';
+        var goToImport = el('ps-goto-import');
+        if (goToImport) { goToImport.addEventListener('click', function () { showTab('import'); }); }
       }
 
       function psVerifyTable(force) {
@@ -4581,6 +4675,17 @@
         psGate = null;
         psCheckPredictReady();
         if (!url) { psRenderGate(null); return; }
+        // Split identity before existence (DP-11) — mirrors Train's gate;
+        // also enforced server-side in /validate/predict and the job.
+        if (kgDatasetPrefix) {
+          var gotDs = kgUrlSeg(url, 'dataset');
+          if (gotDs !== kgSplitDataset('test')) {
+            psRenderGate({ ok: false, noProjectHint: true,
+                           headline: 'Test table URL points at ' + (gotDs || 'an unrecognized dataset') +
+                                     '; expected ' + kgSplitDataset('test') + '.' });
+            return;
+          }
+        }
         var seq = ++psGateSeq;
         psRenderGate({ checking: true });
         API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/import/revisions?url=' + encodeURIComponent(url))
@@ -4631,7 +4736,7 @@
       kgBindTablePicker('ps-test-url', 'ps-test-pop', 'ps-test-pick', function () {
         kgSetUrlOverride('ps-test-url');
         psVerifyTable(true);
-      });
+      }, 'test');
 
       // Conf bounds, inline on blur (server clamps too)
       function psValidateConf() {

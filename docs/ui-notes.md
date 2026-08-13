@@ -418,6 +418,23 @@ table-URL overrides. The rules, settled like everything else here:
   (stateless). `configLoaded` always resolves and is never silent: network
   failures retry through the connection guard, non-network failures render
   an explicit "saved settings could not be loaded" callout.
+- **Split-scoped inputs offer only their own split** (DP-11). The revision
+  picker on a table-URL field lists only that field's dataset
+  (exdark_train / exdark_val / exdark_test via `_meta.dataset_prefix`);
+  the gates assert the dataset segment (amber names the mismatch
+  specifically) and the server rejects cross-split URLs from /validate/*
+  AND the job targets. One predicate decides what may live in
+  `session.overrides` (`classify_override`, mirrored as
+  `kgOverrideDisposition` — a recorded mirrored pair, same class as
+  TR_BOUNDS): **only values that pass it are stored.** Storing a value
+  already judged invalid would mean overrides can hold garbage and every
+  future reader must re-validate — the self-healer pattern this release
+  deleted. Don't-store keeps overrides valid-by-construction, which is
+  why the read-time prune in `kgApplySession` is nearly vacuous: a test
+  that is almost always trivially true is the signature of an invariant
+  holding structurally rather than by repair. The paternalism is
+  deliberate and bounded: the DOM keeps the typed value, the amber
+  explains it, a reload re-derives.
 - **Config writers are user-action-initiated ONLY.** The sole read-path
   write in the plugin is the marker-guarded one-shot migration in
   `config_store.load()`. Current complete writer list (v1.2.6):

@@ -31,7 +31,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from tlc_plugin_kaggle.constants import DEFAULT_PROJECT
+from tlc_plugin_kaggle.constants import DEFAULT_PROJECT, split_dataset
 
 LOCKED_TRAIN_ARGS: dict[str, Any] = {
     # Resolved to the plugin-managed official checkpoint at train time
@@ -198,6 +198,34 @@ def parse_extra_args(text: str) -> dict[str, Any]:
             raise ValueError(f"Invalid extra-arg name: '{key}'.")
         out[key] = _coerce_scalar(value)
     return out
+
+
+def validate_table_urls(train_url: str, val_url: str) -> None:
+    """Split-identity enforcement (DP-11), server-side like every other
+    locked-contract rule: the gate is client-side and the host /run path
+    never traverses /validate, so without this assert NO point in the
+    pipeline would notice a train slot holding an exdark_val table —
+    ``.latest()`` resolves within one dataset's lineage and the training
+    call is split-blind. Raises ValueError with the participant-facing
+    cause; called from /validate/train (fail-fast 400) AND run_training.
+    """
+    from tlc_plugin_kaggle import config_store
+
+    for role, url in (("train", train_url), ("val", val_url)):
+        expected = split_dataset(role)
+        got = config_store.url_dataset(url)
+        if got != expected:
+            raise ValueError(
+                f"{role.capitalize()} table URL points at "
+                f"{got or 'an unrecognized dataset'}; expected {expected}. "
+                f"Pick the {expected} table (the revision picker only offers "
+                f"the matching split), or clear the field to restore the default."
+            )
+    if str(train_url).strip().rstrip("\\/") == str(val_url).strip().rstrip("\\/"):
+        raise ValueError(
+            "Train and Val table URLs point at the same table. Training and "
+            "validation need the two different splits Import created."
+        )
 
 
 def build_train_kwargs(params: dict[str, Any]) -> dict[str, Any]:
@@ -383,6 +411,9 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     from tlc_plugin_kaggle.predictor import resolve_device
 
     train_kwargs = build_train_kwargs(params)  # raises on locked-key attempts
+    # Split identity is enforced HERE, not only in /validate/train — the
+    # host /run dispatch never traverses /validate (DP-11, Layer 3).
+    validate_table_urls(str(params.get("train_table_url", "")), str(params.get("val_table_url", "")))
     device_requested = str(train_kwargs["device"]).strip()
     train_kwargs["device"] = resolve_device(train_kwargs["device"])
     settings = build_settings(params)

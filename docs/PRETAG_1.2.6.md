@@ -63,6 +63,30 @@ reader, then assert:
       revisit-reads-session (6), DP-10 clamp (7), DP-08 pruned-record (8),
       `?kgdev` fixtures render + never persist (9), console clean (10).
 
+## DP-11 — split identity (added after the round-3 finding)
+
+- [ ] Open the revision picker on each of the three URL fields: the
+      popover offers ONLY that field's dataset (train -> exdark_train,
+      val -> exdark_val, test -> exdark_test).
+- [ ] Hand-paste a cross-split URL into the Train field (e.g. the
+      exdark_val table): gate goes amber with the SPECIFIC message
+      ("Train table URL points at exdark_val; expected exdark_train"),
+      no wrong-project hint, Start disabled; the value is NOT persisted
+      (reload re-derives the correct URL).
+- [ ] Same hand-paste on the Predict test field: amber names the split;
+      Run inference stays disabled.
+- [ ] M1 runtime twin (the JS mirror is not unit-tested — this step IS
+      its coverage until Playwright): pick the revision that equals the
+      derived default via the picker; confirm `session.overrides` stays
+      empty; then change the Table name on Import and confirm the field
+      FOLLOWS the new name (nothing froze it).
+- [ ] Server backstop: with the gate somehow bypassed (curl /run or an
+      edited request), a cross-split train body is rejected with the
+      dataset-naming error, not trained.
+- [ ] Run `scripts/scan_cross_split_runs.py` against the machine's job
+      store(s); file its output with the checklist (a clean result is
+      not proof of absence — 50-record prune, header says so).
+
 ## Open items (decide before tag)
 
 - [ ] H1 regression check (fix landed with the K1 audit): open

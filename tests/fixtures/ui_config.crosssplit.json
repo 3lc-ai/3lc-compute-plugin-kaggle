@@ -1,0 +1,48 @@
+{
+ "import": {
+  "dataset_yaml": "<FIXTURE_ROOT>\\Desktop\\3LC Kaggle Competitions\\competition_exdark\\package_build\\starter_kit\\dataset.yaml",
+  "project_name": "exdark-competition",
+  "table_name": "round2"
+ },
+ "train": {
+  "train_table_url": "<FIXTURE_ROOT>/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/exdark_val/tables/initial",
+  "val_table_url": "<FIXTURE_ROOT>/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/exdark_val/tables/round2",
+  "use_latest": false,
+  "epochs": "10",
+  "device": "",
+  "project_name": "exdark-competition"
+ },
+ "submit": {
+  "test_table_url": "<FIXTURE_ROOT>/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/exdark_test/tables/round2",
+  "conf": "0.25",
+  "device": "",
+  "competition_slug": "fixture-competition-slug-test"
+ },
+ "import_state": {
+  "project": "exdark-competition",
+  "tables": {
+   "train": {
+    "url": "<FIXTURE_ROOT>/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/exdark_train/tables/round2",
+    "rows": 5910,
+    "reused": false
+   },
+   "val": {
+    "url": "<FIXTURE_ROOT>/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/exdark_val/tables/round2",
+    "rows": 733,
+    "reused": false
+   },
+   "test": {
+    "url": "<FIXTURE_ROOT>/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/exdark_test/tables/round2",
+    "rows": 715,
+    "reused": false
+   }
+  },
+  "table_name": "round2",
+  "dataset_yaml": "<FIXTURE_ROOT>\\Desktop\\3LC Kaggle Competitions\\competition_exdark\\package_build\\starter_kit\\dataset.yaml",
+  "job_id": "aaaa0000bbbb",
+  "finished_at": 1786600000.0
+ },
+ "_migrations": {
+  "device_blank_default": true
+ }
+}

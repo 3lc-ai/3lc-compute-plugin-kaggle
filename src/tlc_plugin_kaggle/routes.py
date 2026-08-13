@@ -19,6 +19,7 @@ from litestar import Controller, Response, get, post
 from litestar.exceptions import NotFoundException
 from litestar.status_codes import HTTP_400_BAD_REQUEST
 
+from tlc_plugin_kaggle import constants
 from tlc_plugin_kaggle.constants import DEFAULT_PROJECT, DEFAULT_TABLE
 
 
@@ -60,6 +61,14 @@ def _resolve_predict_params(data: Any) -> tuple[dict[str, Any] | None, Response 
         return bad(f"Weights file not found: {weights}")
     if not str(data.get("test_table_url", "")).strip():
         return bad("Missing required field 'test_table_url'")
+    # Split identity (DP-11): predictions must run on the held-out test
+    # split; _predict_core re-asserts (the host /run path skips /validate).
+    from tlc_plugin_kaggle import predictor as _p
+
+    try:
+        _p.validate_test_table_url(str(data.get("test_table_url", "")).strip().strip('"'))
+    except ValueError as exc:
+        return bad(str(exc))
 
     params = dict(data)
     params["weights_path"] = weights
@@ -169,7 +178,7 @@ class KaggleController(Controller):
 
         out: dict[str, Any] = {"project": project}
         for split in ("train", "val", "test"):
-            url = importer._table_url(table, f"exdark_{split}", project)
+            url = importer._table_url(table, constants.split_dataset(split), project)
             out[split] = {"url": str(url), "exists": url.exists()}
         return out
 
@@ -198,6 +207,11 @@ class KaggleController(Controller):
         try:
             trainer.build_train_kwargs(data)
             trainer.validate_settings(data)
+            # Split identity (DP-11): a train slot holding another split's
+            # table is individually valid and passes every existence check.
+            trainer.validate_table_urls(
+                str(data.get("train_table_url", "")), str(data.get("val_table_url", ""))
+            )
         except ValueError as exc:
             return Response(content={"error": str(exc)}, status_code=HTTP_400_BAD_REQUEST)
 
@@ -401,6 +415,9 @@ class KaggleController(Controller):
             # Shipped slug, so the fragment can render the effective slug
             # (session.slug_override or this) without a Kaggle connection.
             "default_slug": constants.COMPETITION_SLUG,
+            # Split<->dataset mapping for the pickers/gates: the fragment
+            # keeps zero domain literals (DP-11 scoping + split asserts).
+            "dataset_prefix": constants.DATASET_PREFIX,
         }
         return out
 

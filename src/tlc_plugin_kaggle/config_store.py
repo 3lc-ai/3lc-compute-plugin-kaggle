@@ -78,24 +78,46 @@ def default_session() -> dict[str, Any]:
     }
 
 
-# ── URL helpers (migration only) ─────────────────────────────────────────
+# ── URL helpers (public: trainer/predictor asserts reuse them) ──────────
 # Table URLs follow the deterministic layout
 # .../projects/<project>/datasets/<dataset>/tables/<table>; both slash
 # styles occur in real configs (importer writes /, yaml paths use \).
 
-def _url_project(url: str) -> str | None:
+def url_project(url: str) -> str | None:
     m = re.search(r"[\\/]projects[\\/]([^\\/]+)[\\/]datasets[\\/]", str(url))
     return m.group(1) if m else None
 
 
-def _url_dataset(url: str) -> str | None:
+def url_dataset(url: str) -> str | None:
     m = re.search(r"[\\/]datasets[\\/]([^\\/]+)[\\/]tables[\\/]", str(url))
     return m.group(1) if m else None
 
 
-def _url_table(url: str) -> str | None:
+def url_table(url: str) -> str | None:
     m = re.search(r"[\\/]tables[\\/]([^\\/]+)[\\/]?$", str(url).strip())
     return m.group(1) if m else None
+
+
+def classify_override(url: str, project: str, table_name: str, split: str) -> str:
+    """One predicate for whether a table-URL value may live in
+    session.overrides — the SAME rule the fragment mirrors at write time
+    (kgOverrideDisposition), so overrides are valid-by-construction and no
+    reader ever needs a self-healer:
+
+      "drop"     — wrong project, wrong dataset for the slot's split
+                   (DP-11: individually valid, wrong in context), or
+                   unparseable. Never stored.
+      "suppress" — byte-equivalent to what derivation yields (right
+                   project, right dataset, table == session table). Stored
+                   as an override it would silently freeze future
+                   table-name changes (M1) — so it is not stored either.
+      "keep"     — a genuine same-project, same-split revision choice.
+    """
+    if url_project(url) != project or url_dataset(url) != constants.split_dataset(split):
+        return "drop"
+    if url_table(url) == table_name:
+        return "suppress"
+    return "keep"
 
 
 def _url_exists(url: str) -> bool:
@@ -153,12 +175,14 @@ def _migrate_session_v1(data: dict[str, Any]) -> str:
          moved dir, unavailable drive) vs "import_form_no_snapshot".
       3. The shipped defaults.
 
-    Table-URL keys: a URL whose project segment matches the resolved session
-    project is an intentional same-project choice (hand-paste or revision
-    picker — e.g. a fixed-labels revision) and is carried into
-    session.overrides unless it equals what derivation would produce anyway.
-    A URL in any OTHER project is the cross-project mixture this migration
-    exists to end — dropped, as is one whose project can't be parsed.
+    Table-URL keys: classify_override decides. Only a same-project,
+    same-split revision choice (hand-paste or revision picker — e.g. a
+    fixed-labels revision) is carried into session.overrides. A URL in
+    another project is the cross-project mixture this migration exists to
+    end; one in another DATASET is DP-11's cross-split mistake
+    (individually valid, wrong in its slot); one equal to what derivation
+    yields would freeze future table-name changes (M1). All three are
+    dropped/suppressed, as is anything unparseable.
     """
     legacy = [k for k in ("import", "train", "submit", "import_state") if isinstance(data.get(k), dict)]
     if not legacy:
@@ -192,10 +216,10 @@ def _migrate_session_v1(data: dict[str, Any]) -> str:
         # with its own tables is the snapshot-vs-value class this migration
         # exists to retire.
         project = str(
-            _url_project(urls[0]) or ist.get("project") or imp.get("project_name") or constants.DEFAULT_PROJECT
+            url_project(urls[0]) or ist.get("project") or imp.get("project_name") or constants.DEFAULT_PROJECT
         ).strip()
         table_name = str(
-            _url_table(urls[0]) or ist.get("table_name") or imp.get("table_name") or constants.DEFAULT_TABLE
+            url_table(urls[0]) or ist.get("table_name") or imp.get("table_name") or constants.DEFAULT_TABLE
         ).strip()
         dataset_yaml = str(ist.get("dataset_yaml") or imp.get("dataset_yaml") or "").strip()
     elif any(imp.get(k) for k in ("project_name", "table_name", "dataset_yaml")):
@@ -235,11 +259,10 @@ def _migrate_session_v1(data: dict[str, Any]) -> str:
         ("submit", "test_table_url", "test"),
     ):
         url = str((data.get(tab) or {}).get(key) or "").strip()
-        if not url or _url_project(url) != project:
-            continue  # cross-project mixture or unparseable: dropped by design
-        if _url_dataset(url) == f"{constants.DATASET_PREFIX}_{split}" and _url_table(url) == table_name:
-            continue  # exactly what derivation yields: no override needed
-        overrides[key] = url
+        if url and classify_override(url, project, table_name, split) == "keep":
+            overrides[key] = url
+        # "drop": cross-project mixture, cross-split (DP-11), unparseable.
+        # "suppress": exactly what derivation yields — no override needed.
 
     for tab, keys in _RETIRED_TAB_KEYS.items():
         values = data.get(tab)

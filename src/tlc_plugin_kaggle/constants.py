@@ -18,6 +18,15 @@ DEFAULT_TABLE = "initial"
 # Table layout: datasets are named f"{DATASET_PREFIX}_{split}".
 DATASET_PREFIX = "exdark"
 
+
+def split_dataset(split: str) -> str:
+    """The dataset name a split's tables live under (exdark_train / _val /
+    _test). The single definition of the split<->dataset mapping: the
+    pickers, gates, server asserts, and migration all resolve it here
+    (DP-11: a train slot holding an exdark_val URL passed every check that
+    only tested one property)."""
+    return f"{DATASET_PREFIX}_{split}"
+
 # ── SWAP AT PUBLIC LAUNCH ────────────────────────────────────────────────
 # Single source for the Submit tab's slug default and the join link. This is
 # the private test competition — the "comepetition" typo is real, it's in the
