@@ -19,6 +19,8 @@ from litestar import Controller, Response, get, post
 from litestar.exceptions import NotFoundException
 from litestar.status_codes import HTTP_400_BAD_REQUEST
 
+from tlc_plugin_kaggle.constants import DEFAULT_PROJECT, DEFAULT_TABLE
+
 
 def _resolve_predict_params(data: Any) -> tuple[dict[str, Any] | None, Response | None]:
     """Shared request validation for the predict-shaped routes: resolve
@@ -116,8 +118,8 @@ class KaggleController(Controller):
             )
         params = {
             "dataset_yaml": str(data["dataset_yaml"]).strip(),
-            "project_name": str(data.get("project_name") or "exdark-competition").strip(),
-            "table_name": str(data.get("table_name") or "initial").strip(),
+            "project_name": str(data.get("project_name") or DEFAULT_PROJECT).strip(),
+            "table_name": str(data.get("table_name") or DEFAULT_TABLE).strip(),
             "force_splits": [s for s in (str(x) for x in raw_force) if s in importer.SPLITS],
         }
         return Response(content={"ok": True, "params": params}, status_code=200)
@@ -161,7 +163,7 @@ class KaggleController(Controller):
         return jobs.list_jobs(kind or None)
 
     @get("/tables/defaults", sync_to_thread=True)
-    def table_defaults(self, project: str = "exdark-competition", table: str = "initial") -> dict[str, Any]:
+    def table_defaults(self, project: str = DEFAULT_PROJECT, table: str = DEFAULT_TABLE) -> dict[str, Any]:
         """Canonical table URLs for the pickers' defaults, with exists flags."""
         from tlc_plugin_kaggle import importer
 
@@ -328,7 +330,7 @@ class KaggleController(Controller):
             return {"state": "empty", "reason": f"{type(exc).__name__}: {exc}"}
 
     @get("/tables/list", sync_to_thread=True)
-    def tables_list(self, project: str = "exdark-competition") -> dict[str, Any]:
+    def tables_list(self, project: str = DEFAULT_PROJECT) -> dict[str, Any]:
         """Datasets -> ordered revision chains (revision picker)."""
         from tlc_plugin_kaggle import importer
 
@@ -418,7 +420,7 @@ class KaggleController(Controller):
             return Response(content={"error": str(exc)}, status_code=HTTP_400_BAD_REQUEST)
 
     @get("/pipeline", sync_to_thread=True)
-    def pipeline_state(self, project: str = "exdark-competition") -> dict[str, Any]:
+    def pipeline_state(self, project: str = DEFAULT_PROJECT) -> dict[str, Any]:
         """Where the participant is in the Import -> Train -> Submit loop.
 
         Import-done delegates to verified_import_state so the stepper

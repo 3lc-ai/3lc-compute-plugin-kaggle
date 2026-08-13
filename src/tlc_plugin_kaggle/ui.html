@@ -648,11 +648,11 @@
             </div>
             <div class="form-group">
               <label class="form-label" for="kg-project">Project name</label>
-              <input id="kg-project" type="text" class="form-control" value="exdark-competition" autocomplete="off">
+              <input id="kg-project" type="text" class="form-control" autocomplete="off">
             </div>
             <div class="form-group">
               <label class="form-label" for="kg-table">Table name</label>
-              <input id="kg-table" type="text" class="form-control" value="initial">
+              <input id="kg-table" type="text" class="form-control">
               <div class="form-help">Revision name for the imported tables. <code>initial</code> is the convention for a first import.</div>
             </div>
           </div>
@@ -1836,8 +1836,14 @@
           if (o) { el(id).value = o; } else { derived.push(id); }
         });
         if (!derived.length) { kgRenderLoopFixLabels(); return Promise.resolve(true); }
+        // Both halves of the session pair ride the derivation: the table
+        // name too, so an import under a non-default revision name derives
+        // URLs that actually exist (the old caller omitted &table= and the
+        // server fell back to the default revision).
+        var tbl = (kgSession.table_name || '').trim();
         return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/tables/defaults?project=' +
-                             encodeURIComponent(kgCurrentProject()))
+                             encodeURIComponent(kgCurrentProject()) +
+                             (tbl ? '&table=' + encodeURIComponent(tbl) : ''))
           .then(function (r) { return r.json(); })
           .then(function (d) {
             derived.forEach(function (id) {

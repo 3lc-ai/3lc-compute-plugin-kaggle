@@ -31,6 +31,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from tlc_plugin_kaggle.constants import DEFAULT_PROJECT
+
 LOCKED_TRAIN_ARGS: dict[str, Any] = {
     # Resolved to the plugin-managed official checkpoint at train time
     # (ensure_official_checkpoint); the symbolic name here is what the
@@ -269,7 +271,7 @@ def validate_settings(params: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"image_embeddings_reducer must be one of {_EMB_REDUCERS}.")
 
     return dict(
-        project_name=str(params.get("project_name") or "exdark-competition").strip(),
+        project_name=str(params.get("project_name") or DEFAULT_PROJECT).strip(),
         run_name=str(params.get("run_name") or f"kaggle_run_{time.strftime('%Y%m%d_%H%M%S')}").strip(),
         conf_thres=_f("conf_thres", 0.1, float),
         max_det=_f("max_det", 300, int),

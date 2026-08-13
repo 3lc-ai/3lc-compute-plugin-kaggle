@@ -56,7 +56,7 @@ CANONICAL_CLASSES = [
 ]
 SPLITS = ("train", "val", "test")
 
-from tlc_plugin_kaggle.constants import DATASET_PREFIX  # single definition site
+from tlc_plugin_kaggle.constants import DATASET_PREFIX, DEFAULT_PROJECT, DEFAULT_TABLE  # single definition site
 
 PARTICIPANT_FIX = (
     "Your local copy does not match the competition dataset. "
@@ -377,8 +377,8 @@ def run_import(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
         return ok
 
     yaml_path = str(params.get("dataset_yaml", "")).strip()
-    project = str(params.get("project_name") or "exdark-competition").strip()
-    table_name = str(params.get("table_name") or "initial").strip()
+    project = str(params.get("project_name") or DEFAULT_PROJECT).strip()
+    table_name = str(params.get("table_name") or DEFAULT_TABLE).strip()
     # Splits to forcibly re-import from disk (overwrite instead of reuse).
     # The UI confirms revision loss before sending this (table_revisions).
     force_splits = {s for s in (params.get("force_splits") or []) if s in SPLITS}
@@ -515,11 +515,9 @@ def verified_import_state() -> dict[str, Any]:
         # canonical table URLs so the revisit view and the stepper agree.
         # The session (populated by the session_v1 migration at load) is the
         # one store of the project/table facts.
-        from tlc_plugin_kaggle import constants
-
         sess = cfg.get("session") or {}
-        project = str(sess.get("project_name") or constants.DEFAULT_PROJECT).strip()
-        table_name = str(sess.get("table_name") or constants.DEFAULT_TABLE).strip()
+        project = str(sess.get("project_name") or DEFAULT_PROJECT).strip()
+        table_name = str(sess.get("table_name") or DEFAULT_TABLE).strip()
         urls = {s: _table_url(table_name, f"{DATASET_PREFIX}_{s}", project) for s in SPLITS}
         try:
             if all(u.exists() for u in urls.values()):
