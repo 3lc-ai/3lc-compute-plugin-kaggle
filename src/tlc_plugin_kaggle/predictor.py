@@ -32,6 +32,15 @@ from typing import Any
 # Kaggle URL. Replace the value with the public competition slug at launch.
 COMPETITION_SLUG = "the-3-lc-low-light-object-detection-comepetition-test"
 
+# Slugs that must never win over the shipped constant when found persisted
+# as session.slug_override: the placeholder that shipped in early builds,
+# plus every slug this plugin has since retired. LAUNCH-VERIFY: add the
+# typo'd test slug above to this set IN THE SAME COMMIT that swaps
+# COMPETITION_SLUG, so a v1.2.5-era persisted slug (or an install that
+# skipped v1.2.6) collapses to tracking the new constant instead of
+# submitting to the retired test competition (tests/test_slug_swap.py).
+RETIRED_SLUGS = frozenset({"[SLUG]"})
+
 EXPECTED_TEST_ROWS = 715
 NUM_CLASSES = 12
 SUBMISSION_COLUMNS = ["id", "image_id", "prediction_string"]
@@ -829,7 +838,6 @@ def run_kaggle_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
                     "ref": submission.get("ref"),
                     "reason": submission.get("reason"),
                     "message": message,
-                    "slug": (slug or COMPETITION_SLUG),
                     "finished_at": time.time(),
                 }
             }
@@ -849,14 +857,21 @@ def run_kaggle_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
 
 def predict_submit_state() -> dict[str, Any]:
     """Revisit state for the Predict + Submit tab: the persisted snapshots,
-    with the CSV path re-verified on disk. CSV existence decides — a snapshot
-    whose CSV was deleted reports state="empty" (fall back to the form)."""
-    from tlc_plugin_kaggle import config_store
+    re-verified against the environment on read. Two facts must both hold:
+    the CSV exists on disk, AND the predict job record still exists — the
+    revisit view's step 2 submits by job id, and /validate/submit and the
+    CSV download both 404 on a pruned record (the job store keeps 50), so a
+    snapshot without its record is not a submittable basis. Either miss
+    reports state="empty" (fall back to the form)."""
+    from tlc_plugin_kaggle import config_store, jobs
 
     cfg = config_store.load() or {}
     ps = cfg.get("predict_state") or {}
     csv_path = str(ps.get("csv_path", ""))
     if not csv_path or not Path(csv_path).is_file():
+        return {"state": "empty"}
+    job_id = str(ps.get("job_id") or "")
+    if not job_id or jobs.get_job(job_id) is None:
         return {"state": "empty"}
     out: dict[str, Any] = {"state": "predicted", "predict": ps}
     ss = cfg.get("submit_state") or {}

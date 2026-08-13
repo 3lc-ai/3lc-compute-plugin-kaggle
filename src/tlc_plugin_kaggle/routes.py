@@ -382,23 +382,40 @@ class KaggleController(Controller):
         from tlc_plugin_kaggle import config_store, predictor
 
         out = config_store.load()
+        # The session always arrives populated: missing fields (fresh
+        # install, partial write) fill from the shipped defaults here, so
+        # the fragment carries no default literals of its own.
+        stored = out.get("session")
+        out["session"] = {
+            **config_store.default_session(),
+            **(stored if isinstance(stored, dict) else {}),
+        }
         out["_meta"] = {
             "version": tlc_plugin_kaggle.__version__,
             "repository_url": tlc_plugin_kaggle.REPOSITORY_URL,
             # Host machines (metric + solution on disk) get host-only UI:
             # the direct weights-file source and local scores.
             "host": predictor.is_host(),
+            # Shipped slug, so the fragment can render the effective slug
+            # (session.slug_override or this) without a Kaggle connection.
+            "default_slug": predictor.COMPETITION_SLUG,
         }
         return out
 
     @post("/config", sync_to_thread=True)
-    def save_config(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Merge per-tab form snapshots. Body: {"train": {...}} etc."""
+    def save_config(self, data: dict[str, Any]) -> Response:
+        """Merge per-tab form snapshots. Body: {"session": {...}} /
+        {"train": {...}} etc. Writes carrying keys retired by session_v1
+        are rejected whole (400): only a stale cached fragment sends them,
+        and a visible failure beats silently re-creating the duplication."""
         from tlc_plugin_kaggle import config_store
 
         if not isinstance(data, dict):
-            return {}
-        return config_store.save(data)
+            return Response(content={}, status_code=200)
+        try:
+            return Response(content=config_store.save(data), status_code=200)
+        except ValueError as exc:
+            return Response(content={"error": str(exc)}, status_code=HTTP_400_BAD_REQUEST)
 
     @get("/pipeline", sync_to_thread=True)
     def pipeline_state(self, project: str = "exdark-competition") -> dict[str, Any]:

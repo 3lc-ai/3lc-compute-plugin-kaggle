@@ -27,6 +27,18 @@ kaggle = [
     "kaggle>=2.2.3,<3",
 ]
 
+# Dev-only tooling (PEP 735). Never part of the wheel/sdist or the [kaggle]
+# provision extra — the ui-notes no-new-dependencies rule governs RUNTIME
+# deps; this group never ships and never enters a provisioned venv.
+[dependency-groups]
+dev = ["pytest>=8"]
+
+# The test layer imports the plugin modules straight from src/ (they are
+# stdlib-light at module level by design — heavy imports live in functions).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
 # Advertised for the installed-package / catalog discovery path. Value = the
 # import package; its bundled plugin.toml drives id/ui/runtime + the extra.
 # Key MUST equal the plugin id (the host dedups discovery on ep.name).

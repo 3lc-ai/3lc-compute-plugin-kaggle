@@ -472,15 +472,16 @@ def run_import(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     # Persist the revisit snapshot (State 6). Table existence — re-verified
     # by verified_import_state on every read — is the source of truth; the
     # job_id is optional garnish that may outlive its pruned job record.
+    # The snapshot keeps only what is not derivable (tables/mechanisms/
+    # checks/job_id): project/table_name/dataset_yaml live in the session,
+    # and a second copy here is the divergence class session_v1 retired.
     try:
         from tlc_plugin_kaggle import config_store
 
         config_store.save(
             {
                 "import_state": {
-                    **result,
-                    "table_name": table_name,
-                    "dataset_yaml": yaml_path,
+                    **{k: v for k, v in result.items() if k != "project"},
                     "job_id": getattr(ctx, "job_id", ""),
                     "finished_at": time.time(),
                 }
@@ -511,9 +512,11 @@ def verified_import_state() -> dict[str, Any]:
     if not isinstance(tables, dict):
         # Pre-snapshot imports (older plugin versions): synthesize from the
         # canonical table URLs so the revisit view and the stepper agree.
-        import_cfg = cfg.get("import") or {}
-        project = str(import_cfg.get("project_name") or "exdark-competition").strip()
-        table_name = str(import_cfg.get("table_name") or "initial").strip()
+        # The session (populated by the session_v1 migration at load) is the
+        # one store of the project/table facts.
+        sess = cfg.get("session") or {}
+        project = str(sess.get("project_name") or config_store.DEFAULT_PROJECT).strip()
+        table_name = str(sess.get("table_name") or config_store.DEFAULT_TABLE).strip()
         urls = {s: _table_url(table_name, f"{DATASET_PREFIX}_{s}", project) for s in SPLITS}
         try:
             if all(u.exists() for u in urls.values()):
