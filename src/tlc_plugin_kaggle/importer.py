@@ -55,7 +55,8 @@ CANONICAL_CLASSES = [
     "Chair", "Cup", "Dog", "Motorbike", "People", "Table",
 ]
 SPLITS = ("train", "val", "test")
-DATASET_PREFIX = "exdark"
+
+from tlc_plugin_kaggle.constants import DATASET_PREFIX  # single definition site
 
 PARTICIPANT_FIX = (
     "Your local copy does not match the competition dataset. "
@@ -514,9 +515,11 @@ def verified_import_state() -> dict[str, Any]:
         # canonical table URLs so the revisit view and the stepper agree.
         # The session (populated by the session_v1 migration at load) is the
         # one store of the project/table facts.
+        from tlc_plugin_kaggle import constants
+
         sess = cfg.get("session") or {}
-        project = str(sess.get("project_name") or config_store.DEFAULT_PROJECT).strip()
-        table_name = str(sess.get("table_name") or config_store.DEFAULT_TABLE).strip()
+        project = str(sess.get("project_name") or constants.DEFAULT_PROJECT).strip()
+        table_name = str(sess.get("table_name") or constants.DEFAULT_TABLE).strip()
         urls = {s: _table_url(table_name, f"{DATASET_PREFIX}_{s}", project) for s in SPLITS}
         try:
             if all(u.exists() for u in urls.values()):

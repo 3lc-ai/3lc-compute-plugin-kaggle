@@ -31,7 +31,7 @@ except ModuleNotFoundError:
     _stub.JobContext = type("JobContext", (), {})
     sys.modules["tlc_plugin_sdk"] = _stub
 
-from tlc_plugin_kaggle import config_store, predictor
+from tlc_plugin_kaggle import config_store, constants
 
 FIXTURES = Path(__file__).parent / "fixtures"
 FIXTURE_SLUG = "fixture-competition-slug-test"
@@ -44,7 +44,7 @@ def store(tmp_path, monkeypatch):
     shipped constant" behaves exactly like the real configs the fixtures
     were taken from (both carried the then-current test slug)."""
     monkeypatch.setattr(config_store, "CONFIG_PATH", tmp_path / "ui_config.json")
-    monkeypatch.setattr(predictor, "COMPETITION_SLUG", FIXTURE_SLUG)
+    monkeypatch.setattr(constants, "COMPETITION_SLUG", FIXTURE_SLUG)
     return config_store
 
 

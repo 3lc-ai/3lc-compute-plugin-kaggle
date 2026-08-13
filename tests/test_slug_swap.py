@@ -11,7 +11,7 @@ import pytest
 
 from conftest import FIXTURE_SLUG, write_config
 
-from tlc_plugin_kaggle import predictor
+from tlc_plugin_kaggle import constants
 
 NEW_SLUG = "the-3lc-public-competition"
 
@@ -24,15 +24,15 @@ def _write_legacy(store, slug):
 
 
 def _effective(sess):
-    return sess["slug_override"] or predictor.COMPETITION_SLUG
+    return sess["slug_override"] or constants.COMPETITION_SLUG
 
 
 @pytest.fixture
 def launch(monkeypatch):
     """Simulate the public-launch build: new shipped constant, old test
     slug retired in the same commit."""
-    monkeypatch.setattr(predictor, "COMPETITION_SLUG", NEW_SLUG)
-    monkeypatch.setattr(predictor, "RETIRED_SLUGS", frozenset({"[SLUG]", FIXTURE_SLUG}))
+    monkeypatch.setattr(constants, "COMPETITION_SLUG", NEW_SLUG)
+    monkeypatch.setattr(constants, "RETIRED_SLUGS", frozenset({"[SLUG]", FIXTURE_SLUG}))
 
 
 def test_persisted_old_slug_resolves_to_new_constant(store, launch, tmp_path):

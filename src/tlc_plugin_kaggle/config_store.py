@@ -24,19 +24,24 @@ values that stop persisting) and the remedy is a hard refresh.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import threading
 from pathlib import Path
 from typing import Any
 
-CONFIG_PATH = Path.home() / ".3lc-kaggle-plugin" / "ui_config.json"
+# The only intra-package import, and it's a leaf: constants.py defines the
+# shipped defaults/slug and imports nothing back. This module must stay
+# cheap to import and cheap to call — load() runs on every GET /config, so
+# nothing heavy (predictor, importer, tlc) may be reachable from it except
+# the lazy tlc attempt in _url_exists, which runs only inside the one-shot
+# migration.
+from tlc_plugin_kaggle import constants
 
-# Single definition site for the shipped defaults. Every other backend site
-# references these; the UI carries NO copy — GET /config always serves a
-# populated session, so a fragment never needs a fallback literal.
-DEFAULT_PROJECT = "exdark-competition"
-DEFAULT_TABLE = "initial"
+_log = logging.getLogger(__name__)
+
+CONFIG_PATH = Path.home() / ".3lc-kaggle-plugin" / "ui_config.json"
 
 # Reentrant: save() holds it while load() may persist a migration.
 _lock = threading.RLock()
@@ -64,8 +69,8 @@ def default_session() -> dict[str, Any]:
     "track the shipped COMPETITION_SLUG"; overrides holds only explicit
     per-field table-URL choices (hand-paste / revision picker)."""
     return {
-        "project_name": DEFAULT_PROJECT,
-        "table_name": DEFAULT_TABLE,
+        "project_name": constants.DEFAULT_PROJECT,
+        "table_name": constants.DEFAULT_TABLE,
         "dataset_yaml": "",
         "device": "",
         "slug_override": None,
@@ -137,10 +142,15 @@ def _migrate_session_v1(data: dict[str, Any]) -> str:
     decision from the config file alone.
 
     Precedence for the triple:
-      1. import_state.* — IF the snapshot's three table URLs resolve on
-         disk. This is the only copy backed by verifiable artifacts.
+      1. The import_state snapshot — IF its three table URLs resolve on
+         disk. This is the only copy backed by verifiable artifacts, so
+         the artifact itself (the URLs' project/table segments) decides;
+         the snapshot's string fields are only a fallback.
       2. import.* — the form's last settled values (the user's last
-         expressed intent; the next gate re-verifies immediately).
+         expressed intent; the next gate re-verifies immediately). The
+         marker distinguishes WHY the snapshot lost: "import_form_urls_
+         unresolved" (snapshot existed, tables not on disk right then —
+         moved dir, unavailable drive) vs "import_form_no_snapshot".
       3. The shipped defaults.
 
     Table-URL keys: a URL whose project segment matches the resolved session
@@ -159,19 +169,46 @@ def _migrate_session_v1(data: dict[str, Any]) -> str:
     tables = ist.get("tables") if isinstance(ist.get("tables"), dict) else {}
     urls = [str((tables.get(s) or {}).get("url") or "") for s in _SPLITS]
 
-    if tables and all(urls) and all(_url_exists(u) for u in urls):
+    snapshot_present = bool(tables) and all(urls)
+    snapshot_ok = False
+    if snapshot_present:
+        unresolved = [u for u in urls if not _url_exists(u)]
+        snapshot_ok = not unresolved
+        if unresolved:
+            # The branch choice is permanent (one-shot marker), so name the
+            # evidence: a moved project dir or an unavailable drive lands
+            # here, and this line is how support tells that apart from a
+            # config that never had a snapshot.
+            _log.warning(
+                "session_v1: import_state snapshot ignored, table URLs not on disk: %s",
+                ", ".join(unresolved),
+            )
+
+    if snapshot_ok:
         branch = "import_state"
-        project = str(ist.get("project") or imp.get("project_name") or DEFAULT_PROJECT).strip()
-        table_name = str(ist.get("table_name") or imp.get("table_name") or DEFAULT_TABLE).strip()
+        # The ARTIFACT decides, not the strings beside it: the verified
+        # URLs' own project/table segments are primary, the snapshot's
+        # string fields only a fallback — a snapshot whose strings disagree
+        # with its own tables is the snapshot-vs-value class this migration
+        # exists to retire.
+        project = str(
+            _url_project(urls[0]) or ist.get("project") or imp.get("project_name") or constants.DEFAULT_PROJECT
+        ).strip()
+        table_name = str(
+            _url_table(urls[0]) or ist.get("table_name") or imp.get("table_name") or constants.DEFAULT_TABLE
+        ).strip()
         dataset_yaml = str(ist.get("dataset_yaml") or imp.get("dataset_yaml") or "").strip()
     elif any(imp.get(k) for k in ("project_name", "table_name", "dataset_yaml")):
-        branch = "import_form"
-        project = str(imp.get("project_name") or DEFAULT_PROJECT).strip()
-        table_name = str(imp.get("table_name") or DEFAULT_TABLE).strip()
+        # Two distinguishable ways to land on the form value: a snapshot
+        # existed but its tables were not on disk at migration time, vs no
+        # usable snapshot at all.
+        branch = "import_form_urls_unresolved" if snapshot_present else "import_form_no_snapshot"
+        project = str(imp.get("project_name") or constants.DEFAULT_PROJECT).strip()
+        table_name = str(imp.get("table_name") or constants.DEFAULT_TABLE).strip()
         dataset_yaml = str(imp.get("dataset_yaml") or "").strip()
     else:
         branch = "default"
-        project, table_name, dataset_yaml = DEFAULT_PROJECT, DEFAULT_TABLE, ""
+        project, table_name, dataset_yaml = constants.DEFAULT_PROJECT, constants.DEFAULT_TABLE, ""
 
     # One machine fact: first non-empty of the two legacy device copies
     # (both already post-device_blank_default — see _migrate ordering).
@@ -185,15 +222,11 @@ def _migrate_session_v1(data: dict[str, Any]) -> str:
     # Slug decision: persist only a deliberate divergence from the shipped
     # constant. The current constant and every retired slug collapse to
     # None = "track whatever the installed version ships" (DP-04).
-    from tlc_plugin_kaggle import predictor
-
     raw_slug = str((data.get("submit") or {}).get("competition_slug") or "").strip()
-    if raw_slug and raw_slug != predictor.COMPETITION_SLUG and raw_slug not in predictor.RETIRED_SLUGS:
+    if raw_slug and raw_slug != constants.COMPETITION_SLUG and raw_slug not in constants.RETIRED_SLUGS:
         slug_override = raw_slug
     else:
         slug_override = None
-
-    from tlc_plugin_kaggle.importer import DATASET_PREFIX
 
     overrides: dict[str, str] = {}
     for tab, key, split in (
@@ -204,7 +237,7 @@ def _migrate_session_v1(data: dict[str, Any]) -> str:
         url = str((data.get(tab) or {}).get(key) or "").strip()
         if not url or _url_project(url) != project:
             continue  # cross-project mixture or unparseable: dropped by design
-        if _url_dataset(url) == f"{DATASET_PREFIX}_{split}" and _url_table(url) == table_name:
+        if _url_dataset(url) == f"{constants.DATASET_PREFIX}_{split}" and _url_table(url) == table_name:
             continue  # exactly what derivation yields: no override needed
         overrides[key] = url
 
@@ -230,7 +263,8 @@ def _migrate(data: dict[str, Any]) -> bool:
     """Run pending migrations in their fixed order. Returns True if any ran
     (caller persists). device_blank_default keeps its boolean marker;
     session_v1's marker is the branch string that decided the triple
-    ("import_state" / "import_form" / "default" / "fresh") — truthy, so it
+    ("import_state" / "import_form_urls_unresolved" /
+    "import_form_no_snapshot" / "default" / "fresh") — truthy, so it
     doubles as the done flag."""
     done = data.get(_MIGRATIONS_KEY)
     done = dict(done) if isinstance(done, dict) else {}

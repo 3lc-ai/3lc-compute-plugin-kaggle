@@ -26,20 +26,10 @@ import time
 from pathlib import Path
 from typing import Any
 
-# ── SWAP AT PUBLIC LAUNCH ────────────────────────────────────────────────
-# Single source for the Submit tab's slug default and the join link. This is
-# the private test competition — the "comepetition" typo is real, it's in the
-# Kaggle URL. Replace the value with the public competition slug at launch.
-COMPETITION_SLUG = "the-3-lc-low-light-object-detection-comepetition-test"
-
-# Slugs that must never win over the shipped constant when found persisted
-# as session.slug_override: the placeholder that shipped in early builds,
-# plus every slug this plugin has since retired. LAUNCH-VERIFY: add the
-# typo'd test slug above to this set IN THE SAME COMMIT that swaps
-# COMPETITION_SLUG, so a v1.2.5-era persisted slug (or an install that
-# skipped v1.2.6) collapses to tracking the new constant instead of
-# submitting to the retired test competition (tests/test_slug_swap.py).
-RETIRED_SLUGS = frozenset({"[SLUG]"})
+# The slug (and its swap-at-launch / RETIRED_SLUGS story) lives in
+# constants.py — the leaf module the config store can also read without
+# importing this module (predictor is never on the /config read path).
+from tlc_plugin_kaggle.constants import COMPETITION_SLUG
 
 EXPECTED_TEST_ROWS = 715
 NUM_CLASSES = 12

@@ -379,7 +379,7 @@ class KaggleController(Controller):
         _meta block (version, repository) the fragment renders in the
         footer and stamps into diagnostics."""
         import tlc_plugin_kaggle
-        from tlc_plugin_kaggle import config_store, predictor
+        from tlc_plugin_kaggle import config_store, constants, predictor
 
         out = config_store.load()
         # The session always arrives populated: missing fields (fresh
@@ -398,7 +398,7 @@ class KaggleController(Controller):
             "host": predictor.is_host(),
             # Shipped slug, so the fragment can render the effective slug
             # (session.slug_override or this) without a Kaggle connection.
-            "default_slug": predictor.COMPETITION_SLUG,
+            "default_slug": constants.COMPETITION_SLUG,
         }
         return out
 

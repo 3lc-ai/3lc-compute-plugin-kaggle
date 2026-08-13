@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from conftest import fixture_config, materialize_tables, write_config
 
+from tlc_plugin_kaggle import constants
+
 RETIRED = {
     "train": ("train_table_url", "val_table_url", "project_name", "device"),
     "submit": ("test_table_url", "device", "competition_slug"),
@@ -54,12 +56,19 @@ def test_oldstack_snapshot_branch(store, tmp_path):
     assert_retired_gone(data)
 
 
-def test_oldstack_form_branch_when_tables_missing(store, tmp_path):
-    data = migrate(store, tmp_path, "oldstack", resolve_tables=False)
+def test_oldstack_form_branch_when_tables_missing(store, tmp_path, caplog):
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="tlc_plugin_kaggle.config_store"):
+        data = migrate(store, tmp_path, "oldstack", resolve_tables=False)
     # Same project value either way in this config (form matched snapshot);
-    # the marker records which rule actually decided.
-    assert data["_migrations"]["session_v1"] == "import_form"
+    # the marker records which rule actually decided — and WHY the snapshot
+    # lost (tables existed in the config but not on disk at that moment).
+    assert data["_migrations"]["session_v1"] == "import_form_urls_unresolved"
     assert data["session"]["project_name"] == "exdark-competition-test-init3"
+    # D3: the permanent branch choice logs its evidence.
+    assert "session_v1" in caplog.text
+    assert "exdark-competition-test-init3/datasets/exdark_train/tables/initial" in caplog.text
     assert_retired_gone(data)
 
 
@@ -93,11 +102,48 @@ def test_newstack_snapshot_wins_over_edited_form(store, tmp_path):
 
 def test_newstack_form_branch_when_tables_missing(store, tmp_path):
     data = migrate(store, tmp_path, "newstack", resolve_tables=False)
-    assert data["_migrations"]["session_v1"] == "import_form"
+    assert data["_migrations"]["session_v1"] == "import_form_urls_unresolved"
     # No verifiable artifacts: the form's last expressed intent wins; the
     # Train gate re-verifies immediately and walks the user to re-import.
     assert data["session"]["project_name"] == "exdark-competition"
     assert_retired_gone(data)
+
+
+def test_snapshot_strings_disagreeing_with_urls_lose_to_the_artifact(store, tmp_path):
+    # D1: the branch's justification is the verified artifact, so the
+    # artifact must decide. A snapshot whose string fields disagree with
+    # its own tables' URLs is the exact snapshot-vs-value class this
+    # release retires — the URL segments win.
+    cfg = fixture_config("newstack", tmp_path)
+    materialize_tables(cfg)
+    cfg["import_state"]["project"] = "wrong-string-project"
+    cfg["import_state"]["table_name"] = "wrong-string-table"
+    write_config(store, cfg)
+    data = store.load()
+    assert data["_migrations"]["session_v1"] == "import_state"
+    assert data["session"]["project_name"] == "v124check2"
+    assert data["session"]["table_name"] == "initial"
+
+
+def test_empty_snapshot_project_string_still_uses_artifact(store, tmp_path):
+    # D1's second half: an empty ist["project"] must not silently fall
+    # through to the form value while recording branch="import_state".
+    cfg = fixture_config("newstack", tmp_path)
+    materialize_tables(cfg)
+    cfg["import_state"]["project"] = ""
+    write_config(store, cfg)
+    data = store.load()
+    assert data["_migrations"]["session_v1"] == "import_state"
+    assert data["session"]["project_name"] == "v124check2"  # not the form's exdark-competition
+
+
+def test_form_branch_without_any_snapshot(store, tmp_path):
+    write_config(store, {"import": {"project_name": "probe-x", "table_name": "r2", "dataset_yaml": ""}})
+    data = store.load()
+    assert data["_migrations"]["session_v1"] == "import_form_no_snapshot"
+    sess = data["session"]
+    assert sess["project_name"] == "probe-x"
+    assert sess["table_name"] == "r2"
 
 
 # ── B1: same-project URL overrides survive; cross-project ones don't ────
@@ -147,6 +193,6 @@ def test_default_branch_without_import_facts(store, tmp_path):
     data = store.load()
     assert data["_migrations"]["session_v1"] == "default"
     sess = data["session"]
-    assert sess["project_name"] == store.DEFAULT_PROJECT
-    assert sess["table_name"] == store.DEFAULT_TABLE
+    assert sess["project_name"] == constants.DEFAULT_PROJECT
+    assert sess["table_name"] == constants.DEFAULT_TABLE
     assert sess["device"] == ""  # '0' rewritten before the fold
