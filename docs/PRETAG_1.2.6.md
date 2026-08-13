@@ -65,10 +65,12 @@ reader, then assert:
 
 ## Open items (decide before tag)
 
-- [ ] H1: fixture pages fetch the live Kaggle connection
-      (`configLoaded.then(renderConnection)` is not kgDevMode-guarded) and
-      can render the real account handle over the fixture's
-      `'participant'`. Fix is a one-line guard; awaiting go-ahead.
+- [ ] H1 regression check (fix landed with the K1 audit): open
+      `?kgdev=submit-results` — the connection card reads
+      `participant`, never a real Kaggle handle; `?kgdev=train-state2` —
+      the URL fields keep their demo values (no late overwrite from the
+      live derivation). The only network requests on a fixture page load
+      are `/config` and `/pipeline`.
 - [ ] Version bump verified in the tagged build: pyproject + plugin.toml +
       catalog manifest all `1.2.6`, footer reads v1.2.6 after a catalog
       install.

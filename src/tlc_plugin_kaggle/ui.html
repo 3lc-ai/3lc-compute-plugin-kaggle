@@ -3580,12 +3580,15 @@
 
       // Render the Train URL fields from the session (override or
       // derivation), then verify, so the gate is already green when the
-      // tab opens on a healthy install.
+      // tab opens on a healthy install. kgDevMode-guarded (fixture
+      // isolation): a late defaults response would overwrite the demo
+      // URLs a fixture just set — the same async-lands-after-apply shape
+      // this release removed from live state.
       configLoaded.then(function () {
-        return kgApplyDerivedUrls(['tr-train-url', 'tr-val-url']);
-      }).then(function () {
-          if (!kgDevMode) { trVerifyTables(true); }
-        });
+        if (kgDevMode) { return; }
+        kgApplyDerivedUrls(['tr-train-url', 'tr-val-url'])
+          .then(function () { trVerifyTables(true); });
+      });
 
       // Disclosures default collapsed; a saved config that customized an
       // advanced field reopens its disclosure so nothing saved is invisible.
@@ -4661,9 +4664,12 @@
 
       // Test table field renders from the session (override or derivation),
       // same helper as the Train tab; then the gate verifies.
+      // kgDevMode-guarded — same fixture-isolation rationale as Train's.
       configLoaded.then(function () {
-        return kgApplyDerivedUrls(['ps-test-url']);
-      }).then(function () { if (!kgDevMode) { psVerifyTable(true); } });
+        if (kgDevMode) { return; }
+        kgApplyDerivedUrls(['ps-test-url'])
+          .then(function () { psVerifyTable(true); });
+      });
 
       // ── Step 1 in-progress + results panel ──────────────────────────
       function psRenderProgress(job) {
@@ -4999,7 +5005,13 @@
             }
             psCheckSubmitReady();
       }
-      configLoaded.then(renderConnection);
+      // kgDevMode-guarded (H1): the live connection payload used to land
+      // AFTER the fixture's re-apply and overwrite its 'participant'
+      // connState with the real Kaggle account — a runtime bleed no
+      // static audit could see (the handle exists nowhere in the tree).
+      configLoaded.then(function () {
+        if (!kgDevMode) { renderConnection(); }
+      });
 
       function psRenderSubmitSuccess(sub, animate) {
         var viewUrl = ((psConnState || {}).competition_url ||

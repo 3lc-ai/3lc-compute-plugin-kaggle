@@ -494,17 +494,31 @@ randomness — identical screenshots every load).
 
 **Fixtures always render the participant experience** (2026-07-24). While
 `?kgdev` is active, host-only affordances stay hidden regardless of the
-live `_meta.host` flag — no fixture opts into host rendering today. Three
+live `_meta.host` flag — no fixture opts into host rendering today. Four
 enforcement points in the fragment: the config-load reveal of
 `ps-src-seg` requires `!kgDevMode` (the markup default is `hidden`, so
 nothing can reveal it in a fixture); `psSetSource` coerces `'weights'` to
 `'run'` under `?kgdev`, so the external-weights field and its amber
-callout can never render in a fixture; and the eager `psLoadRuns()` is
+callout can never render in a fixture; the eager `psLoadRuns()` is
 skipped under `?kgdev`, so the live host's real runs never race a
-fixture's dev runs into the selector. Fixtures never write config
-(`saveTabConfig` fires only on action-button clicks), and a plain load
-without the param takes none of these paths — the host view and saved
-config come back untouched.
+fixture's dev runs into the selector; and the page-load live fetches —
+the Kaggle connection probe and the two table-URL derivation chains —
+are `kgDevMode`-guarded (v1.2.6, the H1 fix), because their responses
+land AFTER the fixture's post-config re-apply and would overwrite fixture
+state with live state (the connection one rendered the real account
+handle over the fixture's `participant`). Fixtures never write config
+(`kgSessionSave`/`saveTabConfig` guard on `kgDevMode` / fire only on
+action-button clicks), and a plain load without the param takes none of
+these paths — the host view and saved config come back untouched.
+
+Two page-load fetches stay deliberately live under `?kgdev`: `GET
+/config` (fixtures re-apply after it; it carries the `_meta` version the
+footer and diagnostics stamp) and the stepper's `/pipeline` render riding
+`showTab` (long-standing; read-only; means a fixture page's stepper shows
+the machine's real progress — flagged to the Phase C runtime check to
+decide). Interaction-driven read-only fetches (typing into a gate field,
+opening the revision picker) are outside the render-purity rule; the
+job-firing backstops still hold.
 
 ### Intentional improvements over the stock Import plugin
 
