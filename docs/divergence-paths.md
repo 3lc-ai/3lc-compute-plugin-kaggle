@@ -9,6 +9,15 @@ All paths below were verified by code reading against the working copy (v1.2.5,
 `docs/state-audit` branch). DP-06 and DP-07 are race/partial-failure paths: mechanism
 verified in code, not reproduced at runtime this session — marked ⚠ code-verified-only.
 
+> **Status (2026-08-13, v1.2.6 on `fix/session-state`, untagged):**
+> DP-01/02/05/09/10 dissolved with the session object (no store left to
+> disagree); DP-04 and DP-08 resolved by validate-on-read; DP-06 resolved by
+> load sequencing. Evidence: the pytest layer in `tests/` plus the Phase 2
+> browser verification (DP-01 killed end-to-end). **Out of scope, still
+> open:** DP-03 (stepper's project-blind derivation) and DP-07 (three-store
+> submission outcome). Descriptions below are kept as written — they document
+> v1.2.5, the version the migration heals.
+
 ## Divergence classes
 
 - **D1 — duplicated storage**: one logical fact stored under ≥2 independent keys.
@@ -113,6 +122,14 @@ D1+D2.
   but snapshot-absolute for the stepper (import_state). Two derivations of one fact.
 
 ## DP-04 — Competition slug: persisted copy vs shipped constant (public-launch trap)
+
+> **Resolved in code (v1.2.6):** the slug is never stored unless deliberately
+> overridden — `session.slug_override = null` means "track the shipped
+> constant", the migration collapses the current/retired slugs to null, and
+> `tests/test_slug_swap.py` proves the launch-swap case: a persisted
+> v1.2.5-era slug plus a bumped `COMPETITION_SLUG` resolves to the NEW slug
+> while an explicit user override survives. Launch still requires the
+> RETIRED_SLUGS same-commit step (LAUNCH-VERIFY).
 
 - **Class:** D3 + D1
 - **Steps:**

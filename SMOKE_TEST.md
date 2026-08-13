@@ -6,7 +6,11 @@ check it off only if the expectation holds **exactly**, otherwise note what you 
 and keep going. Report the filled checklist plus any **Copy diagnostics** output.
 
 Tester: ______________  Date: ______________  GPU: ______________
-Plugin version shown in the page footer: ______________ (expect **v1.2.5**)
+Plugin version shown in the page footer: ______________ (expect **v1.2.6**)
+
+> Updating from an earlier version? **Hard-refresh the plugin page**
+> (Ctrl+Shift+R) after the update. A stale cached page saves settings in a
+> retired format; the update note explains what you would see.
 
 > Round-1 testers: the plugin id changed to `kaggle-exdark` in v1.2.1 —
 > follow the migration note at the top of
@@ -16,12 +20,15 @@ Plugin version shown in the page footer: ______________ (expect **v1.2.5**)
 
 - [ ] Sidebar shows **Kaggle** under AI TOOLS; the page opens with four tabs
       (Import / Train / Predict + Submit / Status) and a stepper.
-- [ ] Footer reads `3LC Kaggle Competition plugin v1.2.5`.
+- [ ] Footer reads `3LC Kaggle Competition plugin v1.2.6`.
 
 ## 1. Import (~2–5 min)
 
 - [ ] Paste the full path to the kit's `dataset.yaml` → preflight panel goes
       **green** (12 classes; 5,910 / 733 / 715 rows found on disk).
+- [ ] Set **Project name** to `smoke-` + your initials (e.g. `smoke-ab`).
+      Deliberately NOT the default: a later step checks that everything lands
+      in this project, which a default name would pass by accident.
 - [ ] Click **Import & Validate** → progress runs through
       train → val → test → validate.
 - [ ] Result: three tables created — `exdark_train` (5,910), `exdark_val` (733),
@@ -34,6 +41,9 @@ Plugin version shown in the page footer: ______________ (expect **v1.2.5**)
 
 - [ ] Contract panel shows locked **Model yolo11n.pt · Init sha256 `0ebbc80d4a76…`
       · Image size 640** — not editable anywhere.
+- [ ] Under **3LC settings**, the read-only **Session** project row shows the
+      project from step 1 (your `smoke-…` name). There is no editable Project
+      field on this tab; the run goes where the tables are, by construction.
 - [ ] Set **Epochs = 2** (all else default) → **Start Training**.
 - [ ] First-ever run: a "Fetching official checkpoint (5.4 MB)" stage appears once.
       A first-ever start that errors instead of starting is a **finding** in
@@ -51,8 +61,12 @@ Plugin version shown in the page footer: ______________ (expect **v1.2.5**)
       after epoch 2 is expected and is **not** an epoch 3.
 - [ ] On completion: **"Verified provenance recorded" panel, 4/4 assertions green**,
       including the checkpoint sha256.
-- [ ] The run appears in the 3LC Dashboard project (`exdark-competition`) — and
-      the **Open Run in Dashboard** link opens a dashboard that actually shows
+- [ ] The run and ALL THREE tables are in the **same** 3LC Dashboard project —
+      the `smoke-…` project from step 1. Open that project in the Dashboard and
+      confirm it lists the run plus `exdark_train` / `exdark_val` /
+      `exdark_test`. A run in any other project (including
+      `exdark-competition`) is a finding, not a variation.
+- [ ] The **Open Run in Dashboard** link opens a dashboard that actually shows
       the run (v1.2.1 appends `object_service=` to every dashboard link; a
       dashboard that opens empty is a finding).
 

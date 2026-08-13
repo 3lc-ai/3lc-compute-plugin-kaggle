@@ -392,6 +392,43 @@ non-host machines, so the gate is real, not visual. Legacy
 from-scratch runs render truthfully everywhere ("from-scratch ·
 legacy") and remain predictable/submittable — no data migration.
 
+## 14. Session projections (v1.2.6)
+
+One canonical **session object** (`kgSession`, persisted as the `session`
+key in `ui_config.json`) owns every fact tabs share: project name, table
+name, dataset yaml, device, the slug decision, and explicit per-field
+table-URL overrides. The rules, settled like everything else here:
+
+- **Tabs render projections; no tab owns a default.** The fragment holds
+  ZERO default literals — `GET /config` always serves a populated session
+  (server fills from `constants.py`, the single definition site), plus
+  `_meta.default_slug`. The Import form is the session's *editor*, not a
+  store; Train renders the project as a read-only locked-row fact.
+- **Derive, don't store.** Table-URL fields render from
+  `kgApplyDerivedUrls` (override verbatim, else the canonical derivation
+  for the session project + table). Derived values are never persisted. A
+  settled user edit or revision pick IS an explicit per-field override; an
+  emptied field returns to derivation; a settled project/table change
+  clears all overrides and re-runs the gates. Anything else rendered from
+  session values (e.g. the Loop's fix-labels href) re-renders inside the
+  same funnel — a session-derived value with its own render moment is the
+  bug class this section exists to prevent.
+- **Sequence the load.** Tab-entry hooks and the initial tab-open
+  resolutions await `configLoaded`; `showTab` paints immediately
+  (stateless). `configLoaded` always resolves and is never silent: network
+  failures retry through the connection guard, non-network failures render
+  an explicit "saved settings could not be loaded" callout.
+- **Config writers are user-action-initiated ONLY.** The sole read-path
+  write in the plugin is the marker-guarded one-shot migration in
+  `config_store.load()`. Current complete writer list (v1.2.6):
+  `kgSetUrlOverride` (URL edit/pick), `kgImportCfgSettled` (Import form
+  settle + import start), the device blur handler, the slug blur handler,
+  and the three whole-tab action saves (train start, predict click, submit
+  click). **A `saveTabConfig`/`kgSessionSave` call reachable from a
+  render, sync, poll, or tab-enter path is a regression of the v1.2.5
+  cross-project-mixture class** — the store rejects retired keys (400) but
+  cannot reject a bad moment; this rule is the guard for that.
+
 ---
 
 ## Appendix — Import-tab reference
