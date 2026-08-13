@@ -1824,7 +1824,9 @@
       // verbatim, everything else the canonical derivation for the session
       // project. Writes the DOM only — derived values are never persisted,
       // overrides already are. Resolves when the fields are settled
-      // (then() the gate re-check).
+      // (then() the gate re-check). Every path that re-points the train
+      // URL also re-renders the Loop's fix-labels link here, so no href
+      // can hold a project the session has left.
       function kgApplyDerivedUrls(fieldIds) {
         if (!kgSession) { return Promise.resolve(false); }
         var ov = kgSession.overrides || {};
@@ -1833,7 +1835,7 @@
           var o = ov[KG_URL_FIELDS[id][0]];
           if (o) { el(id).value = o; } else { derived.push(id); }
         });
-        if (!derived.length) { return Promise.resolve(true); }
+        if (!derived.length) { kgRenderLoopFixLabels(); return Promise.resolve(true); }
         return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/tables/defaults?project=' +
                              encodeURIComponent(kgCurrentProject()))
           .then(function (r) { return r.json(); })
@@ -1842,9 +1844,21 @@
               var s = d[KG_URL_FIELDS[id][1]];
               if (s && s.url) { el(id).value = s.url; }
             });
+            kgRenderLoopFixLabels();
             return true;
           })
-          .catch(function () { return false; });
+          .catch(function () { kgRenderLoopFixLabels(); return false; });
+      }
+
+      // The Loop's "fix labels" deep-link follows the working train table
+      // (label edits happen there). Rendered from the field AFTER every
+      // derivation/override write — a derived value, never a stored one.
+      function kgRenderLoopFixLabels() {
+        if (!dashboardUrl) { return; }
+        var trainUrl = el('tr-train-url').value.trim();
+        el('kg-loop-fixlabels').href = trainUrl
+          ? dashTableLink(trainUrl)
+          : kgWithObjectService(dashboardUrl);
       }
 
       // A user edit to a URL field is an explicit per-field override; an
@@ -1860,6 +1874,7 @@
         if (v) { ov[key] = v; } else { delete ov[key]; }
         kgSessionSave();
         if (!v) { kgApplyDerivedUrls([id]); }
+        else if (id === 'tr-train-url') { kgRenderLoopFixLabels(); }
       }
 
       function kgRenderProjectFact() {
@@ -1983,7 +1998,15 @@
 
       var kgHost = false;   // organizer machine (config _meta.host): host-only UI
 
-      var configLoaded = API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/config')
+      // The config load is the one thing everything else sequences on:
+      // tab-entry hooks and the initial tab-open resolutions all await
+      // configLoaded, so no state is read or written around the restore
+      // (the round-2 cold-worker race). The promise always resolves — a
+      // network failure retries through the connection guard and resolves
+      // on reconnect; a non-network failure renders an explicit callout
+      // and resolves into shipped defaults. Never silently blank.
+      function kgFetchConfig(resolve) {
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/config')
         .then(function (r) { return r.json(); })
         .then(function (cfg) {
           kgDefaultSlug = String((cfg._meta || {}).default_slug || '');
@@ -2003,8 +2026,29 @@
             var seg = el('ps-src-seg');
             if (seg) { seg.hidden = !kgHost || !!kgDevMode; }
           }
+          resolve();
         })
-        .catch(function () { /* fresh install or route not mounted yet */ });
+        .catch(function (e) {
+          if (kgConn.fail(e, function () { kgFetchConfig(resolve); })) {
+            // Network-level: the guard owns the banner and re-runs this
+            // fetch on reconnect; configLoaded resolves when it lands.
+            return;
+          }
+          // Non-network (bad response, worker fault): say so where the
+          // connection guard would, and continue on shipped defaults —
+          // the gates stay idle and the job-firing CTAs stay disabled.
+          ['kg-conn-banner', 'tr-conn-banner', 'ps-conn-banner'].forEach(function (slot) {
+            var box = el(slot);
+            if (box) {
+              box.innerHTML = '<div class="kg-callout warn">' + kgIcon('alert-triangle') +
+                '<span>Saved settings could not be loaded (' + esc(e.message || String(e)) +
+                '). Defaults are shown; reload the page to try again.</span></div>';
+            }
+          });
+          resolve();
+        });
+      }
+      var configLoaded = new Promise(function (resolve) { kgFetchConfig(resolve); });
 
       // Stepper states from the pipeline endpoint, in icon-set glyphs:
       // check-circle done, filled dot active, outline circle upcoming.
@@ -3535,12 +3579,6 @@
         return kgApplyDerivedUrls(['tr-train-url', 'tr-val-url']);
       }).then(function () {
           if (!kgDevMode) { trVerifyTables(true); }
-          // The Loop's "fix labels" targets the working train table once
-          // one is known (label edits happen there).
-          var trainUrl = el('tr-train-url').value.trim();
-          if (trainUrl && dashboardUrl) {
-            el('kg-loop-fixlabels').href = dashTableLink(trainUrl);
-          }
         });
 
       // Disclosures default collapsed; a saved config that customized an
@@ -4042,14 +4080,17 @@
 
       function trOnTabEnter() {
         if (kgDevMode) { return; }   // forced states own the gate
-        // Activation refetch (v1 pattern): tables may have appeared since
-        // the last check (a fresh Import) — the same-key no-op made that
-        // verdict stick until a reload in round 1. The fields re-render
-        // from the session (override or derivation) before re-verifying.
-        kgRenderProjectFact();
-        kgApplyDerivedUrls(['tr-train-url', 'tr-val-url'])
-          .then(function () { trVerifyTables(true); });
-        trLoadDurationStats();
+        // Gated on configLoaded: an entry hook that ran mid-restore was
+        // the round-2 race (both orderings corrupted state). Post-restore
+        // it is the activation refetch (v1 pattern): tables may have
+        // appeared since the last check, and the fields re-render from
+        // the session (override or derivation) before re-verifying.
+        configLoaded.then(function () {
+          kgRenderProjectFact();
+          kgApplyDerivedUrls(['tr-train-url', 'tr-val-url'])
+            .then(function () { trVerifyTables(true); });
+          trLoadDurationStats();
+        });
       }
       if (!kgDevMode) { trLoadDurationStats(); }
 
@@ -4482,13 +4523,14 @@
       // that finished in the background is selectable without a reload.
       function psOnTabEnter() {
         if (kgDevMode) { return; }   // forced states own this tab
-        psLoadRuns();
-        renderConnection();
-        // Activation refetch (v1 pattern) — same rationale as trOnTabEnter:
-        // a stale same-key verdict survived a fresh Import in round 1. The
-        // field re-renders from the session before re-verifying.
-        kgApplyDerivedUrls(['ps-test-url'])
-          .then(function () { psVerifyTable(true); });
+        // Gated on configLoaded — same rationale as trOnTabEnter (and
+        // renderConnection reads the slug field the session fills).
+        configLoaded.then(function () {
+          psLoadRuns();
+          renderConnection();
+          kgApplyDerivedUrls(['ps-test-url'])
+            .then(function () { psVerifyTable(true); });
+        });
       }
 
       // ── Test-table gate (Train's pattern, one URL) ──────────────────
@@ -5521,8 +5563,12 @@
 
       function stOnTabEnter() {
         if (kgDevMode) { return; }   // forced states own this tab
-        stFetchAll(false);
-        stStartAuto();
+        // Gated on configLoaded (the Kaggle live fetch reads the slug
+        // field the session fills).
+        configLoaded.then(function () {
+          stFetchAll(false);
+          stStartAuto();
+        });
       }
 
       document.addEventListener('visibilitychange', function () {
@@ -5530,20 +5576,25 @@
         // refreshes immediately instead of waiting out the interval.
         if (!document.hidden && !kgDevMode &&
             el('kg-panel-status').classList.contains('active')) {
-          stFetchAll(false);
+          configLoaded.then(function () { stFetchAll(false); });
         }
       });
 
       // ── Dispatch — LAST, so the initial tab's enter hooks and forced
-      // states run after every tab's vars and handlers exist. Normal
-      // loads resolve each tab's tab-open state here.
+      // states run after every tab's vars and handlers exist. showTab
+      // paints the saved tab immediately (stateless); the tab-open state
+      // resolutions and the entry hooks all await configLoaded, so
+      // nothing reads or writes workflow state around the async restore
+      // (the round-2 cold-worker race, both orderings).
       showTab(savedTab || 'import');
       if (kgDevMode) {
         kgDevForce(kgDevMode);
       } else {
-        kgInitImportTab();
-        trInitTrainTab();
-        psInitSubmitTab();
+        configLoaded.then(function () {
+          kgInitImportTab();
+          trInitTrainTab();
+          psInitSubmitTab();
+        });
       }
     })();
   </script>
