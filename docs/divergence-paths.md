@@ -284,7 +284,10 @@ D1+D2.
 > /validate/* and the job targets (enforcement — the host /run path never
 > traverses /validate). One predicate (`classify_override` + its JS mirror)
 > governs migration, runtime override capture, and read-time pruning, so
-> `session.overrides` is valid-by-construction.
+> `session.overrides` is valid-by-construction. Note: the
+> identical-train/val rule is unreachable once both dataset asserts hold
+> (the datasets must differ, so the URLs must) — defense in depth against
+> future naming changes; do not read its green test as live coverage.
 
 - **Class:** D3 (a persisted/typed value read without validation against
   its context) + D2 flavor (the slot's meaning is the shadowed canonical
