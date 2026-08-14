@@ -16,10 +16,12 @@ fixtures).
       same session.
 - [ ] Real Kaggle submit accepted (or a friendly state with the CSV kept);
       Status history row renders the outcome vocabulary.
-- [ ] Four provenance PASS assertions, checkpoint sha256 `0ebbc80d4a76…`
-      unchanged.
-- [ ] Dashboard / Explore links open non-empty (object_service param
-      present; Object Service running).
+- [x] Four provenance PASS assertions, checkpoint sha256 `0ebbc80d4a76…`
+      unchanged. (Observed 2026-08-13: 1-epoch run
+      `kaggle_run_20260813_171646`, 4/4 PASS, sha unchanged.)
+- [x] Dashboard / Explore links open non-empty (object_service param
+      present; Object Service running). (Observed 2026-08-13:
+      exdark-competition opened with Runs 11, Tables 3, 6,643 metrics.)
 
 ## Migration — against restored copies of BOTH real fixtures
 
@@ -57,9 +59,19 @@ this machine (2026-08-14), so a live first read here would take the
       project on Import: override cleared, fields re-derived, gate amber.
       (Unit-tested in `test_same_project_revision_override_preserved`;
       never yet exercised against a real revision chain.)
-- [ ] **DP-02 — non-default table name:** import with Table name
+- [x] **DP-02 — non-default table name:** import with Table name
       `round2` (or any non-`initial`). Train and Predict derive URLs ending
       `/tables/round2` and their gates go green with no hand-pasting.
+      (Observed 2026-08-13: imported under `round2`, Train derived
+      `/tables/round2`, gate green, verified line read
+      `exdark_train/round2 · exdark_val/round2`.)
+- [x] **F1 — deep-link follow** (added as observed, not originally
+      listed here): two-hop project change `probe-x` → `probe-y`, the
+      Loop link followed with no lag. (Observed 2026-08-13.)
+- [x] **DP-06 — load sequencing** (added as observed, not originally
+      listed here): hard-reload on the Train tab, no flash of
+      default-project URLs before the session applied. (Observed
+      2026-08-13.)
 - [x] **Stale-fragment test — closed by source analysis + unit coverage
       (2026-08-14), NOT observed in a live v1.2.5→v1.2.6 shop upgrade.**
       What closed it is a finding, not a green observation: the v1.2.5
@@ -70,46 +82,63 @@ this machine (2026-08-14), so a live first read here would take the
       fragment-version echo ships (v1.2.7 candidate, v1.2-ideas.md).
       Consequence shipped: the tester note now makes the post-update
       hard-refresh a REQUIRED step.
-- [ ] **Fresh-install case:** delete `ui_config.json`, open the page:
+- [x] **Fresh-install case:** delete `ui_config.json`, open the page:
       fields filled from shipped defaults (served session), no migration
       noise, first settle-save creates `session` + markers
-      (`session_v1: "fresh"`).
+      (`session_v1: "fresh"`). (Observed 2026-08-13: marker `"fresh"`,
+      empty Import form, Import & Validate correctly disabled.)
 - [ ] Remaining C3 items from the Phase 2 checklist not yet reported:
       revisit-reads-session (6), DP-10 clamp (7), DP-08 pruned-record (8),
       `?kgdev` fixtures render + never persist (9), console clean (10).
 
 ## DP-11 — split identity (added after the round-3 finding)
 
-- [ ] Open the revision picker on each of the three URL fields: the
+- [x] Open the revision picker on each of the three URL fields: the
       popover offers ONLY that field's dataset (train -> exdark_train,
-      val -> exdark_val, test -> exdark_test).
-- [ ] Hand-paste a cross-split URL into the Train field (e.g. the
+      val -> exdark_val, test -> exdark_test). (Observed 2026-08-13:
+      each popover showed exactly one dataset group.)
+- [x] Hand-paste a cross-split URL into the Train field (e.g. the
       exdark_val table): gate goes amber with the SPECIFIC message
       ("Train table URL points at exdark_val; expected exdark_train"),
       no wrong-project hint, Start disabled; the value is NOT persisted
-      (reload re-derives the correct URL).
-- [ ] Same hand-paste on the Predict test field: amber names the split;
-      Run inference stays disabled.
-- [ ] M1 runtime twin (the JS mirror is not unit-tested — this step IS
+      (reload re-derives the correct URL). (Observed 2026-08-13: amber
+      message verbatim plus the identical-URLs bullet; F5 re-derived;
+      overrides stayed `{}` — don't-store confirmed.)
+- [x] Same hand-paste on the Predict test field: amber names the split;
+      Run inference stays disabled. (Observed 2026-08-13: "Test table
+      URL points at exdark_train; expected exdark_test", fired before
+      the row-count backstop — N1 ordering confirmed.)
+- [x] M1 runtime twin (the JS mirror is not unit-tested — this step IS
       its coverage until Playwright): pick the revision that equals the
       derived default via the picker; confirm `session.overrides` stays
       empty; then change the Table name on Import and confirm the field
-      FOLLOWS the new name (nothing froze it).
-- [ ] Server backstop: with the gate somehow bypassed (curl /run or an
+      FOLLOWS the new name (nothing froze it). (Observed 2026-08-13:
+      table_name round2 -> initial, BOTH URL fields followed, overrides
+      `{}` after settle-save. ONE-SHOT evidence: run against the
+      then-dirty config, cannot be re-run.)
+- [x] Server backstop: with the gate somehow bypassed (curl /run or an
       edited request), a cross-split train body is rejected with the
-      dataset-naming error, not trained.
-- [ ] Run `scripts/scan_cross_split_runs.py` against the machine's job
+      dataset-naming error, not trained. (Observed 2026-08-13: job
+      `ddbe0249e8dc418ea164b8d9db750b13`, status failed in 2.4s, error =
+      the split message, checks/progress/facts all empty, result null,
+      no checkpoint fetch, no epoch.)
+- [x] Run `scripts/scan_cross_split_runs.py` against the machine's job
       store(s); file its output with the checklist (a clean result is
       not proof of absence — 50-record prune, header says so).
+      (Run 2026-08-13 at the DP-11 gate: 19 + 13 records, 0 flagged.)
 
 ## Open items (decide before tag)
 
-- [ ] H1 regression check (fix landed with the K1 audit): open
+- [x] H1 regression check (fix landed with the K1 audit): open
       `?kgdev=submit-results` — the connection card reads
       `participant`, never a real Kaggle handle; `?kgdev=train-state2` —
       the URL fields keep their demo values (no late overwrite from the
       live derivation). The only network requests on a fixture page load
-      are `/config` and `/pipeline`.
+      are `/config` and `/pipeline`. (Observed 2026-08-13:
+      submit-results showed "Connected to Kaggle as participant", handle
+      gone. The train-state2 demo-values clause and the network-request
+      audit were not separately evidenced in the report — reasoned as
+      covered by the same kgDevMode guard, not watched.)
 - [ ] Version bump verified in the tagged build: pyproject + plugin.toml +
       catalog manifest all `1.2.6`, footer reads v1.2.6 after a catalog
       install.
