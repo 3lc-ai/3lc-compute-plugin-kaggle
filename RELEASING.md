@@ -26,6 +26,25 @@ entry was removed on purpose — keeping it would advertise a stale installable
 card next to the renamed plugin. The catalog `id` must always equal the
 `plugin.toml` id or the shop shows a phantom "available" card.)
 
+**Version pins that must ride this same commit** — the catalog bump makes
+every one of them stale the moment it lands (the version-pin class
+finding, v1.1-ideas.md LAUNCH-VERIFY: the setup script shipped pinned at
+1.2.2 across two releases because no list existed). Pins, not history —
+audit docs, PRETAG checklists, and ideas files stay as written:
+
+- `docs/TESTER_SETUP_0.2.md` — title line, round-1 migration note
+  ("installs under `managed-plugins\kaggle-exdark\<version>\`"), §2 W1
+  comment + env-var path, troubleshooting table W1 row.
+- `scripts/setup-0.2-tester.ps1` — header "tested against" comment, W1
+  comment, the `$managed` path.
+- `README.md` — the setup env-var line and the troubleshooting
+  torch-check path.
+- `CONTEXT.md` — the "Current release" sentence under **tags**.
+
+Until the Phase C version-drift CI check exists the sweep is manual:
+grep the tree for the OLD version string (`*.md`, `*.ps1`) and update
+every hit that is a pin.
+
 **The repo copy is the source of truth.** The gist (step 3) is only a mirror.
 
 ## 3. Mirror the change to the gist

@@ -59,6 +59,11 @@ Rules marked **[codified]** existed only as working practice until written here.
     an incognito fetch after the lag, and paste the repo file **verbatim** —
     a hand-paste once introduced a duplicate-key error. Repo `catalog.json`
     is source of truth; the gist only ever mirrors it. [codified 2026-08-10]
+- **Tests.** `tests/` is a pytest layer over config_store / migrations /
+  predictor state (dev dependency group only — never ships, never enters the
+  provisioned venv; the ui-notes no-new-dependencies rule governs runtime
+  deps). Run before any tag; the migration tests pin the two real-world
+  configs in `tests/fixtures/`. [codified 2026-08-13]
 - **Identity.** Commit as Rishikesh-Jadhav only; no co-author trailers.
   Settings already enforce this — verify `git config user.name` if in doubt.
   [codified]

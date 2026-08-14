@@ -9,6 +9,15 @@ All paths below were verified by code reading against the working copy (v1.2.5,
 `docs/state-audit` branch). DP-06 and DP-07 are race/partial-failure paths: mechanism
 verified in code, not reproduced at runtime this session — marked ⚠ code-verified-only.
 
+> **Status (2026-08-13, v1.2.6 on `fix/session-state`, untagged):**
+> DP-01/02/05/09/10 dissolved with the session object (no store left to
+> disagree); DP-04 and DP-08 resolved by validate-on-read; DP-06 resolved by
+> load sequencing. Evidence: the pytest layer in `tests/` plus the Phase 2
+> browser verification (DP-01 killed end-to-end). **Out of scope, still
+> open:** DP-03 (stepper's project-blind derivation) and DP-07 (three-store
+> submission outcome). Descriptions below are kept as written — they document
+> v1.2.5, the version the migration heals.
+
 ## Divergence classes
 
 - **D1 — duplicated storage**: one logical fact stored under ≥2 independent keys.
@@ -113,6 +122,14 @@ D1+D2.
   but snapshot-absolute for the stepper (import_state). Two derivations of one fact.
 
 ## DP-04 — Competition slug: persisted copy vs shipped constant (public-launch trap)
+
+> **Resolved in code (v1.2.6):** the slug is never stored unless deliberately
+> overridden — `session.slug_override = null` means "track the shipped
+> constant", the migration collapses the current/retired slugs to null, and
+> `tests/test_slug_swap.py` proves the launch-swap case: a persisted
+> v1.2.5-era slug plus a bumped `COMPETITION_SLUG` resolves to the NEW slug
+> while an explicit user override survives. Launch still requires the
+> RETIRED_SLUGS same-commit step (LAUNCH-VERIFY).
 
 - **Class:** D3 + D1
 - **Steps:**
@@ -255,6 +272,56 @@ D1+D2.
 - **Severity:** low.
 - **Root cause:** a healer for one field-group snapshots the whole tab; persistence is not
   gated on validity.
+
+## DP-11 — Split identity: a slot's URL vs the split the slot means (found in round-3 browser verification, 2026-08-13)
+
+> **Resolved in code (v1.2.6, same day):** three layers — the revision
+> picker is scoped to its field's split (prevention; there is no legitimate
+> cross-split pick in this workflow), the Train/Predict gates assert the
+> dataset segment and non-identical train/val with a message naming the
+> mismatch (detection), and `trainer.validate_table_urls` /
+> `predictor.validate_test_table_url` reject server-side from both
+> /validate/* and the job targets (enforcement — the host /run path never
+> traverses /validate). One predicate (`classify_override` + its JS mirror)
+> governs migration, runtime override capture, and read-time pruning, so
+> `session.overrides` is valid-by-construction. Note: the
+> identical-train/val rule is unreachable once both dataset asserts hold
+> (the datasets must differ, so the URLs must) — defense in depth against
+> future naming changes; do not read its green test as live coverage.
+
+- **Class:** D3 (a persisted/typed value read without validation against
+  its context) + D2 flavor (the slot's meaning is the shadowed canonical
+  fact).
+- **Steps (reproduced live):**
+  1. On Train, open the revision picker on "Train table URL". The popover
+     listed ALL datasets (exdark_test / exdark_train / exdark_val).
+  2. Pick a revision from EXDARK_VAL. Accepted into the train field.
+  3. Gate: existence-only → **green**: "Tables verified: exdark_val/initial
+     · exdark_val/round2 · trains on these exact revisions".
+  4. v1.2.6's override capture persisted it: the mistake survived reload.
+- **Divergence:** the URL says exdark_val; the slot means exdark_train. Two
+  readers of the split identity disagree, and no check compares them: the
+  gate tested existence, `validate_settings` never inspected URLs, and —
+  the reason Layer 3 exists — `.latest()` resolves within one dataset's
+  lineage, so `use_latest` faithfully preserves the wrong dataset. Without
+  a server-side assert there is NO point in the pipeline that would notice.
+- **Severity (calibrated):** not a cheating vector — training on val yields
+  a worse model and the leaderboard scores the held-out test set. It is a
+  **silent-wrong-results footgun**: green gate, completed run, four PASS
+  provenance assertions, plausible mAP, nothing anywhere indicating the
+  mistake. Provenance records model/imgsz/pretrained/sha — not split
+  identity — so an affected run is indistinguishable after the fact
+  (LAUNCH-VERIFY: candidate provenance addition; scripts/
+  scan_cross_split_runs.py covers the surviving job records).
+- **Predict variant:** same picker hole on the test field; the row-count
+  backstop (715) fails the job before inference, but its old remediation
+  ("re-run Import") was misleading for this cause — reworded, and the
+  dataset assert now fires first with the specific message.
+- **Root cause:** an individually-valid value passing a check that tests
+  one property (existence) while its contextual property (which split) is
+  asserted nowhere. Pre-existing, not a v1.2.6 regression — but v1.2.6's
+  override persistence upgraded it from transient to durable, which is
+  what surfaced it.
 
 ---
 

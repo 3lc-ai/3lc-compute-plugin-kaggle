@@ -1,0 +1,188 @@
+{
+ "import_state": {
+  "project": "v124check2",
+  "tables": {
+   "train": {
+    "url": "<FIXTURE_ROOT>/Desktop/3LC Kaggle Competitions/3lc-hub-next/home/AppData/Local/3LC/3LC/projects/v124check2/datasets/exdark_train/tables/initial",
+    "rows": 5910,
+    "reused": false
+   },
+   "val": {
+    "url": "<FIXTURE_ROOT>/Desktop/3LC Kaggle Competitions/3lc-hub-next/home/AppData/Local/3LC/3LC/projects/v124check2/datasets/exdark_val/tables/initial",
+    "rows": 733,
+    "reused": false
+   },
+   "test": {
+    "url": "<FIXTURE_ROOT>/Desktop/3LC Kaggle Competitions/3lc-hub-next/home/AppData/Local/3LC/3LC/projects/v124check2/datasets/exdark_test/tables/initial",
+    "rows": 715,
+    "reused": false
+   }
+  },
+  "mechanisms": {
+   "train": "from_yolo_url",
+   "val": "from_yolo_url",
+   "test": "from_yolo_url-labelless"
+  },
+  "checks": [
+   {
+    "label": "dataset.yaml declares train/val/test",
+    "ok": true,
+    "detail": "found: ['test', 'train', 'val']"
+   },
+   {
+    "label": "12 classes in canonical order",
+    "ok": true,
+    "detail": "nc=12, names=['Bicycle', 'Boat', 'Bottle']..."
+   },
+   {
+    "label": "train row count == 5910",
+    "ok": true,
+    "detail": "got 5910"
+   },
+   {
+    "label": "val row count == 733",
+    "ok": true,
+    "detail": "got 733"
+   },
+   {
+    "label": "test row count == 715",
+    "ok": true,
+    "detail": "got 715"
+   },
+   {
+    "label": "train value map is the canonical 12 classes",
+    "ok": true,
+    "detail": "got 12 classes"
+   },
+   {
+    "label": "val value map is the canonical 12 classes",
+    "ok": true,
+    "detail": "got 12 classes"
+   },
+   {
+    "label": "test stems unique (one image_id per image)",
+    "ok": true,
+    "detail": "715 unique / 715 rows; e.g. 2015_00015"
+   },
+   {
+    "label": "test table carries no ground-truth boxes",
+    "ok": true,
+    "detail": "0 boxes found"
+   }
+  ],
+  "table_name": "initial",
+  "dataset_yaml": "<FIXTURE_ROOT>\\Desktop\\3LC Kaggle Competitions\\competition_exdark\\package_build\\starter_kit\\dataset.yaml",
+  "job_id": "b56589cc0ee64bb2bcfcc3b65ba59eba",
+  "finished_at": 1786556747.1509674
+ },
+ "predict_state": {
+  "job_id": "9eb7158ca4014c118e2273f5593c6508",
+  "run_name": "kaggle_run_20260812_103220",
+  "weights": "<FIXTURE_ROOT>\\Desktop\\3LC Kaggle Competitions\\3lc-hub-next\\home\\.3lc-kaggle-plugin\\runs\\kaggle_run_20260812_103220\\weights\\best.pt",
+  "csv_path": "<FIXTURE_ROOT>\\Desktop\\3LC Kaggle Competitions\\3lc-hub-next\\home\\.3lc-kaggle-plugin\\runs\\kaggle_run_20260812_103220\\submissions\\submission_20260812_104215.csv",
+  "conf": 0.25,
+  "local_score": null,
+  "sanity": {
+   "total_boxes": 2526,
+   "images": 715,
+   "empty_images": 91,
+   "boxes_per_image_mean": 3.53,
+   "per_class": {
+    "Bicycle": 66,
+    "Boat": 104,
+    "Bottle": 85,
+    "Bus": 81,
+    "Car": 310,
+    "Cat": 15,
+    "Chair": 308,
+    "Cup": 145,
+    "Dog": 72,
+    "Motorbike": 100,
+    "People": 1067,
+    "Table": 173
+   }
+  },
+  "checks": [
+   {
+    "label": "columns are id, image_id, prediction_string",
+    "ok": true,
+    "detail": "got ['id', 'image_id', 'prediction_string']"
+   },
+   {
+    "label": "exactly 715 rows (one per test image)",
+    "ok": true,
+    "detail": "got 715"
+   },
+   {
+    "label": "no duplicated image_id rows",
+    "ok": true,
+    "detail": "0 duplicates"
+   },
+   {
+    "label": "id column is 0..N-1 aligned to sorted image_id",
+    "ok": true,
+    "detail": "aligned"
+   },
+   {
+    "label": "all prediction_strings parse under the metric's strict rules",
+    "ok": true,
+    "detail": "2526 boxes total"
+   }
+  ],
+  "finished_at": 1786549335.2334306
+ },
+ "import": {
+  "dataset_yaml": "<FIXTURE_ROOT>\\Desktop\\3LC Kaggle Competitions\\competition_exdark\\package_build\\starter_kit\\dataset.yaml",
+  "project_name": "exdark-competition",
+  "table_name": "initial"
+ },
+ "train": {
+  "train_table_url": "<FIXTURE_ROOT>/Desktop/3LC Kaggle Competitions/3lc-hub-next/home/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/exdark_train/tables/initial",
+  "val_table_url": "<FIXTURE_ROOT>/Desktop/3LC Kaggle Competitions/3lc-hub-next/home/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/exdark_val/tables/initial",
+  "use_latest": true,
+  "epochs": "1",
+  "batch": "16",
+  "lr0": "0.01",
+  "lrf": "0.01",
+  "optimizer": "auto",
+  "patience": "0",
+  "device": "",
+  "workers": "0",
+  "extra_args": "",
+  "project_name": "exdark-competition",
+  "conf_thres": "0.1",
+  "max_det": "300",
+  "image_embeddings_dim": "0",
+  "image_embeddings_reducer": "pacmap",
+  "instance_embeddings_dim": "0",
+  "collection_epoch_start": "",
+  "collection_epoch_interval": "1",
+  "collect_loss": false,
+  "ground_truth_instance_embeddings": false,
+  "sampling_weights": false,
+  "exclude_zero_weight_training": false,
+  "exclude_zero_weight_collection": false,
+  "collection_val_only": false,
+  "collection_disable": false
+ },
+ "submit": {
+  "test_table_url": "<FIXTURE_ROOT>/Desktop/3LC Kaggle Competitions/3lc-hub-next/home/AppData/Local/3LC/3LC/projects/exdark-competition/datasets/exdark_test/tables/initial",
+  "conf": "0.25",
+  "device": "",
+  "competition_slug": "fixture-competition-slug-test"
+ },
+ "submit_state": {
+  "job_id": "1b4c0e4dd88e49539abab30596c973e6",
+  "predict_job_id": "4bc0a3f5778d437cb9e9cc5eb24187c9",
+  "run_name": "kaggle_run_20260805_131843",
+  "status": "submitted",
+  "ref": "00000000",
+  "reason": null,
+  "message": "testabc",
+  "slug": "fixture-competition-slug-test",
+  "finished_at": 1785954238.8279881
+ },
+ "_migrations": {
+  "device_blank_default": true
+ }
+}

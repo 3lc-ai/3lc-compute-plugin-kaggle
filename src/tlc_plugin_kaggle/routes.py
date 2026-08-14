@@ -19,6 +19,9 @@ from litestar import Controller, Response, get, post
 from litestar.exceptions import NotFoundException
 from litestar.status_codes import HTTP_400_BAD_REQUEST
 
+from tlc_plugin_kaggle import constants
+from tlc_plugin_kaggle.constants import DEFAULT_PROJECT, DEFAULT_TABLE
+
 
 def _resolve_predict_params(data: Any) -> tuple[dict[str, Any] | None, Response | None]:
     """Shared request validation for the predict-shaped routes: resolve
@@ -58,6 +61,14 @@ def _resolve_predict_params(data: Any) -> tuple[dict[str, Any] | None, Response 
         return bad(f"Weights file not found: {weights}")
     if not str(data.get("test_table_url", "")).strip():
         return bad("Missing required field 'test_table_url'")
+    # Split identity (DP-11): predictions must run on the held-out test
+    # split; _predict_core re-asserts (the host /run path skips /validate).
+    from tlc_plugin_kaggle import predictor as _p
+
+    try:
+        _p.validate_test_table_url(str(data.get("test_table_url", "")).strip().strip('"'))
+    except ValueError as exc:
+        return bad(str(exc))
 
     params = dict(data)
     params["weights_path"] = weights
@@ -116,8 +127,8 @@ class KaggleController(Controller):
             )
         params = {
             "dataset_yaml": str(data["dataset_yaml"]).strip(),
-            "project_name": str(data.get("project_name") or "exdark-competition").strip(),
-            "table_name": str(data.get("table_name") or "initial").strip(),
+            "project_name": str(data.get("project_name") or DEFAULT_PROJECT).strip(),
+            "table_name": str(data.get("table_name") or DEFAULT_TABLE).strip(),
             "force_splits": [s for s in (str(x) for x in raw_force) if s in importer.SPLITS],
         }
         return Response(content={"ok": True, "params": params}, status_code=200)
@@ -161,13 +172,13 @@ class KaggleController(Controller):
         return jobs.list_jobs(kind or None)
 
     @get("/tables/defaults", sync_to_thread=True)
-    def table_defaults(self, project: str = "exdark-competition", table: str = "initial") -> dict[str, Any]:
+    def table_defaults(self, project: str = DEFAULT_PROJECT, table: str = DEFAULT_TABLE) -> dict[str, Any]:
         """Canonical table URLs for the pickers' defaults, with exists flags."""
         from tlc_plugin_kaggle import importer
 
         out: dict[str, Any] = {"project": project}
         for split in ("train", "val", "test"):
-            url = importer._table_url(table, f"exdark_{split}", project)
+            url = importer._table_url(table, constants.split_dataset(split), project)
             out[split] = {"url": str(url), "exists": url.exists()}
         return out
 
@@ -196,6 +207,11 @@ class KaggleController(Controller):
         try:
             trainer.build_train_kwargs(data)
             trainer.validate_settings(data)
+            # Split identity (DP-11): a train slot holding another split's
+            # table is individually valid and passes every existence check.
+            trainer.validate_table_urls(
+                str(data.get("train_table_url", "")), str(data.get("val_table_url", ""))
+            )
         except ValueError as exc:
             return Response(content={"error": str(exc)}, status_code=HTTP_400_BAD_REQUEST)
 
@@ -328,7 +344,7 @@ class KaggleController(Controller):
             return {"state": "empty", "reason": f"{type(exc).__name__}: {exc}"}
 
     @get("/tables/list", sync_to_thread=True)
-    def tables_list(self, project: str = "exdark-competition") -> dict[str, Any]:
+    def tables_list(self, project: str = DEFAULT_PROJECT) -> dict[str, Any]:
         """Datasets -> ordered revision chains (revision picker)."""
         from tlc_plugin_kaggle import importer
 
@@ -379,29 +395,49 @@ class KaggleController(Controller):
         _meta block (version, repository) the fragment renders in the
         footer and stamps into diagnostics."""
         import tlc_plugin_kaggle
-        from tlc_plugin_kaggle import config_store, predictor
+        from tlc_plugin_kaggle import config_store, constants, predictor
 
         out = config_store.load()
+        # The session always arrives populated: missing fields (fresh
+        # install, partial write) fill from the shipped defaults here, so
+        # the fragment carries no default literals of its own.
+        stored = out.get("session")
+        out["session"] = {
+            **config_store.default_session(),
+            **(stored if isinstance(stored, dict) else {}),
+        }
         out["_meta"] = {
             "version": tlc_plugin_kaggle.__version__,
             "repository_url": tlc_plugin_kaggle.REPOSITORY_URL,
             # Host machines (metric + solution on disk) get host-only UI:
             # the direct weights-file source and local scores.
             "host": predictor.is_host(),
+            # Shipped slug, so the fragment can render the effective slug
+            # (session.slug_override or this) without a Kaggle connection.
+            "default_slug": constants.COMPETITION_SLUG,
+            # Split<->dataset mapping for the pickers/gates: the fragment
+            # keeps zero domain literals (DP-11 scoping + split asserts).
+            "dataset_prefix": constants.DATASET_PREFIX,
         }
         return out
 
     @post("/config", sync_to_thread=True)
-    def save_config(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Merge per-tab form snapshots. Body: {"train": {...}} etc."""
+    def save_config(self, data: dict[str, Any]) -> Response:
+        """Merge per-tab form snapshots. Body: {"session": {...}} /
+        {"train": {...}} etc. Writes carrying keys retired by session_v1
+        are rejected whole (400): only a stale cached fragment sends them,
+        and a visible failure beats silently re-creating the duplication."""
         from tlc_plugin_kaggle import config_store
 
         if not isinstance(data, dict):
-            return {}
-        return config_store.save(data)
+            return Response(content={}, status_code=200)
+        try:
+            return Response(content=config_store.save(data), status_code=200)
+        except ValueError as exc:
+            return Response(content={"error": str(exc)}, status_code=HTTP_400_BAD_REQUEST)
 
     @get("/pipeline", sync_to_thread=True)
-    def pipeline_state(self, project: str = "exdark-competition") -> dict[str, Any]:
+    def pipeline_state(self, project: str = DEFAULT_PROJECT) -> dict[str, Any]:
         """Where the participant is in the Import -> Train -> Submit loop.
 
         Import-done delegates to verified_import_state so the stepper

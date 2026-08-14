@@ -26,11 +26,28 @@ import time
 from pathlib import Path
 from typing import Any
 
-# ── SWAP AT PUBLIC LAUNCH ────────────────────────────────────────────────
-# Single source for the Submit tab's slug default and the join link. This is
-# the private test competition — the "comepetition" typo is real, it's in the
-# Kaggle URL. Replace the value with the public competition slug at launch.
-COMPETITION_SLUG = "the-3-lc-low-light-object-detection-comepetition-test"
+# The slug (and its swap-at-launch / RETIRED_SLUGS story) lives in
+# constants.py — the leaf module the config store can also read without
+# importing this module (predictor is never on the /config read path).
+from tlc_plugin_kaggle.constants import COMPETITION_SLUG, split_dataset
+
+
+def validate_test_table_url(url: str) -> None:
+    """Split-identity assert for the predict path (DP-11): the test slot
+    must hold an exdark_test table. Fires before the row-count backstop so
+    a cross-split pick gets the specific cause, not a mystifying count.
+    Called from /validate/predict (fail-fast 400) AND _predict_core."""
+    from tlc_plugin_kaggle import config_store
+
+    expected = split_dataset("test")
+    got = config_store.url_dataset(url)
+    if got != expected:
+        raise ValueError(
+            f"Test table URL points at {got or 'an unrecognized dataset'}; "
+            f"expected {expected}. Predictions must run on the held-out test "
+            f"split. Pick the {expected} table, or clear the field to restore "
+            f"the default."
+        )
 
 EXPECTED_TEST_ROWS = 715
 NUM_CLASSES = 12
@@ -685,13 +702,18 @@ def _predict_core(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     ctx.set_field("run_name", run_name)
     ctx.set_field("weights", weights)
 
-    table = tlc.Table.from_url(tlc.Url(str(params["test_table_url"]).strip().strip('"')))
+    test_url = str(params["test_table_url"]).strip().strip('"')
+    validate_test_table_url(test_url)   # DP-11: specific cause before the count backstop
+    table = tlc.Table.from_url(tlc.Url(test_url))
     items = _test_items(table)
     ctx.log(f"Test table: {table.url} ({len(items)} images)")
     if len(items) != EXPECTED_TEST_ROWS:
         raise ValueError(
             f"Test table has {len(items)} rows; the competition test split has "
-            f"{EXPECTED_TEST_ROWS}. Re-run Import against the starter kit's dataset.yaml."
+            f"{EXPECTED_TEST_ROWS}. Check that the Test table URL points at the "
+            f"{split_dataset('test')} table (not another split or a modified "
+            f"revision); if the table itself is wrong on disk, re-run Import "
+            f"against the starter kit's dataset.yaml."
         )
 
     conf = float(params.get("conf", 0.25) or 0.25)
@@ -829,7 +851,6 @@ def run_kaggle_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
                     "ref": submission.get("ref"),
                     "reason": submission.get("reason"),
                     "message": message,
-                    "slug": (slug or COMPETITION_SLUG),
                     "finished_at": time.time(),
                 }
             }
@@ -849,14 +870,21 @@ def run_kaggle_submit(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
 
 def predict_submit_state() -> dict[str, Any]:
     """Revisit state for the Predict + Submit tab: the persisted snapshots,
-    with the CSV path re-verified on disk. CSV existence decides — a snapshot
-    whose CSV was deleted reports state="empty" (fall back to the form)."""
-    from tlc_plugin_kaggle import config_store
+    re-verified against the environment on read. Two facts must both hold:
+    the CSV exists on disk, AND the predict job record still exists — the
+    revisit view's step 2 submits by job id, and /validate/submit and the
+    CSV download both 404 on a pruned record (the job store keeps 50), so a
+    snapshot without its record is not a submittable basis. Either miss
+    reports state="empty" (fall back to the form)."""
+    from tlc_plugin_kaggle import config_store, jobs
 
     cfg = config_store.load() or {}
     ps = cfg.get("predict_state") or {}
     csv_path = str(ps.get("csv_path", ""))
     if not csv_path or not Path(csv_path).is_file():
+        return {"state": "empty"}
+    job_id = str(ps.get("job_id") or "")
+    if not job_id or jobs.get_job(job_id) is None:
         return {"state": "empty"}
     out: dict[str, Any] = {"state": "predicted", "predict": ps}
     ss = cfg.get("submit_state") or {}

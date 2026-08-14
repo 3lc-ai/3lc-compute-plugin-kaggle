@@ -392,6 +392,60 @@ non-host machines, so the gate is real, not visual. Legacy
 from-scratch runs render truthfully everywhere ("from-scratch ·
 legacy") and remain predictable/submittable — no data migration.
 
+## 14. Session projections (v1.2.6)
+
+One canonical **session object** (`kgSession`, persisted as the `session`
+key in `ui_config.json`) owns every fact tabs share: project name, table
+name, dataset yaml, device, the slug decision, and explicit per-field
+table-URL overrides. The rules, settled like everything else here:
+
+- **Tabs render projections; no tab owns a default.** The fragment holds
+  ZERO default literals — `GET /config` always serves a populated session
+  (server fills from `constants.py`, the single definition site), plus
+  `_meta.default_slug`. The Import form is the session's *editor*, not a
+  store; Train renders the project as a read-only locked-row fact.
+- **Derive, don't store.** Table-URL fields render from
+  `kgApplyDerivedUrls` (override verbatim, else the canonical derivation
+  for the session project + table). Derived values are never persisted. A
+  settled user edit or revision pick IS an explicit per-field override; an
+  emptied field returns to derivation; a settled project/table change
+  clears all overrides and re-runs the gates. Anything else rendered from
+  session values (e.g. the Loop's fix-labels href) re-renders inside the
+  same funnel — a session-derived value with its own render moment is the
+  bug class this section exists to prevent.
+- **Sequence the load.** Tab-entry hooks and the initial tab-open
+  resolutions await `configLoaded`; `showTab` paints immediately
+  (stateless). `configLoaded` always resolves and is never silent: network
+  failures retry through the connection guard, non-network failures render
+  an explicit "saved settings could not be loaded" callout.
+- **Split-scoped inputs offer only their own split** (DP-11). The revision
+  picker on a table-URL field lists only that field's dataset
+  (exdark_train / exdark_val / exdark_test via `_meta.dataset_prefix`);
+  the gates assert the dataset segment (amber names the mismatch
+  specifically) and the server rejects cross-split URLs from /validate/*
+  AND the job targets. One predicate decides what may live in
+  `session.overrides` (`classify_override`, mirrored as
+  `kgOverrideDisposition` — a recorded mirrored pair, same class as
+  TR_BOUNDS): **only values that pass it are stored.** Storing a value
+  already judged invalid would mean overrides can hold garbage and every
+  future reader must re-validate — the self-healer pattern this release
+  deleted. Don't-store keeps overrides valid-by-construction, which is
+  why the read-time prune in `kgApplySession` is nearly vacuous: a test
+  that is almost always trivially true is the signature of an invariant
+  holding structurally rather than by repair. The paternalism is
+  deliberate and bounded: the DOM keeps the typed value, the amber
+  explains it, a reload re-derives.
+- **Config writers are user-action-initiated ONLY.** The sole read-path
+  write in the plugin is the marker-guarded one-shot migration in
+  `config_store.load()`. Current complete writer list (v1.2.6):
+  `kgSetUrlOverride` (URL edit/pick), `kgImportCfgSettled` (Import form
+  settle + import start), the device blur handler, the slug blur handler,
+  and the three whole-tab action saves (train start, predict click, submit
+  click). **A `saveTabConfig`/`kgSessionSave` call reachable from a
+  render, sync, poll, or tab-enter path is a regression of the v1.2.5
+  cross-project-mixture class** — the store rejects retired keys (400) but
+  cannot reject a bad moment; this rule is the guard for that.
+
 ---
 
 ## Appendix — Import-tab reference
@@ -457,17 +511,31 @@ randomness — identical screenshots every load).
 
 **Fixtures always render the participant experience** (2026-07-24). While
 `?kgdev` is active, host-only affordances stay hidden regardless of the
-live `_meta.host` flag — no fixture opts into host rendering today. Three
+live `_meta.host` flag — no fixture opts into host rendering today. Four
 enforcement points in the fragment: the config-load reveal of
 `ps-src-seg` requires `!kgDevMode` (the markup default is `hidden`, so
 nothing can reveal it in a fixture); `psSetSource` coerces `'weights'` to
 `'run'` under `?kgdev`, so the external-weights field and its amber
-callout can never render in a fixture; and the eager `psLoadRuns()` is
+callout can never render in a fixture; the eager `psLoadRuns()` is
 skipped under `?kgdev`, so the live host's real runs never race a
-fixture's dev runs into the selector. Fixtures never write config
-(`saveTabConfig` fires only on action-button clicks), and a plain load
-without the param takes none of these paths — the host view and saved
-config come back untouched.
+fixture's dev runs into the selector; and the page-load live fetches —
+the Kaggle connection probe and the two table-URL derivation chains —
+are `kgDevMode`-guarded (v1.2.6, the H1 fix), because their responses
+land AFTER the fixture's post-config re-apply and would overwrite fixture
+state with live state (the connection one rendered the real account
+handle over the fixture's `participant`). Fixtures never write config
+(`kgSessionSave`/`saveTabConfig` guard on `kgDevMode` / fire only on
+action-button clicks), and a plain load without the param takes none of
+these paths — the host view and saved config come back untouched.
+
+Two page-load fetches stay deliberately live under `?kgdev`: `GET
+/config` (fixtures re-apply after it; it carries the `_meta` version the
+footer and diagnostics stamp) and the stepper's `/pipeline` render riding
+`showTab` (long-standing; read-only; means a fixture page's stepper shows
+the machine's real progress — flagged to the Phase C runtime check to
+decide). Interaction-driven read-only fetches (typing into a gate field,
+opening the revision picker) are outside the render-purity rule; the
+job-firing backstops still hold.
 
 ### Intentional improvements over the stock Import plugin
 
