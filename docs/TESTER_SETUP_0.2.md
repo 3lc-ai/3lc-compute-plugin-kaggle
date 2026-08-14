@@ -1,4 +1,4 @@
-# Tester setup — 0.2.x Hub + Kaggle plugin v1.2.5 (catalog install)
+# Tester setup — 0.2.x Hub + Kaggle plugin v1.2.6 (catalog install)
 
 > **MIGRATION — round-1 testers only (installed v1.2.0 under the old id `kaggle`).**
 > v1.2.1 renamed the plugin id to **`kaggle-exdark`** (collision safety). The old
@@ -18,7 +18,7 @@
 >    the compute service.
 > 4. **Re-add the catalog** only if you had the local-clone fallback (pull first);
 >    the gist URL is unchanged. **Install** the new card — it installs under
->    `managed-plugins\kaggle-exdark\1.2.5\`.
+>    `managed-plugins\kaggle-exdark\1.2.6\`.
 >
 > Job history, saved form values, and run artifacts live in `~/.3lc-kaggle-plugin/`
 > and survive the rename untouched. *(This note comes out once round-2 starts clean.)*
@@ -72,11 +72,11 @@ Windows-required**:
 # OS. On Windows that file doesn't exist and every plugin worker fails with a
 # 500 on first use. This per-plugin override pins the correct interpreter path
 # (pre-stating where the shop materializes the venv: id kaggle-exdark,
-# version 1.2.5 — the env-var name is TLC_COMPUTE_PLUGIN_VENV_ +
+# version 1.2.6 — the env-var name is TLC_COMPUTE_PLUGIN_VENV_ +
 # id.upper() with hyphens as underscores. The version segment tracks the
 # INSTALLED plugin version — repoint on every update, see the note after
 # the service-start block):
-$env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.5\.venv\Scripts\python.exe"
+$env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.6\.venv\Scripts\python.exe"
 
 # CUDA torch: shop installs (uv pip install) don't read the plugin's own uv
 # index config, so plain `torch` resolves CPU-only on Windows without this.
@@ -159,7 +159,7 @@ manual install you may notice:
 | Install fails: `Repository not found` | git has a **stale** GitHub credential (vs. row below = none at all). Credential Manager → Windows Credentials → delete `git:https://github.com`, re-run the `git ls-remote` prerequisite, sign in fresh. |
 | uv behaves unlike this doc / version mismatch | An older uv shadows the winget one until the shell restarts. `(Get-Command uv).Source` + `uv --version` to see which runs; restart the shell after installing. |
 | `ERROR ... API key` printed before your first login | Normal ordering artifact — clears on the next start after `3lc login`. Only a persistent key error *after* a successful login is a finding. |
-| Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle-exdark\1.2.5\.venv\Scripts\python.exe`. Round-1 machines: the OLD name `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` no longer does anything. |
+| Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle-exdark\1.2.6\.venv\Scripts\python.exe`. Round-1 machines: the OLD name `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` no longer does anything. |
 | Install fails: `could not read Username for 'https://github.com'` | git has no GitHub token — prerequisite row 3 |
 | Install fails: `uv executable not found` | uv not on the PATH of the compute-service process |
 | Training says CUDA unavailable | `UV_TORCH_BACKEND=auto` was not set when the plugin venv was built → uninstall the plugin in the shop, set the env var, reinstall. (Round-1/2 machines: the old `TLC_COMPUTE_PLUGIN_INDEX_URLS` cu128 pin still works, but `UV_TORCH_BACKEND=auto` supersedes it.) |

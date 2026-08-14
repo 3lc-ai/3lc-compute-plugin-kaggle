@@ -18,7 +18,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Versions this plugin (v1.2.5) was tested against — do not float.
+# Versions this plugin (v1.2.6) was tested against — do not float.
 $TLC_CORE = "3lc==3.1.0"
 $TLC_COMPUTE = "3lc-compute==0.2.1"
 $INDEX_PRE = "https://pypi.3lc.ai/public/repositories/prereleases-public/"
@@ -52,11 +52,11 @@ if ($LASTEXITCODE -ne 0) { Write-Error "3lc login failed - check the API key" }
 # venv layout (<venv>/bin/python) on every OS - on Windows that path does
 # not exist and every venv-plugin worker fails to start. The env var below
 # is the documented per-plugin override; the path pre-states where the shop
-# will materialize the plugin's venv (id kaggle-exdark, version 1.2.5 — must
+# will materialize the plugin's venv (id kaggle-exdark, version 1.2.6 — must
 # match the version the catalog currently advertises, see TESTER_SETUP_0.2 §2).
 # Derivation rule (SDK worker_spec.py): TLC_COMPUTE_PLUGIN_VENV_ +
 # id.upper().replace('-', '_').
-$managed = Join-Path $env:USERPROFILE ".3lc-compute\managed-plugins\kaggle-exdark\1.2.5\.venv\Scripts\python.exe"
+$managed = Join-Path $env:USERPROFILE ".3lc-compute\managed-plugins\kaggle-exdark\1.2.6\.venv\Scripts\python.exe"
 $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = $managed
 
 # CUDA torch for catalog installs: `uv pip install` does not read the

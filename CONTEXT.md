@@ -60,5 +60,5 @@ One line per term. Depth: docs/ui-notes.md (UI), ../3lc-hub-next/PORT_PLAN.md (p
 
 - **run names** — `kaggle_run_<YYYYMMDD_HHMMSS>` when the field is blank; sanity-control runs live apart (project `control-sanity`, run `control_pretrained_DO_NOT_SUBMIT` — never submit non-plugin outputs).
 - **project name** — default 3LC project `exdark-competition`; tables `exdark_train` / `exdark_val` / `exdark_test`.
-- **tags** — `vX.Y.Z`; the version string is identical in pyproject.toml, plugin.toml, and the catalog entry; never retag. Current release: **v1.2.5** (tagged 2026-08-12; config persistence on settle + coherent-project follow — the round-2 tester-handoff version, replacing v1.2.4).
+- **tags** — `vX.Y.Z`; the version string is identical in pyproject.toml, plugin.toml, and the catalog entry; never retag. Current release: **v1.2.6** (tagged 2026-08-14; session object refactor — one canonical session, derived table URLs, split identity (DP-11) — replacing v1.2.5).
 - **plugin id** — `kaggle-exdark` (since v1.2.1; collision safety). The legacy id `kaggle` is retired and reserved for the future generic multi-competition fork; the W1 env-var name derives as `TLC_COMPUTE_PLUGIN_VENV_` + id upper-cased with `-` → `_`.
