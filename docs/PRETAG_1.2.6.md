@@ -187,6 +187,13 @@ this machine (2026-08-14), so a live first read here would take the
       gone. The train-state2 demo-values clause and the network-request
       audit were not separately evidenced in the report — reasoned as
       covered by the same kgDevMode guard, not watched.)
-- [ ] Version bump verified in the tagged build: pyproject + plugin.toml +
+- [x] Version bump verified in the tagged build: pyproject + plugin.toml +
       catalog manifest all `1.2.6`, footer reads v1.2.6 after a catalog
-      install.
+      install. (Observed 2026-08-14, tag v1.2.6 @ 1b2b775: real install
+      from the gist catalog after a full uninstall — required because
+      the force-installed dev wheel had poisoned the shop's version view
+      (D2, recorded in v1.1-ideas.md) — then env repoint, restart, hard
+      refresh; footer reads v1.2.6. Config survived its second
+      migration-adjacent pass intact: session_v1 "import_state", project
+      exdark-competition, overrides {}; job history, runs, and
+      checkpoints untouched. PRETAG COMPLETE.)

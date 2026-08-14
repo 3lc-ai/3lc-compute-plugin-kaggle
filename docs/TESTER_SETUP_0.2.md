@@ -5,10 +5,14 @@
 > install won't update in place — do this once, in this order:
 >
 > 1. **Kill the orphan worker first** (known 0.2.1 bug W3: uninstall does NOT stop
->    the worker process, and the leftover lock breaks reinstall):
->    in the Hub call **reload** on the old plugin, or from PowerShell:
+>    the worker process, and the leftover lock breaks reinstall): **close the
+>    compute-service window and start it again** — that's the whole step
+>    (verified clean 2026-08-14: no orphaned directory, uninstall succeeded).
+>    Optional alternative for the restart-averse: the reload endpoint
 >    `Invoke-RestMethod -Method Post http://localhost:5020/api/admin/plugins/kaggle/reload`
->    (a service restart also works).
+>    — but on 0.2.x admin routes answer `403 unauthenticated` without the Hub's
+>    Bearer token (copy one from a logged-in Hub tab's DevTools → Network →
+>    any request's Authorization header), so the restart is the primary path.
 > 2. **Uninstall** the old *Kaggle Competition* card (Plugins → Installed → Uninstall).
 >    Then verify `%USERPROFILE%\.3lc-compute\managed-plugins\kaggle\` is actually gone —
 >    if not, close the service window and delete the folder by hand.
@@ -97,12 +101,19 @@ C:\3lc-hub-next\.venv\Scripts\3lc-compute.exe          # Compute Service :5020 (
 > **Updating the plugin later (Windows):** the venv path in
 > `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` is version-suffixed, so every
 > plugin update moves it. After installing a new version from the catalog:
-> close the compute-service window (this kills the plugin worker — never
-> mid-train), repoint the env var at the new
-> `...\managed-plugins\kaggle-exdark\<new version>\.venv\Scripts\python.exe`,
-> and start the service again. A stale path fails exactly like W1: the
-> worker 500s on first use while the shop still shows the new version
-> installed.
+>
+> 1. Close the compute-service window (this kills the plugin worker —
+>    never mid-train).
+> 2. Repoint the env var at the new
+>    `...\managed-plugins\kaggle-exdark\<new version>\.venv\Scripts\python.exe`
+>    and start the service again. A stale path fails exactly like W1: the
+>    worker 500s on first use while the shop still shows the new version
+>    installed.
+> 3. **Hard-refresh the plugin page** (Ctrl+Shift+R) — required, not
+>    optional. Until you do, the browser may keep serving the old cached
+>    page, and every settings change silently fails to save: nothing on
+>    the page signals it, values just revert on the next reload. One
+>    hard refresh fixes it for good.
 
 ## 3. Install the plugin from the catalog
 
@@ -163,6 +174,7 @@ manual install you may notice:
 | Install fails: `could not read Username for 'https://github.com'` | git has no GitHub token — prerequisite row 3 |
 | Install fails: `uv executable not found` | uv not on the PATH of the compute-service process |
 | Training says CUDA unavailable | `UV_TORCH_BACKEND=auto` was not set when the plugin venv was built → uninstall the plugin in the shop, set the env var, reinstall. (Round-1/2 machines: the old `TLC_COMPUTE_PLUGIN_INDEX_URLS` cu128 pin still works, but `UV_TORCH_BACKEND=auto` supersedes it.) |
+| Settings don't persist / revert on reload (after an update) | Stale cached fragment: the old page saves settings in a format the new version rejects, and nothing visible fails at save time. **Hard-refresh the plugin page** (Ctrl+Shift+R) once — see step 3 of the update note in §2. |
 | `API key not found` at service start | run `3lc login` **from this venv** (3.x key store is new) |
 | `The filename, directory name, or volume label syntax is incorrect` on the setup commands | You're in **cmd**, not PowerShell — the setup commands are PowerShell. Type `powershell` first, then re-run the block. |
 
