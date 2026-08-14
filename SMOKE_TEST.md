@@ -9,8 +9,9 @@ Tester: ______________  Date: ______________  GPU: ______________
 Plugin version shown in the page footer: ______________ (expect **v1.2.6**)
 
 > Updating from an earlier version? **Hard-refresh the plugin page**
-> (Ctrl+Shift+R) after the update. A stale cached page saves settings in a
-> retired format; the update note explains what you would see.
+> (Ctrl+Shift+R) after the update — required, not optional. A stale cached
+> page saves settings in a retired format and every save silently fails
+> (nothing on the page signals it) until you refresh.
 
 > Round-1 testers: the plugin id changed to `kaggle-exdark` in v1.2.1 —
 > follow the migration note at the top of

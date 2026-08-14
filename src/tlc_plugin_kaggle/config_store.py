@@ -17,8 +17,13 @@ tab, re-verified against the CSV on disk AND the job store on read).
 Keys retired by the session_v1 migration are REJECTED on save (ValueError →
 the /config route answers 400): the only writer that still sends them is a
 stale browser-cached fragment, and silently dropping its writes would be a
-new silent divergence — a failing save is visible (worker log, network tab,
-values that stop persisting) and the remedy is a hard refresh.
+new silent divergence. Honesty note (finding, 2026-08-14): the failure is
+visible in the worker log and network tab but NOT in the v1.2.5 UI — its
+save path swallows every save error ('.catch', best-effort), so mid-flow a
+user sees nothing until values revert on reload. That is why the tester
+note makes the post-update hard refresh a REQUIRED step; the recorded fix
+is the fragment-version echo + 409 handshake (docs/v1.2-ideas.md, v1.2.7
+candidate).
 """
 
 from __future__ import annotations
