@@ -9,7 +9,7 @@ fixtures).
 
 ## Tier 3 — manual verification on the dev machine (GPU)
 
-- [ ] Two-epoch GPU train from the session project: run lands in the same
+- [x] Two-epoch GPU train from the session project: run lands in the same
       project as the three tables (SMOKE_TEST §2 wording — a run anywhere
       else is a blocker, not a variation). TWO epochs is load-bearing,
       not convention: the ETA fix was one of Copeland's five round-1
@@ -18,10 +18,19 @@ fixtures).
       history/sparkline, the second per-epoch collection pass, and the
       mAP50 reference band calibrated at epoch 2. A 1-epoch run
       (2026-08-13) covered project landing/provenance/links only.
-- [ ] Full 715-image predict; 5/5 format checks; no OOM after train in the
-      same session.
-- [ ] Real Kaggle submit accepted (or a friendly state with the CSV kept);
-      Status history row renders the outcome vocabulary.
+      (Observed 2026-08-14: `kaggle_run_20260814_135436`, live ETA
+      visible from 24s in — the round-1 eta_s fix confirmed on the
+      current build; two history points, epoch 1 mAP50 0.44325 matching
+      the pre-refactor baseline to five decimals, epoch 2 0.5563 inside
+      the calibrated band; 4/4 provenance PASS; run in
+      exdark-competition. Supersedes the 1-epoch DP-01 evidence.)
+- [x] Full 715-image predict; 5/5 format checks; no OOM after train in the
+      same session. (Observed 2026-08-14: same worker session as the
+      two-epoch train, no OOM, 5/5 checks, 715 rows, 2,171 boxes.)
+- [x] Real Kaggle submit accepted (or a friendly state with the CSV kept);
+      Status history row renders the outcome vocabulary. (Observed
+      2026-08-14: accepted, ref #55512225; history row moved
+      "CSV generated" → "Submitted · #55512225".)
 - [x] Four provenance PASS assertions, checkpoint sha256 `0ebbc80d4a76…`
       unchanged. (Observed 2026-08-13: 1-epoch run
       `kaggle_run_20260813_171646`, 4/4 PASS, sha unchanged.)
@@ -58,13 +67,19 @@ this machine (2026-08-14), so a live first read here would take the
 
 ## Session-refactor specifics
 
-- [ ] **F2 — override preservation, browser-real:** run an actual
+- [x] **F2 — override preservation, browser-real:** run an actual
       fix-labels Loop pass (edit labels in the Dashboard → new revision →
       pick it via the revision picker). Reload: the picked revision
       survives in the field and in `session.overrides`. Then change the
       project on Import: override cleared, fields re-derived, gate amber.
       (Unit-tested in `test_same_project_revision_override_preserved`;
       never yet exercised against a real revision chain.)
+      (Observed 2026-08-14, both halves against a real revision chain:
+      committed `train_v2` in the Dashboard, picked it via the picker,
+      ran a full 2-epoch train on it (`kaggle_run_20260814_142701`),
+      F5 — field and override survived; then changed project to `abcd` —
+      both fields re-derived, override dropped, amber named `abcd`.
+      The full fix-labels Loop ran end to end.)
 - [x] **DP-02 — non-default table name:** import with Table name
       `round2` (or any non-`initial`). Train and Predict derive URLs ending
       `/tables/round2` and their gates go green with no hand-pasting.
