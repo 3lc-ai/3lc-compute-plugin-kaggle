@@ -11,7 +11,13 @@ fixtures).
 
 - [ ] Two-epoch GPU train from the session project: run lands in the same
       project as the three tables (SMOKE_TEST §2 wording — a run anywhere
-      else is a blocker, not a variation).
+      else is a blocker, not a variation). TWO epochs is load-bearing,
+      not convention: the ETA fix was one of Copeland's five round-1
+      findings (root cause was epoch-boundary-only eta_s) and only shows
+      with epochs remaining after epoch 1; also the ≥2-point
+      history/sparkline, the second per-epoch collection pass, and the
+      mAP50 reference band calibrated at epoch 2. A 1-epoch run
+      (2026-08-13) covered project landing/provenance/links only.
 - [ ] Full 715-image predict; 5/5 format checks; no OOM after train in the
       same session.
 - [ ] Real Kaggle submit accepted (or a friendly state with the CSV kept);
@@ -87,9 +93,36 @@ this machine (2026-08-14), so a live first read here would take the
       noise, first settle-save creates `session` + markers
       (`session_v1: "fresh"`). (Observed 2026-08-13: marker `"fresh"`,
       empty Import form, Import & Validate correctly disabled.)
-- [ ] Remaining C3 items from the Phase 2 checklist not yet reported:
-      revisit-reads-session (6), DP-10 clamp (7), DP-08 pruned-record (8),
-      `?kgdev` fixtures render + never persist (9), console clean (10).
+- Remaining C3 items from the Phase 2 checklist — all observed
+  2026-08-13, reported 2026-08-14:
+  - [x] revisit-reads-session (6) / DP-01 acceptance criterion: 1-epoch
+        run `kaggle_run_20260813_171646` under session project
+        exdark-competition; Dashboard at that project showed Runs 11,
+        Tables 3, 6,643 per-sample metrics against exdark_train/initial
+        + exdark_val/initial — run and tables in ONE project. Config
+        after the run: one project_name, one device, slug_override null,
+        no retired keys (run-start save did not re-pollute the store).
+        Supersedable by the two-epoch run.
+  - [x] DP-10 clamp (7): hand-set `train.epochs` to "999", reloaded —
+        field showed 20 (markup default), no inline error, 999 neither
+        restored nor persisted.
+  - [x] DP-08 pruned-record (8): predict job JSON moved out of `jobs/`,
+        reload — Predict rendered the FORM with step 2 locked ("Run
+        inference first. A validated CSV unlocks this step"), not an
+        unlocked step whose submit would 404. File restored — revisit
+        view returned ("predicted 31 hours ago (from a previous
+        session)").
+  - [x] `?kgdev` fixtures render + never persist (9): state6,
+        train-state2, submit-results all rendered with "demo state —
+        actions disabled" on Start Training / Re-run inference / Submit
+        to Kaggle; config untouched. (H1's bleed was found in this same
+        pass; ticked separately post-fix under Open items.)
+  - [x] Console clean (10) — **plugin console clean; see J1/J2**, not
+        bare-clean: DevTools console empty across all four tab switches
+        on the normal page, but the Issues panel showed ~50 entries, all
+        Chrome Local Network Access blocks on Hub↔localhost calls (J1,
+        platform escalation, ledgered) plus one form-field label issue
+        (J2). Neither is a plugin console error.
 
 ## DP-11 — split identity (added after the round-3 finding)
 
