@@ -23,20 +23,30 @@ fixtures).
 
 ## Migration — against restored copies of BOTH real fixtures
 
-Restore each to the redirected home, let a v1.2.6 worker be its first
-reader, then assert:
+CLOSED BY SUITE 2026-08-14 (55 passed), not by a live redirected-home
+worker run: `tests/test_session_migration.py` executes session_v1 against
+sanitized copies of both real stores, both URL-resolution branches each.
+The premigration store on the desktop (`Desktop\v126-fixtures`) was
+verified byte-equivalent to the newstack fixture modulo the documented
+sanitization (paths, slug, zeroed submission ref), so the suite IS this
+section's exercise. Live-disk note: the `v124check2` tables are gone from
+this machine (2026-08-14), so a live first read here would take the
+`import_form_urls_unresolved` branch — also pinned.
 
-- [ ] `ui_config.oldstack.json` (no `_migrations` at all): both markers
+- [x] `ui_config.oldstack.json` (no `_migrations` at all): both markers
       appear, `session.device == ""` (ordering), branch recorded, retired
       keys gone, session project = the artifact's project when tables
-      resolve.
-- [ ] `ui_config.newstack.json` (three-way divergence): session project
+      resolve. (Suite: `test_oldstack_snapshot_branch`,
+      `test_session_v1_runs_after_device_blank_default`.)
+- [x] `ui_config.newstack.json` (three-way divergence): session project
       follows the tables on disk, not the edited form; overrides empty
-      (cross-project URLs dropped).
-- [ ] The `_migrations.session_v1` marker value matches what the disk state
+      (cross-project URLs dropped). (Suite:
+      `test_newstack_snapshot_wins_over_edited_form`.)
+- [x] The `_migrations.session_v1` marker value matches what the disk state
       at that moment justifies (`import_state` vs
       `import_form_urls_unresolved` — the worker log names any unresolved
-      URLs).
+      URLs). (Suite: both `*_form_branch_when_tables_missing` tests; the
+      caplog assertion pins the worker-log line.)
 
 ## Session-refactor specifics
 
@@ -50,11 +60,16 @@ reader, then assert:
 - [ ] **DP-02 — non-default table name:** import with Table name
       `round2` (or any non-`initial`). Train and Predict derive URLs ending
       `/tables/round2` and their gates go green with no hand-pasting.
-- [ ] **Stale-fragment test:** with an old (pre-v1.2.6) cached fragment
-      against the new worker, config saves 400 (worker log shows the
-      retired-keys message) and NOTHING is written to the store; a
-      hard-refresh fixes it. This is the B3 behavior the tester note
-      documents.
+- [x] **Stale-fragment test — closed by source analysis + unit coverage
+      (2026-08-14), NOT observed in a live v1.2.5→v1.2.6 shop upgrade.**
+      What closed it is a finding, not a green observation: the v1.2.5
+      fragment's `saveTabConfig` swallows every save error (`.catch`,
+      best-effort), so the 400 is invisible mid-flow. The 400 rejection
+      and nothing-written halves are pinned by the retired-key tests;
+      the "what the user sees" half is absent by construction until the
+      fragment-version echo ships (v1.2.7 candidate, v1.2-ideas.md).
+      Consequence shipped: the tester note now makes the post-update
+      hard-refresh a REQUIRED step.
 - [ ] **Fresh-install case:** delete `ui_config.json`, open the page:
       fields filled from shipped defaults (served session), no migration
       noise, first settle-save creates `session` + markers
