@@ -22,6 +22,7 @@ CSV exists for manual upload.
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -67,7 +68,22 @@ def competition_url(slug: str) -> str:
 # the mAP shown next to the CSV. The organizer places these two files there
 # once (they are never shipped); participant machines don't have them, so the
 # whole step silently no-ops there.
-HOST_DIR = Path.home() / ".3lc-kaggle-plugin" / "host"
+#
+# The default resolves under the WORKER PROCESS's home — under a
+# redirected-home service (P1, v1.2.7) or a service running as another user,
+# that is not the browsing organizer's home. TLC_KAGGLE_HOST_DIR (a service
+# env var, inherited by the worker; organizer capability, read at worker
+# start) points the host dir anywhere; the 0-LOC alternative is copying the
+# two files into the worker-home path (TESTER_SETUP_0.2.md, organizer
+# appendix — both verified live).
+
+
+def _host_dir() -> Path:
+    override = os.environ.get("TLC_KAGGLE_HOST_DIR", "").strip()
+    return Path(override) if override else Path.home() / ".3lc-kaggle-plugin" / "host"
+
+
+HOST_DIR = _host_dir()
 LOCAL_METRIC_PY = str(HOST_DIR / "metric_exdark.py")
 LOCAL_SOLUTION_CSV = str(HOST_DIR / "solution.csv")
 

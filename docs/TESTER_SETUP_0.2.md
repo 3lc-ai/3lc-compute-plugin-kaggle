@@ -200,6 +200,50 @@ Same flow, Windows-isms swapped out:
   in `@port/0.2.x` (or a commit sha) instead of the pinned `@vX.Y.Z` tag, and add that file's
   absolute path as the catalog source instead of the gist URL.
 
+## Appendix — organizer machines (local scoring)
+
+Participants never need this section. On the organizer's machine the plugin
+also scores each prediction locally (mAP@0.5 next to the CSV) and unlocks the
+host-only UI (the direct weights-file source). The gate is two files that are
+never shipped:
+
+```
+<host dir>\metric_exdark.py
+<host dir>\solution.csv
+```
+
+**Where `<host dir>` is:** by default `~\.3lc-kaggle-plugin\host\` resolved
+under the home of the **worker process**, not the person browsing. On a plain
+install those are the same. They differ whenever the service runs with a
+redirected home (the 1.1.x-coexistence setup below) or as another user — the
+files then sit in your home while the worker looks in its own, and the host
+UI silently stays participant-mode. That silence is by design (participants
+must never see an error about files they are not supposed to have), so check
+this appendix first when local scores don't render.
+
+Two supported fixes — both verified live (local mAP renders, e.g. 0.4308):
+
+1. **`TLC_KAGGLE_HOST_DIR`** (organizer capability, v1.2.7) — a service env
+   var pointing the host dir anywhere. Set it in the service window before
+   starting, alongside the other env vars from §2:
+
+   ```powershell
+   $env:TLC_KAGGLE_HOST_DIR = "$env:USERPROFILE\.3lc-kaggle-plugin\host"
+   ```
+
+   The worker reads it at start — if the service is already running, reload
+   the plugin (or restart the service) after setting it.
+
+2. **The 0-LOC copy** — put the two files where the worker already looks.
+   For the redirected-home setup (worker home = `<hub-next>\home`):
+
+   ```powershell
+   New-Item -ItemType Directory -Force "<hub-next>\home\.3lc-kaggle-plugin\host" | Out-Null
+   Copy-Item "$env:USERPROFILE\.3lc-kaggle-plugin\host\*" "<hub-next>\home\.3lc-kaggle-plugin\host\"
+   ```
+
+   No restart needed — the gate stats the files on every check.
+
 ## Appendix — machine also runs the 1.1.x Hub
 
 Don't share state: the two stacks fight over `~/.3lc-compute/settings.json`

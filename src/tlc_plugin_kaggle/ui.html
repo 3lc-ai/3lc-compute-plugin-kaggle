@@ -3672,11 +3672,17 @@
           trCheckReady();
         }
 
-        var doneJob = function () {
+        // V1: extra.facts REPLACES the JOB() facts wholesale, so the
+        // project fact must ride here too. omitProject renders the
+        // graceful-omission branch (a pre-1.2.7 record with no recorded
+        // project: the Projects button simply doesn't render).
+        var doneJob = function (omitProject) {
+          var facts = { run_name: devRun, run_url: runUrl, weights: weights,
+                        checkpoint_sha256: devSha };
+          if (!omitProject) { facts.project_name = 'exdark-competition'; }
           return JOB('completed', 50, 50, {
             checks: PROV,
-            facts: { run_name: devRun, run_url: runUrl, weights: weights,
-                     checkpoint_sha256: devSha },
+            facts: facts,
             result: { run_name: devRun, weights: weights, epochs_completed: 50,
                       provenance: PROV, checkpoint_sha256: devSha }
           });
@@ -3728,9 +3734,9 @@
             trRenderRunView(JOB('running', 12, 50));
             el('tr-log').textContent = LOG.join('\n');
             el('tr-log-details').style.display = 'block';
-          } else if (mode === 'train-state4') {
+          } else if (mode === 'train-state4' || mode === 'train-state4-noproject') {
             gateGreen();
-            trRenderTerminal(doneJob(), false, false);
+            trRenderTerminal(doneJob(mode === 'train-state4-noproject'), false, false);
             el('tr-log').textContent = LOG.concat([
               "PASS run records model == yolo11n.pt (official checkpoint) — model='" + devCkpt + "'",
               'PASS run records imgsz == 640 — imgsz=640',

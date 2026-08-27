@@ -558,7 +558,8 @@ show the quiet kit-on-disk line.
 | `train-state2-missing` | Amber gate (val table missing) + Go to Import, Start disabled |
 | `train-state2-invalid` | Gate green + epochs 999 inline bounds error, Start disabled |
 | `train-state3` | In-run: epoch 12/50, determinate bar, metrics strip + sparklines (12-point deterministic curve), ETA, Cancel enabled |
-| `train-state4` | Live success: banner (pre-drawn check), weights + copy, Continue to Submit, provenance panel, form visible |
+| `train-state4` | Live success: banner (pre-drawn check), weights + copy, Continue to Submit + Dashboard + Projects links, provenance panel, form visible |
+| `train-state4-noproject` | state4 from a record with no recorded project (pre-1.2.7): the Projects link is omitted gracefully, everything else identical |
 | `train-state5` | Failure: CUDA-OOM banner + Copy diagnostics, epoch 7/50 static, Re-run CTA, form visible |
 | `train-state6` | Revisit summary: form hidden, static strip + provenance, Start new run |
 

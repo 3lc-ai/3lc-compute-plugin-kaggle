@@ -58,3 +58,16 @@ def test_submitted_pairing_still_resolves(store, tmp_path, monkeypatch):
     out = predictor.predict_submit_state()
     assert out["state"] == "submitted"
     assert out["submission"]["ref"] == "00000000"
+
+
+def test_host_dir_env_override(monkeypatch):
+    # P1 (v1.2.7): the organizer capability. Default resolves under the
+    # worker's home; the service env var relocates it.
+    from pathlib import Path
+
+    monkeypatch.delenv("TLC_KAGGLE_HOST_DIR", raising=False)
+    assert predictor._host_dir() == Path.home() / ".3lc-kaggle-plugin" / "host"
+    monkeypatch.setenv("TLC_KAGGLE_HOST_DIR", r"D:\organizer\host")
+    assert predictor._host_dir() == Path(r"D:\organizer\host")
+    monkeypatch.setenv("TLC_KAGGLE_HOST_DIR", "  ")  # blank means default
+    assert predictor._host_dir() == Path.home() / ".3lc-kaggle-plugin" / "host"

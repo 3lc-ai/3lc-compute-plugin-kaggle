@@ -69,8 +69,11 @@ Rules marked **[codified]** existed only as working practice until written here.
   [codified]
 - **Windows-first.** Docs speak PowerShell 5.1; write files BOM-less
   [codified]. Service env vars: `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK`
-  (W1 workaround, Windows-only) and `UV_TORCH_BACKEND=auto` (GPU torch in
-  shop installs; no-op on non-NVIDIA hosts). Mac and remote-host deltas live
+  (W1 workaround, Windows-only), `UV_TORCH_BACKEND=auto` (GPU torch in
+  shop installs; no-op on non-NVIDIA hosts), and optional
+  `TLC_KAGGLE_HOST_DIR` (organizer machines: relocates the local-scoring
+  host dir when the worker's home isn't the organizer's — TESTER_SETUP
+  organizer appendix). Mac and remote-host deltas live
   in the TESTER_SETUP_0.2 macOS appendix and TESTER_SETUP_REMOTE.
 
 ## C. Tester-finding triage (round 2)
