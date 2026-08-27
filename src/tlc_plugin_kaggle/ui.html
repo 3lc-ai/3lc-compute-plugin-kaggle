@@ -631,6 +631,42 @@
       <!-- Connection guard banner (network-level failures only) -->
       <div id="kg-conn-banner" role="status" aria-live="polite"></div>
 
+      <!-- ── Starter-kit download (a section, not a stepper step: an offer
+           above the form; participants who already unzipped the kit just
+           use the form below). Hidden until the tab-open resolution decides
+           its state; the whole section hides on Import revisit. -->
+      <div id="kg-dl-section" hidden>
+        <div class="kg-sec-head">Starter kit</div>
+        <div id="kg-dl-banner" role="status"></div>
+        <div id="kg-dl-offer" hidden>
+          <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 6px; line-height: 1.55;">
+            Downloads the competition images and labels from the 3LC content
+            network to the machine running the compute service, then verifies
+            every file against the published manifest.</p>
+          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 10px;">
+            Saves to <code id="kg-dl-dest" style="word-break: break-all;"></code>
+            on the service machine. An interrupted download keeps its finished
+            parts and resumes.</p>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button type="button" id="kg-dl-btn" class="btn btn-primary btn-sm kgi-btn"></button>
+            <span id="kg-dl-state" aria-live="polite" style="font-size: 12px; color: var(--text-muted);"></span>
+          </div>
+        </div>
+        <div id="kg-dl-progress" style="margin-top: 10px;"></div>
+        <div class="kg-log-details" id="kg-dl-log-details" style="display: none;">
+          <button type="button" class="kgl-acc-summary" id="kg-dl-log-toggle"
+                  aria-expanded="false" aria-controls="kg-dl-log-panel">
+            <span class="kgl-acc-caret" aria-hidden="true"><svg class="kgi kgi-12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></span> Show log
+          </button>
+          <div class="kgl-acc" id="kg-dl-log-panel" hidden>
+            <div class="kgl-acc-inner">
+              <pre id="kg-dl-log"></pre>
+            </div>
+          </div>
+        </div>
+        <hr class="divider">
+      </div>
+
       <!-- Success / failure banner (rendered by JS) -->
       <div id="kg-import-banner"></div>
 
@@ -1204,7 +1240,7 @@
 
       function kgStartJob(kind, params) {
         var validatePath = '/api/plugins/kaggle-exdark/validate/' +
-          (kind === 'kaggle_submit' ? 'submit' : kind);
+          (kind === 'kaggle_submit' ? 'submit' : kind === 'download_kit' ? 'download' : kind);
         var stamp = Date.now();
         return API.authFetch(computeUrl + validatePath, {
           method: 'POST',
@@ -1702,6 +1738,7 @@
         });
       }
       kgBindAccordion('kg-log-toggle', 'kg-log-panel');
+      kgBindAccordion('kg-dl-log-toggle', 'kg-dl-log-panel');
       kgBindAccordion('tr-adv-toggle', 'tr-adv-panel');
       kgBindAccordion('tr-mc-toggle', 'tr-mc-panel');
       kgBindAccordion('tr-log-toggle', 'tr-log-panel');
@@ -2093,6 +2130,9 @@
             kgHost = !!cfg._meta.host;
             var seg = el('ps-src-seg');
             if (seg) { seg.hidden = !kgHost || !!kgDevMode; }
+            // Download destination fact (server-resolved default). Guarded
+            // like every page-load live value: fixtures keep their own path.
+            if (!kgDevMode) { el('kg-dl-dest').textContent = String(cfg._meta.kit_dest || ''); }
           }
           resolve();
         })
@@ -2889,6 +2929,10 @@
         if (animate) { kglEnter(el('kg-import-form')); el('kg-yaml').focus(); }
         kgRenderPreflight(null);
         kgCheckReady();
+        // The download section belongs to the form states; revisit and the
+        // running-import reconnect hide it (the kit is a solved problem there).
+        dlShowSection(true);
+        dlInit();
         configLoaded.then(function () {
           if (el('kg-yaml').value.trim()) { kgRunPreflight(true); }
         });
@@ -2898,6 +2942,7 @@
         var snap = state.snapshot || {};
         kgLastJobId = String(snap.job_id || '');
         kgRevisitActive = true;
+        dlShowSection(false);
         el('kg-import-form').style.display = 'none';
         var result = { tables: {}, mechanisms: snap.mechanisms || {} };
         ['train', 'val', 'test'].forEach(function (s) {
@@ -2944,6 +2989,7 @@
               // "running" (server-side pid check).
               kgImporting = true;
               kgCheckReady();
+              dlShowSection(false);
               el('kg-import-spinner').style.display = 'inline-block';
               el('kg-import-state').textContent = 'Importing… (safe to navigate away)';
               pollTimer = setInterval(function () { poll(running.id); }, 1000);
@@ -2959,6 +3005,268 @@
           });
       }
 
+      // ── Starter-kit download section (v1.2.7) ────────────────────────
+      // A compact state machine inside the Import tab: offer → running
+      // (download / extract / verify phases) → verified / failure /
+      // cancelled → quiet revisit line. The job is kind "download_kit"; on
+      // success the SERVER writes session.dataset_yaml (the A5 writer) and
+      // this client re-reads /config so the value re-enters through the
+      // session funnel — job facts render from the job record, session
+      // facts only ever from the session (ui-notes §14, two funnels).
+      var dlJobId = null, dlPollTimer = null, dlRunning = false;
+      var dlLastChecks = null;
+      var KG_BTN_DL = kgIcon('download', 'kgi-16') + '<span>Download starter kit</span>';
+      var KG_BTN_DL_RESUME = kgIcon('download', 'kgi-16') + '<span>Resume download</span>';
+      el('kg-dl-btn').innerHTML = KG_BTN_DL;
+
+      function dlMB(bytes) { return fmtCount(Math.round((bytes || 0) / 1e6)); }
+
+      function dlLogReset() {
+        el('kg-dl-log-details').style.display = 'none';
+        el('kg-dl-log-toggle').setAttribute('aria-expanded', 'false');
+        var panel = el('kg-dl-log-panel');
+        panel.classList.remove('open');
+        panel.hidden = true;
+        el('kg-dl-log').textContent = '';
+      }
+
+      function dlBuildDiagnostics() {
+        return kgBuildDiagnosticsCore([
+          dlJobId ? ['download job: ' + dlJobId] : null,
+          kgChecksSection('download checks', dlLastChecks),
+          kgLogTailSection(el('kg-dl-log'))
+        ]);
+      }
+
+      function dlShowSection(show) { el('kg-dl-section').hidden = !show; }
+
+      function dlShowOffer(resume, animate) {
+        el('kg-dl-offer').hidden = false;
+        el('kg-dl-progress').innerHTML = '';
+        el('kg-dl-btn').innerHTML = resume ? KG_BTN_DL_RESUME : KG_BTN_DL;
+        el('kg-dl-btn').disabled = !!kgDevMode;
+        el('kg-dl-state').textContent = '';
+        if (animate) { kglEnter(el('kg-dl-offer')); }
+      }
+
+      // Quiet revisit line: the kit is a solved problem, one muted fact.
+      function dlRenderQuiet(fileCount, when) {
+        el('kg-dl-offer').hidden = true;
+        el('kg-dl-progress').innerHTML = '';
+        el('kg-dl-banner').innerHTML =
+          '<div class="kg-preflight-ok">' + kgIcon('check-circle') +
+          '<span>Starter kit on disk and verified' +
+          (fileCount ? ' (' + fmtCount(fileCount) + ' files)' : '') +
+          (when ? ', downloaded ' + kgFmtAgo(when) : '') + '.</span></div>';
+      }
+
+      function dlRenderSuccess(job, animate) {
+        el('kg-dl-offer').hidden = true;
+        el('kg-dl-progress').innerHTML = '';
+        var files = (job.result || {}).file_count;
+        el('kg-dl-banner').innerHTML =
+          '<div class="kg-callout ok' + (animate ? ' kgl-enter' : '') + '">' + kgIcon('check-circle') +
+          '<span><strong>Starter kit downloaded and verified.</strong> ' +
+          (files ? fmtCount(files) + ' files match the published manifest. ' : '') +
+          'The dataset YAML path below is filled in and ready to import.</span></div>';
+      }
+
+      function dlRenderFail(job, animate) {
+        var failed = (job.checks || []).filter(function (c) { return !c.ok; });
+        var lines = failed.map(function (c) {
+          return '<div style="font-size: 12px; margin-top: 4px;">' +
+            esc(c.label) + (c.detail ? ' <span style="color: var(--text-muted);">(' + esc(c.detail) + ')</span>' : '') + '</div>';
+        }).join('');
+        el('kg-dl-banner').innerHTML =
+          '<div class="kg-callout err' + (animate ? ' kgl-enter' : '') + '">' + kgIcon('x-circle') +
+          '<span><strong>Download failed.</strong> ' + esc(job.error || 'See the log for details.') +
+          lines + '<div style="margin-top: 8px;">' + kgDiagBtn() + '</div></span></div>';
+        kgBindDiag(el('kg-dl-banner'), dlBuildDiagnostics);
+        dlShowOffer(true, false);
+      }
+
+      function dlRenderCancelled(animate) {
+        el('kg-dl-banner').innerHTML =
+          '<div class="kg-callout info' + (animate ? ' kgl-enter' : '') + '">' + kgIcon('info') +
+          '<span>Download cancelled. Finished parts are kept, so downloading again resumes where it stopped.</span></div>';
+        dlShowOffer(true, false);
+      }
+
+      function dlRenderProgress(job) {
+        var p = job.progress || {};
+        var box = el('kg-dl-progress');
+        if (!box.querySelector('.kg-run-head')) {
+          box.innerHTML =
+            '<div class="kg-run-head">' +
+            '<span class="name">Starter kit download</span>' +
+            '<span class="badge badge-status-running">running</span>' +
+            '<span class="kg-run-meta"><span class="epoch" id="kg-dl-prog-label"></span>' +
+            '<span id="kg-dl-prog-elapsed"></span></span>' +
+            '<button type="button" id="kg-dl-cancel" class="btn btn-ghost btn-sm" style="margin-left: auto;">Cancel</button></div>' +
+            '<div class="plugin-progress-wrap"><div class="plugin-progress-bar" id="kg-dl-prog-bar" style="width:0%"></div></div>' +
+            '<span class="kg-visually-hidden" id="kg-dl-announce" aria-live="polite"></span>';
+          el('kg-dl-cancel').addEventListener('click', dlCancel);
+        }
+        var label = String(p.label || 'Starting…');
+        if (p.phase === 'download' && p.bytes_total) {
+          label += ' · ' + dlMB(p.bytes_done) + ' of ' + dlMB(p.bytes_total) + ' MB';
+        }
+        // Plain textContent, NOT kgSwapText: the swap's deferred write rides
+        // a transitionend that never fires on an element built by innerHTML
+        // in the same frame (no style recalc between creation and the
+        // opacity write), which left this label permanently blank (S1). A
+        // per-second byte counter should not fade anyway — motion rule 1.
+        var labelEl = el('kg-dl-prog-label');
+        if (labelEl.textContent !== label) { labelEl.textContent = label; }
+        el('kg-dl-prog-elapsed').textContent = job.created_at
+          ? 'elapsed ' + fmtDur(Date.now() / 1000 - job.created_at) : '';
+        var pct = Math.min(100, Math.round(p.percent || 0));
+        el('kg-dl-prog-bar').style.width = pct + '%';
+        kgSetTitleProgress(pct);
+        // Screen-reader announcements throttle to quartiles, not poll ticks.
+        var quartile = Math.floor(pct / 25) * 25;
+        var ann = el('kg-dl-announce');
+        if (quartile > 0 && ann.textContent !== 'Download ' + quartile + '% complete') {
+          ann.textContent = 'Download ' + quartile + '% complete';
+        }
+      }
+
+      // Cancel is cheap here (finished shards resume), so no confirm — the
+      // cancelled callout states the resume fact instead.
+      function dlCancel() {
+        if (kgDevMode || !dlJobId) { return; }
+        var btn = el('kg-dl-cancel');
+        if (btn) { btn.disabled = true; btn.textContent = 'Cancelling…'; }
+        API.authFetch(computeUrl + '/api/plugins/jobs/' + dlJobId + '/cancel', { method: 'POST' })
+          .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Cancel'; } });
+      }
+
+      // Two funnels (ui-notes §14): dataset_yaml is a SESSION fact the
+      // server wrote (the A5 writer). Re-read /config so it enters through
+      // the session funnel instead of being copied out of job facts.
+      function dlAdoptSessionYaml() {
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/config')
+          .then(function (r) { return r.json(); })
+          .then(function (cfg) {
+            var yaml = String(((cfg || {}).session || {}).dataset_yaml || '');
+            if (!yaml || !kgSession) { return; }
+            kgSession.dataset_yaml = yaml;
+            el('kg-yaml').value = yaml;
+            kgRunPreflight(true);
+          })
+          .catch(function () { /* the offer's help still names the path */ });
+      }
+
+      function dlTerminal(job, animate) {
+        clearInterval(dlPollTimer);
+        dlPollTimer = null;
+        dlRunning = false;
+        kgClearTitleProgress();
+        el('kg-dl-progress').innerHTML = '';
+        dlLastChecks = job.checks || null;
+        if (job.status === 'completed' && !(job.result || {}).cancelled) {
+          dlRenderSuccess(job, animate);
+          dlAdoptSessionYaml();
+        } else if (job.status === 'cancelled' || (job.result || {}).cancelled) {
+          dlRenderCancelled(animate);
+        } else {
+          dlRenderFail(job, animate);
+        }
+      }
+
+      function dlPoll(jobId) {
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs/' + jobId)
+          .then(function (r) { return r.json(); })
+          .then(function (job) {
+            el('kg-dl-log-details').style.display = 'block';
+            el('kg-dl-log').textContent = (job.log || []).join('\n');
+            if (job.status === 'running') { dlRenderProgress(job); return; }
+            dlTerminal(job, true);
+          })
+          .catch(function (e) {
+            if (kgConn.fail(e, function () {
+              if (!dlPollTimer) { dlPollTimer = setInterval(function () { dlPoll(jobId); }, 1000); }
+            })) {
+              // Network-level: the guard owns the banner and resumes this
+              // poll on reconnect. The download continues on the service.
+              clearInterval(dlPollTimer);
+              dlPollTimer = null;
+              return;
+            }
+            clearInterval(dlPollTimer);
+            dlPollTimer = null;
+            dlRunning = false;
+            kgClearTitleProgress();
+            el('kg-dl-progress').innerHTML = '';
+            el('kg-dl-banner').innerHTML = '<div class="kg-callout warn">' + kgIcon('alert-triangle') +
+              '<span>Status check failed: ' + esc(e.message || String(e)) +
+              '. The download may still be running on the service; reopen this tab to reconnect.</span></div>';
+            dlShowOffer(true, false);
+          });
+      }
+
+      function dlStart() {
+        if (kgDevMode || dlRunning) { return; }
+        dlRunning = true;
+        el('kg-dl-banner').innerHTML = '';
+        el('kg-dl-btn').disabled = true;
+        el('kg-dl-state').textContent = 'Starting…';
+        dlLogReset();
+        kgStartJob('download_kit', {})
+          .then(function (res) {
+            if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
+            dlJobId = res.body.job_id;
+            el('kg-dl-offer').hidden = true;
+            el('kg-dl-state').textContent = '';
+            dlRenderProgress({ status: 'running', progress: {} });
+            dlPollTimer = setInterval(function () { dlPoll(dlJobId); }, 1000);
+          })
+          .catch(function (e) {
+            dlRunning = false;
+            el('kg-dl-btn').disabled = !!kgDevMode;
+            el('kg-dl-state').textContent = kgConn.fail(e)
+              ? 'Download didn’t start (service unreachable). Try again once reconnected.'
+              : 'Download request failed: ' + e.message;
+          });
+      }
+
+      el('kg-dl-btn').addEventListener('click', function () {
+        if (kgDevMode) { return; }
+        dlStart();
+      });
+
+      // Section state resolution: running download → reconnect, else a
+      // verified kit on disk → quiet line, else the offer. Fetch-free under
+      // ?kgdev (fixtures own the section, same H1 rule as the other
+      // page-load fetches).
+      function dlInit() {
+        if (kgDevMode) { dlShowOffer(false, false); return; }
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs?kind=download_kit')
+          .then(function (r) { return r.json(); })
+          .catch(function () { return []; })
+          .then(function (list) {
+            var running = (list || []).filter(function (j) { return j.status === 'running'; })[0];
+            if (running && !dlPollTimer) {
+              dlJobId = running.id;
+              dlRunning = true;
+              el('kg-dl-offer').hidden = true;
+              dlPollTimer = setInterval(function () { dlPoll(running.id); }, 1000);
+              return;
+            }
+            return API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/download/state')
+              .then(function (r) { return r.json(); })
+              .catch(function () { return { state: 'empty' }; })
+              .then(function (state) {
+                if (state.state === 'success') {
+                  dlJobId = String(state.job_id || '');
+                  dlRenderQuiet(state.file_count, state.created_at);
+                } else {
+                  dlShowOffer(false, false);
+                }
+              });
+          });
+      }
+
       // ── Dev affordance: ?kgdev=<state> renders each UI state from static
       // fixtures for screenshotting — no fetches, no job side effects.
       // Values: state1, state2, state2-mismatch, state2-error, state3,
@@ -2969,7 +3277,7 @@
       // kgDevMode so no later recalc can re-enable, and the click handlers
       // guard on it as the hard backstop.
       function kgDevDisableActions() {
-        ['kg-import-btn', 'tr-start-btn', 'ps-predict-btn', 'ps-submit-btn']
+        ['kg-import-btn', 'kg-dl-btn', 'tr-start-btn', 'ps-predict-btn', 'ps-submit-btn']
           .forEach(function (id) {
             var btn = el(id);
             btn.disabled = true;
@@ -3037,9 +3345,112 @@
           }
         };
 
+        // Download-section fixtures (?kgdev=dl-*): real shard names and
+        // byte counts from the published v1 manifest, so screenshots show
+        // the true shapes. devDlYaml is the A5-written path (under the
+        // plugin home), distinct from devYaml's hand-unzipped Downloads path.
+        var devDest = 'C:\\Users\\participant\\.3lc-kaggle-plugin\\data\\exdark-low-light';
+        var devDlYaml = devDest + '\\v1\\starter_kit\\dataset.yaml';
+        var DLLOG = [
+          'Fetching https://competitions.3lc.ai/kaggle/exdark-low-light/starter-kit/v1/manifest.json',
+          'PASS manifest fetched from the CDN — v1: 14004 files, 623,648,864 bytes in 10 shards',
+          'PASS enough disk space at the destination — 412.0 GB free, ~1.3 GB needed',
+          'part-00-images-test.zip: 59,969,490 bytes, sha256 verified',
+          'part-01-images-train-00.zip: 73,460,567 bytes, sha256 verified',
+          'part-02-images-train-01.zip: 73,382,298 bytes, sha256 verified',
+          'part-03-images-train-02.zip: 73,500,242 bytes, sha256 verified',
+          'part-04-images-train-03.zip: 73,549,314 bytes, sha256 verified',
+          'part-05-images-train-04.zip: 73,532,776 bytes, sha256 verified',
+          'part-06-images-train-05.zip: 73,532,479 bytes, sha256 verified',
+          'part-07-images-train-06.zip: 61,659,130 bytes, sha256 verified',
+          'part-08-images-val.zip: 61,329,085 bytes, sha256 verified',
+          'part-09-root-labels.zip: 1,496,845 bytes, sha256 verified',
+          'PASS all 10 shards downloaded and sha256-verified — 625,412,226 bytes',
+          'PASS all 10 shards extracted — 14004 files',
+          'PASS extracted kit matches the manifest — 14004/14004 files verified',
+          'PASS dataset.yaml present at the kit root — ' + devDlYaml,
+          'Session updated: Import now points at the downloaded dataset.yaml',
+          'Shard archives removed after verification (manifest.json kept)'
+        ];
+
         function apply() {
           kgRevisitActive = false;
           el('kg-import-state').textContent = '';
+          // Download-section decoration for the classic import states:
+          // state1 is a true first visit (the offer), the yaml-bearing
+          // states have the kit on disk (quiet line), state3 hides the
+          // section like the live running-import resolution does, and
+          // state6's kgRenderRevisit hides it itself.
+          if (mode && mode.indexOf('state') === 0) {
+            if (mode === 'state1') {
+              dlShowSection(true);
+              el('kg-dl-dest').textContent = devDest;
+              dlShowOffer(false, false);
+            } else if (mode === 'state3' || mode === 'state6') {
+              dlShowSection(false);
+            } else {
+              dlShowSection(true);
+              dlRenderQuiet(14004, Date.now() / 1000 - 7200);
+            }
+          }
+          if (mode && mode.indexOf('dl-') === 0) {
+            dlShowSection(true);
+            el('kg-dl-dest').textContent = devDest;
+            var dlNow = Date.now() / 1000;
+            if (mode === 'dl-success' || mode === 'dl-revisit') {
+              el('kg-yaml').value = devDlYaml;
+              kgPreflight = pfGreen;
+              kgRenderPreflight(pfGreen);
+            } else {
+              el('kg-yaml').value = '';
+              kgPreflight = null;
+              kgRenderPreflight(null);
+            }
+            kgCheckReady();
+            if (mode === 'dl-empty') {
+              dlShowOffer(false, false);
+            } else if (mode === 'dl-running' || mode === 'dl-verify') {
+              el('kg-dl-offer').hidden = true;
+              dlRenderProgress({
+                status: 'running',
+                created_at: dlNow - (mode === 'dl-verify' ? 51 : 23),
+                progress: mode === 'dl-verify'
+                  ? { percent: 97, label: 'Verifying files', phase: 'verify' }
+                  : { percent: 37, label: 'Downloading shard 4/10', phase: 'download',
+                      bytes_done: 231402524, bytes_total: 625412226 }
+              });
+              el('kg-dl-log').textContent = DLLOG.slice(0, mode === 'dl-verify' ? 15 : 7).join('\n');
+              el('kg-dl-log-details').style.display = 'block';
+            } else if (mode === 'dl-success') {
+              dlRenderSuccess({ result: { file_count: 14004 } }, false);
+              el('kg-dl-log').textContent = DLLOG.join('\n');
+              el('kg-dl-log-details').style.display = 'block';
+            } else if (mode === 'dl-fail') {
+              dlRenderFail({
+                error: 'Could not download part-04-images-train-03.zip: connection ended at ' +
+                  '41,943,040 of 73,549,314 bytes. Run the download again. Completed shards ' +
+                  'are kept, and the job resumes where it stopped.',
+                checks: []
+              }, false);
+              el('kg-dl-log').textContent = DLLOG.slice(0, 7).concat([
+                'part-04-images-train-03.zip: connection ended at 41,943,040 of 73,549,314 bytes — retrying',
+                'FAILED: Could not download part-04-images-train-03.zip: connection ended at 41,943,040 of 73,549,314 bytes.'
+              ]).join('\n');
+              el('kg-dl-log-details').style.display = 'block';
+            } else if (mode === 'dl-cancelled') {
+              dlRenderCancelled(false);
+              el('kg-dl-log').textContent = DLLOG.slice(0, 7).concat([
+                'Cancellation requested — stopping at the next checkpoint.',
+                'Cancelled — completed shards are kept; running the download again resumes.'
+              ]).join('\n');
+              el('kg-dl-log-details').style.display = 'block';
+            } else if (mode === 'dl-revisit') {
+              dlRenderQuiet(14004, dlNow - 7200);
+            } else {
+              kgInitImportTab();   // unknown dl-* value → normal resolution
+            }
+            return;
+          }
           if (mode === 'state1') {
             el('kg-yaml').value = '';
             kgPreflight = null;

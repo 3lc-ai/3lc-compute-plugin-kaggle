@@ -419,7 +419,7 @@ class KaggleController(Controller):
         _meta block (version, repository) the fragment renders in the
         footer and stamps into diagnostics."""
         import tlc_plugin_kaggle
-        from tlc_plugin_kaggle import config_store, constants, predictor
+        from tlc_plugin_kaggle import config_store, constants, downloader, predictor
 
         out = config_store.load()
         # The session always arrives populated: missing fields (fresh
@@ -442,6 +442,13 @@ class KaggleController(Controller):
             # Split<->dataset mapping for the pickers/gates: the fragment
             # keeps zero domain literals (DP-11 scoping + split asserts).
             "dataset_prefix": constants.DATASET_PREFIX,
+            # Starter-kit download facts for the Import tab's Download
+            # section: the server-resolved default destination (a string
+            # only — no directory is created until a download runs) and
+            # the pinned kit version. The fragment renders these, never
+            # defines them.
+            "kit_dest": str(downloader.DEFAULT_DEST),
+            "kit_version": constants.STARTER_KIT_VERSION,
         }
         return out
 

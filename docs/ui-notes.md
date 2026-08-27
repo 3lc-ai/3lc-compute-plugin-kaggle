@@ -158,7 +158,7 @@ their log formatting.
 | `kgMotionOK()` | Live `prefers-reduced-motion` check; gate any JS that waits on animation/transition end-events |
 | `kglEnter(elm)` | Re-triggerable entrance for a persistent element (fresh innerHTML embeds `kgl-enter` in markup instead) |
 | `kgSwapHtml(elm, html)` | Fading label swap on buttons (instant under reduce); relies on the gated opacity transition |
-| `kgSwapText(elm, text)` | Fading text swap for stat values; no-op when unchanged, so poll ticks never blink. Needs a gated opacity transition on the element |
+| `kgSwapText(elm, text)` | Fading text swap for stat values; no-op when unchanged, so poll ticks never blink. Needs a gated opacity transition on the element — AND an element that has been painted before the first swap: the deferred write rides `transitionend`, which never fires on an element built by innerHTML in the same frame (the S1 blank-label finding, v1.2.7). For a label updated on every poll tick, use plain guarded `textContent` instead — a per-second counter should not fade (motion rule 1) |
 | `kgConn.fail(err, resume?)` | Connection guard: returns true iff network-level (TypeError); shows retrying banner in EVERY finished tab's `*-conn-banner` slot (one guard, one state), backoff 2/5/10/15s pings, fires `resume` on reconnect (resume polls/preflights/gates — never imports/trains/submits) |
 | `kgBuildDiagnosticsCore(sections)` | Fenced ```3lc-kaggle-diagnostics``` block: version/OS/time header + caller sections (falsy sections skipped — no placeholders). Per-tab builders compose it: `kgBuildDiagnostics` (Import: yaml, preflight JSON, checks, log tail), `trBuildDiagnostics` (Train: job id, HP set, provenance, log tail) |
 | `kgChecksSection(title, checks)` / `kgLogTailSection(logEl)` | Reusable diagnostics sections (PASS/FAIL lines; last-40-lines log tail) |
@@ -437,14 +437,63 @@ table-URL overrides. The rules, settled like everything else here:
   explains it, a reload re-derives.
 - **Config writers are user-action-initiated ONLY.** The sole read-path
   write in the plugin is the marker-guarded one-shot migration in
-  `config_store.load()`. Current complete writer list (v1.2.6):
+  `config_store.load()`. Current complete writer list (v1.2.7):
   `kgSetUrlOverride` (URL edit/pick), `kgImportCfgSettled` (Import form
   settle + import start), the device blur handler, the slug blur handler,
-  and the three whole-tab action saves (train start, predict click, submit
-  click). **A `saveTabConfig`/`kgSessionSave` call reachable from a
-  render, sync, poll, or tab-enter path is a regression of the v1.2.5
+  the three whole-tab action saves (train start, predict click, submit
+  click), and ONE server-side writer — the download job's A5 write of
+  `session.dataset_yaml` (`downloader._publish_session_yaml`, approved at
+  the v1.2.7 Phase 0 gate). A5 is still user-action-initiated (the
+  Download click starts the job) and last-writer-wins whole-session: the
+  store replaces the session object, so a browser save racing the job's
+  write wins or loses whole, never field-by-field. **A
+  `saveTabConfig`/`kgSessionSave` call reachable from a render, sync,
+  poll, or tab-enter path is a regression of the v1.2.5
   cross-project-mixture class** — the store rejects retired keys (400) but
   cannot reject a bad moment; this rule is the guard for that.
+- **Two funnels, never crossed.** A value has exactly one road into the
+  DOM. SESSION facts travel the session funnel: server store →
+  `GET /config` → `kgSession` → the projection/derivation renderers. JOB
+  facts (bytes, checks, run URLs, file counts) render at render time from
+  the job record. When a JOB produces a SESSION fact (the download job
+  writes `dataset_yaml`), the client does not copy it out of the job
+  record — it re-reads `/config` so the value enters through the session
+  funnel (`dlAdoptSessionYaml`). Copying job facts into session-rendered
+  fields would give a session value a second render moment, the exact bug
+  class the derive-don't-store rule above exists to prevent.
+
+## 15. Starter-kit download section (v1.2.7)
+
+The Import tab gained a **section-scale state machine**: the Download
+section sits above the form (kg-sec-head "Starter kit"), an *offer*, not a
+stepper step — participants who already unzipped the kit just use the form
+below it. The pattern for any future in-tab section:
+
+- **Compact states**: offer → running (download / extract / verify phases
+  on one determinate bar, generic `percent`/`label` progress) → verified /
+  failure / cancelled → quiet revisit line. Terminal success is one
+  `kg-callout ok`; revisit is one muted `kg-preflight-ok` line — a solved
+  problem earns one quiet fact, not a results panel.
+- **Section visibility follows the tab's resolution**: form states show it
+  (`kgEnterFormState` → `dlInit()`), Import revisit and the running-import
+  reconnect hide it. The section resolves its own state inside that
+  (running download_kit job → reconnect, `/download/state` success → quiet
+  line, else the offer).
+- **Cancel without confirm**: cancelling a download is cheap (finished
+  shards resume), so the one destructive control skips the confirm and the
+  cancelled callout states the resume fact instead. Failure banners carry
+  the backend's participant-facing error (which names the resume behavior)
+  plus Copy diagnostics (`dlBuildDiagnostics`); the CTA relabels to
+  "Resume download".
+- **No literals**: the destination fact renders from `_meta.kit_dest`
+  (server-resolved `downloader.DEFAULT_DEST`), the version from
+  `_meta.kit_version`; sizes and counts render from the job's progress and
+  result. The section's copy names no sizes of its own.
+- **A5 + two funnels** (§14): on success the server wrote
+  `session.dataset_yaml`; the client re-reads `/config`, updates
+  `kgSession`, fills the YAML field, and re-runs the preflight — the
+  Import gate goes green without a keystroke, which is the section's whole
+  payoff.
 
 ---
 
@@ -462,6 +511,23 @@ table-URL overrides. The rules, settled like everything else here:
 | `state4` | Success: val CREATED + train/test REUSED, GT-guard note, grouped checks, log |
 | `state5` | Failure: val count + GT-leak failed, remediation, Re-run CTA, Copy diagnostics |
 | `state6` | Revisit (form hidden, Start over) |
+
+The classic states also decorate the Download section: `state1` shows the
+offer (a true first visit), `state3`/`state6` hide the section (like the
+live running-import and revisit resolutions), and the yaml-bearing states
+show the quiet kit-on-disk line.
+
+### ?kgdev fixture map — Download section (Import tab)
+
+| Value | Renders |
+|---|---|
+| `dl-empty` | The offer: intro copy, destination fact, Download CTA (disabled demo), empty import form |
+| `dl-running` | Determinate download: shard 4/10, 231 of 625 MB, 37%, elapsed, Cancel, log open |
+| `dl-verify` | Verify phase: 97%, "Verifying files", full shard log |
+| `dl-success` | Green verified banner (14,004 files), yaml field filled with the A5 path, green preflight |
+| `dl-fail` | Red banner with the mid-shard network error + resume copy, Copy diagnostics, Resume CTA |
+| `dl-cancelled` | Info callout (finished parts kept), Resume CTA |
+| `dl-revisit` | Quiet kit-on-disk line + filled yaml + green preflight |
 
 ### ?kgdev fixture map — Train tab
 

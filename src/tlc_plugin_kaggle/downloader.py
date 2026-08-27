@@ -52,8 +52,9 @@ _RETRIES = 2  # attempts per shard before the job fails
 # fork's kits apart; the version dir under it keeps v2 from colliding with v1.
 DEFAULT_DEST = Path.home() / ".3lc-kaggle-plugin" / "data" / constants.COMPETITION_ID
 
+# Participant-facing (renders in a UI callout, so no em dashes: ui-notes §4).
 _RERUN_RESUMES = (
-    "Run the download again — completed shards are kept and the job resumes "
+    "Run the download again. Completed shards are kept, and the job resumes "
     "where it stopped."
 )
 

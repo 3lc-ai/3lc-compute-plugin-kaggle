@@ -75,6 +75,70 @@ glitch — and diagnostics blocks stamp this same version, so triage
 trusts it. The version string is hand-synced in exactly three places:
 pyproject.toml, plugin.toml, and the catalog manifest.
 
+## Starter-kit data releases (separate from code releases)
+
+The competition data ships through its own channel and its own rules. None
+of the code-release steps above apply to it, and vice versa.
+
+**The CDN prefix is the distribution.** `make_kit_manifest.py` generates
+manifest.json + sharded zips into `cdn/<version>/`; the whole version dir is
+staged to `competitions.3lc.ai/kaggle/<competition_id>/starter-kit/<version>/`
+(the prefix `constants.starter_kit_prefix()` resolves). The downloader
+verifies per-file sha256 from the manifest — never the HTTP ETag, because the
+shards are multipart uploads whose ETags are `"<hash>-<parts>"` markers, not
+content MD5s (verified at staging, 2026-08-27).
+
+- **A version prefix is IMMUTABLE once staged.** Updating the kit means
+  regenerating with a NEW version (`v2`, ...), staging that, and bumping
+  `STARTER_KIT_VERSION` in `constants.py` in a normal code release. Never
+  overwrite objects under an existing version: the 24-hour CDN edge cache
+  would serve a mixed manifest/shard set that fails checksum verification in
+  ways that look like corruption.
+- **Data tags use the `kit-*` namespace, never `v*`** (e.g.
+  `kit-exdark-v1`), so they can never be confused with code tags — the
+  catalog's `source` pins parse `v*` tags only.
+- **The committed manifest is the verification anchor.**
+  `kit/<competition_id>/<version>/manifest.json` in this repo is a byte copy
+  of the staged manifest. The generator is deterministic (fixed zip
+  timestamps, sorted entries), so anyone with the kit tree can REBUILD the
+  shards and arrive at the same hashes — the committed manifest is
+  verifiable, not trusted. That determinism is what makes "CDN + committed
+  manifest" a sufficient canonical record.
+- **Disaster recovery is a GitHub release asset**: tag `kit-exdark-v1`
+  carries `exdark_starter_kit_canonical.zip` (587 MB, sha256
+  `e84105db8f2a74cdaba02f54adcd79461a82b4254ebfa4fd6d05c69919e504ac`;
+  GitHub's computed digest matches the local hash). This zip is the recovery
+  copy of the KIT TREE and is **NOT byte-identical to the CDN shards** —
+  different artifacts on purpose: the zip archives the tree, the shards are
+  the deterministic distribution build generated FROM it. Do not try to
+  reconcile their hashes; parity is checked per-file with
+  `scripts/check_kit_parity.py` against the manifest, on either artifact.
+- **The kit release is the repo's only GitHub Release entry**, so it wears
+  GitHub's "Latest" badge by default. That is cosmetic and harmless — the
+  catalog drives installs, not the badge. Do NOT "fix" it by creating
+  release entries for code tags; code versions are git tags only, and
+  release entries for them would add a maintenance surface this repo
+  deliberately does not have.
+
+### Staging to the CDN (the pipeline facts)
+
+Upload the version dir to the dev bucket, then sync dev → prod:
+
+- Azure DevOps access must be **Basic**, not Stakeholder — Stakeholder hides
+  the Run option and fails with "Failed to load Azure Repos source specified
+  by this pipeline".
+- Prod (`3lc-competitions`) is a separate AWS account, reachable ONLY via
+  the sync pipeline `TLC-Sync-Public-Examples-OnDemand` (definitionId=151).
+- The pipeline's "List of folders to sync" parameter defaults to `- /`
+  (EVERYTHING). That default is dangerous: always scope it to the one
+  prefix being staged (e.g. `- /kaggle/exdark-low-light`) so a mis-selected
+  bucket pair cannot sync unrelated prefixes.
+- Timing reference: dev→prod of 628 MB took 23 seconds (in-region S3 copy);
+  the slow leg is the upload TO dev from a home connection.
+- Verify after staging: HEAD returns `Accept-Ranges: bytes`, a `-r 0-1023`
+  GET returns 206/1024 (the downloader's resume depends on ranges), and the
+  manifest round-trips byte-identically through the CDN.
+
 ## Why the gist exists at all
 
 The Hub fetches catalog sources **unauthenticated**, and this repo is private,
