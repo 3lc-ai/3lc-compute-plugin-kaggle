@@ -236,6 +236,13 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   cancelled keeps the form + info callout); else the form. Mid-run
   disconnects show "Connection lost. Training continues on the host."
   and the guard resumes polling on reconnect — never restarts anything.
+- **Success-banner actions** (Feature 2, v1.2.7): Continue to Submit ·
+  Open Run in Dashboard · Open Run in Projects. The Projects href is
+  `/projects/<project>#runs` built at render time from the RUN's own
+  recorded project (`facts.project_name`, stamped by the trainer;
+  `params` fallback for older records) — never the session's current
+  project and never `kgApplyDerivedUrls`: a completed run's project is a
+  job fact, and the session may have moved on by revisit time.
 - **Provenance panel**: the run-record assertions render as verdict +
   checks ("Verified provenance recorded" / group head "Provenance
   verified") the moment the record carries them; cascade on live
@@ -470,10 +477,23 @@ stepper step — participants who already unzipped the kit just use the form
 below it. The pattern for any future in-tab section:
 
 - **Compact states**: offer → running (download / extract / verify phases
-  on one determinate bar, generic `percent`/`label` progress) → verified /
-  failure / cancelled → quiet revisit line. Terminal success is one
-  `kg-callout ok`; revisit is one muted `kg-preflight-ok` line — a solved
-  problem earns one quiet fact, not a results panel.
+  on one determinate bar, generic `percent`/`label` progress; the header
+  label carries phase + shard N/10 + bytes so a slow link never reads as
+  stuck) → verified / failure / cancelled → quiet revisit line. Terminal
+  success is one `kg-callout ok`; revisit is one muted `kg-preflight-ok`
+  line — a solved problem earns one quiet fact, not a results panel.
+- **Claims match checks** (T1): the revisit line says "downloaded Nh ago
+  (14,004 files verified then)" because download_state only stats
+  dataset.yaml — it never says "verified" in the present tense on a
+  one-file check. The line's quiet **Verify** action runs the real
+  files[] pass (`/download/verify` → `downloader.verify_now`, against the
+  kept manifest); success re-renders "verified just now", failure names
+  the missing/changed counts and re-offers the download.
+- **Gate defers to the section** (U1): starting a download for the kit's
+  own path idles a non-green Import preflight (the stale not-found error
+  would read as breakage next to the cancelled/running callouts); success
+  re-gates through the session funnel, cancel and failure leave the gate
+  idle rather than red.
 - **Section visibility follows the tab's resolution**: form states show it
   (`kgEnterFormState` → `dlInit()`), Import revisit and the running-import
   reconnect hide it. The section resolves its own state inside that
@@ -527,7 +547,7 @@ show the quiet kit-on-disk line.
 | `dl-success` | Green verified banner (14,004 files), yaml field filled with the A5 path, green preflight |
 | `dl-fail` | Red banner with the mid-shard network error + resume copy, Copy diagnostics, Resume CTA |
 | `dl-cancelled` | Info callout (finished parts kept), Resume CTA |
-| `dl-revisit` | Quiet kit-on-disk line + filled yaml + green preflight |
+| `dl-revisit` | Quiet downloaded-kit line ("downloaded 2h ago, 14,004 files verified then") + Verify action + filled yaml + green preflight |
 
 ### ?kgdev fixture map — Train tab
 

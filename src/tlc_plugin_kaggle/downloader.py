@@ -289,6 +289,36 @@ def download_state() -> dict[str, Any]:
     return {"state": "empty"}
 
 
+def verify_now() -> dict[str, Any]:
+    """On-demand full files[] re-verification for the revisit Verify action.
+
+    Uses the manifest kept next to the extracted kit (the version prefix is
+    immutable, so the local copy equals the CDN's). The revisit line's claim
+    is exactly as strong as its check; this is the strong check (T1)."""
+    import json
+
+    state = download_state()
+    if state.get("state") != "success":
+        return {"ok": False, "error": "No completed download on record. Download the starter kit first."}
+    version_dir = Path(str(state["dest_dir"])) / str(state.get("kit_version") or constants.STARTER_KIT_VERSION)
+    manifest_path = version_dir / "manifest.json"
+    if not manifest_path.is_file():
+        return {"ok": False, "error": f"manifest.json is no longer on disk at {manifest_path}."}
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    delta = verify_tree(manifest, version_dir)
+    ok = not delta["mismatch"] and not delta["missing"]
+    return {
+        "ok": ok,
+        "file_count": int(manifest["file_count"]),
+        "matched": delta["matched"],
+        "missing_count": len(delta["missing"]),
+        "mismatch_count": len(delta["mismatch"]),
+        "missing": delta["missing"][:20],
+        "mismatch": delta["mismatch"][:20],
+        "extra_count": len(delta["extra"]),
+    }
+
+
 def run_download(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     """The download job. Raises with a participant-facing message on failure;
     returns {"cancelled": True, ...} when stopped (state stays resumable).

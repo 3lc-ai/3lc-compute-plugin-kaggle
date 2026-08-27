@@ -420,6 +420,10 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     # The run name is generated here when the field was blank — surface it
     # immediately so the UI's in-run header can show it from epoch 0.
     ctx.set_field("run_name", settings.run_name)
+    # The success banner's Open Run in Projects link renders THIS run's
+    # project from the record (a job fact, not the session's current
+    # project — the session may have moved on by revisit time).
+    ctx.set_field("project_name", settings.project_name)
 
     use_latest = bool(params.get("use_latest", True))
     train_table = _resolve_table(params["train_table_url"], use_latest, ctx, "train")

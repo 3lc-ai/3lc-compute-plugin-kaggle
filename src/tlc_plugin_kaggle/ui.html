@@ -3050,14 +3050,56 @@
       }
 
       // Quiet revisit line: the kit is a solved problem, one muted fact.
-      function dlRenderQuiet(fileCount, when) {
+      // The claim is exactly as strong as its check (T1): download_state
+      // stats dataset.yaml, so the line says when the FULL verification
+      // happened, and the Verify action re-runs the real files[] pass.
+      function dlRenderQuiet(fileCount, when, justVerified) {
         el('kg-dl-offer').hidden = true;
         el('kg-dl-progress').innerHTML = '';
+        var text = justVerified
+          ? 'Starter kit verified just now: ' + fmtCount(fileCount) +
+            ' of ' + fmtCount(fileCount) + ' files match the manifest.'
+          : 'Starter kit downloaded' + (when ? ' ' + kgFmtAgo(when) : '') +
+            (fileCount ? ' (' + fmtCount(fileCount) + ' files verified then)' : '') + '.';
         el('kg-dl-banner').innerHTML =
           '<div class="kg-preflight-ok">' + kgIcon('check-circle') +
-          '<span>Starter kit on disk and verified' +
-          (fileCount ? ' (' + fmtCount(fileCount) + ' files)' : '') +
-          (when ? ', downloaded ' + kgFmtAgo(when) : '') + '.</span></div>';
+          '<span style="flex:1">' + text + '</span>' +
+          '<button type="button" id="kg-dl-verify" class="btn btn-ghost btn-sm kgi-btn" ' +
+          'title="Re-check every kit file against the published manifest (a few seconds)">' +
+          kgIcon('refresh-cw', 'kgi-12') + '<span>Verify</span></button></div>';
+        el('kg-dl-verify').addEventListener('click', dlVerifyNow);
+      }
+
+      // T1: the Verify action. Read-only fetch (interaction-driven, so it
+      // stays callable in principle, but fixtures render static: kgDevMode
+      // returns early like the job-firing backstops).
+      function dlVerifyNow() {
+        if (kgDevMode) { return; }
+        var btn = el('kg-dl-verify');
+        if (!btn || btn.disabled) { return; }
+        btn.disabled = true;
+        btn.classList.add('kg-spin');
+        API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/download/verify')
+          .then(function (r) { return r.json(); })
+          .then(function (v) {
+            if (v.ok) { dlRenderQuiet(v.matched, null, true); return; }
+            var parts = [];
+            if (v.missing_count) { parts.push(fmtCount(v.missing_count) + ' missing'); }
+            if (v.mismatch_count) { parts.push(fmtCount(v.mismatch_count) + ' changed'); }
+            var first = ((v.missing || []).concat(v.mismatch || [])[0]) || '';
+            el('kg-dl-banner').innerHTML =
+              '<div class="kg-callout err">' + kgIcon('x-circle') +
+              '<span><strong>Verification failed.</strong> ' +
+              (v.error ? esc(v.error) + ' '
+                       : parts.join(', ') + (first ? ' (first: ' + esc(first) + ')' : '') + '. ') +
+              'Downloading again restores the kit.</span></div>';
+            dlShowOffer(false, false);
+          })
+          .catch(function (e) {
+            kgConn.fail(e);
+            btn.disabled = false;
+            btn.classList.remove('kg-spin');
+          });
       }
 
       function dlRenderSuccess(job, animate) {
@@ -3209,6 +3251,18 @@
         if (kgDevMode || dlRunning) { return; }
         dlRunning = true;
         el('kg-dl-banner').innerHTML = '';
+        // U1: a red not-found on the kit's own path is stale the moment a
+        // download for that path starts — the section owns the narrative
+        // until the job lands. Idle the gate; success re-gates through
+        // dlAdoptSessionYaml, cancel and failure leave it idle, not red.
+        var dest = el('kg-dl-dest').textContent;
+        var yamlVal = el('kg-yaml').value.trim();
+        if (dest && yamlVal && yamlVal.toLowerCase().indexOf(dest.toLowerCase()) === 0 &&
+            !(kgPreflight && kgPreflight.all_ok)) {
+          kgPreflight = null;
+          kgRenderPreflight(null);
+          kgCheckReady();
+        }
         el('kg-dl-btn').disabled = true;
         el('kg-dl-state').textContent = 'Starting…';
         dlLogReset();
@@ -3603,7 +3657,7 @@
               batch_i: status === 'running' ? 148 : 0, batch_n: 370,
               avg_epoch_s: 96.4, eta_s: Math.round(96.4 * (total - epoch))
             },
-            facts: { run_name: devRun },
+            facts: { run_name: devRun, project_name: 'exdark-competition' },
             checks: [], result: null, log: LOG
           };
           Object.keys(extra || {}).forEach(function (k) { job[k] = extra[k]; });
@@ -4263,6 +4317,13 @@
         var result = job.result || {};
         var weights = facts.weights || result.weights || '';
         var link = facts.run_url ? dashRunLink(facts.run_url) : '';
+        // Feature 2 (v1.2.7): the Projects link derives from the RUN's own
+        // recorded project at render time (a job fact — never the session's
+        // current project, never kgApplyDerivedUrls). The params fallback
+        // covers records written before the trainer stamped the fact.
+        var project = facts.project_name || (job.params || {}).project_name || '';
+        var projectsHref = project
+          ? '/projects/' + encodeURIComponent(project) + '#runs' : '';
         var banner = '<div class="alert alert-success' + (animate ? ' kgl-enter' : '') + '">' +
           '<span class="alert-icon">' + kgCheckIcon(animate) + '</span>' +
           '<div style="flex:1;min-width:0">' +
@@ -4279,6 +4340,8 @@
           '<span>Continue to Submit</span>' + kgIcon('arrow-right') + '</button>' +
           (link ? '<a class="btn btn-secondary btn-sm kgi-btn" target="_blank" href="' + link +
                   '"><span>Open Run in Dashboard</span>' + kgIcon('external-link', 'kgi-12') + '</a>' : '') +
+          (projectsHref ? '<a class="btn btn-secondary btn-sm kgi-btn" target="_blank" href="' + esc(projectsHref) +
+                  '"><span>Open Run in Projects</span>' + kgIcon('external-link', 'kgi-12') + '</a>' : '') +
           (revisit ? '<button type="button" class="btn btn-ghost btn-sm" id="tr-start-new">Start new run</button>' : '') +
           '</div></div></div>';
         el('tr-banner').innerHTML = banner;

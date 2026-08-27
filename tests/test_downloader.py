@@ -266,11 +266,7 @@ def test_keep_archives_keeps_shards(cdn, tmp_path):
     assert len(list(version_dir.glob("part-*.zip"))) == len(manifest["archives"])
 
 
-def test_download_state_reverifies_disk(cdn, tmp_path):
-    assert downloader.download_state() == {"state": "empty"}
-
-    ctx = FakeCtx()
-    result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
+def _write_record(ctx: FakeCtx, result: dict) -> None:
     record = {
         "id": "job-1",
         "kind": "download_kit",
@@ -284,6 +280,14 @@ def test_download_state_reverifies_disk(cdn, tmp_path):
     jobs.JOBS_DIR.mkdir(parents=True, exist_ok=True)
     (jobs.JOBS_DIR / "job-1.json").write_text(json.dumps(record), encoding="utf-8")
 
+
+def test_download_state_reverifies_disk(cdn, tmp_path):
+    assert downloader.download_state() == {"state": "empty"}
+
+    ctx = FakeCtx()
+    result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
+    _write_record(ctx, result)
+
     state = downloader.download_state()
     assert state["state"] == "success"
     assert state["dataset_yaml"] == result["dataset_yaml"]
@@ -291,3 +295,34 @@ def test_download_state_reverifies_disk(cdn, tmp_path):
 
     Path(result["dataset_yaml"]).unlink()
     assert downloader.download_state()["state"] == "stale"
+
+
+def test_verify_now_passes_then_names_the_tamper(cdn, tmp_path):
+    ctx = FakeCtx()
+    result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
+    _write_record(ctx, result)
+
+    v = downloader.verify_now()
+    assert v["ok"] is True
+    assert v["matched"] == result["file_count"]
+    assert v["missing_count"] == 0 and v["mismatch_count"] == 0
+
+    kit_root = _dest(tmp_path) / "v1" / "starter_kit"
+    tampered = next(kit_root.rglob("*.jpg"))
+    tampered.write_bytes(b"xx")
+    v2 = downloader.verify_now()
+    assert v2["ok"] is False
+    assert v2["mismatch_count"] == 1
+    assert tampered.name in v2["mismatch"][0]
+
+
+def test_verify_now_requires_record_and_manifest(cdn, tmp_path):
+    v = downloader.verify_now()
+    assert v["ok"] is False and "No completed download" in v["error"]
+
+    ctx = FakeCtx()
+    result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
+    _write_record(ctx, result)
+    (_dest(tmp_path) / "v1" / "manifest.json").unlink()
+    v2 = downloader.verify_now()
+    assert v2["ok"] is False and "manifest.json" in v2["error"]

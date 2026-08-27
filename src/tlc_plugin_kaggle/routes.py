@@ -106,6 +106,17 @@ class KaggleController(Controller):
         except Exception as exc:
             return {"state": "empty", "reason": f"{type(exc).__name__}: {exc}"}
 
+    @get("/download/verify", sync_to_thread=True)
+    def download_verify(self) -> dict[str, Any]:
+        """Full files[] re-verification of the downloaded kit (the revisit
+        line's Verify action). Read-only; ~7.5 s on the real kit."""
+        from tlc_plugin_kaggle import downloader
+
+        try:
+            return downloader.verify_now()
+        except Exception as exc:
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
     @get("/import/preflight", sync_to_thread=True)
     def import_preflight(self, yaml_path: str = "") -> dict[str, Any]:
         """Read-only dry run of the yaml for the Import form's progressive
