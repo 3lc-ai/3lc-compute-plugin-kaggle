@@ -563,6 +563,14 @@ show the quiet kit-on-disk line.
 | `train-state5` | Failure: CUDA-OOM banner + Copy diagnostics, epoch 7/50 static, Re-run CTA, form visible |
 | `train-state6` | Revisit summary: form hidden, static strip + provenance, Start new run |
 
+**Composition trap (V1, v1.2.7):** `JOB()`'s `extra` parameter REPLACES
+top-level keys — `extra.facts` replaces the whole base facts object, it does
+not merge. A fact added to `JOB()`'s defaults therefore never reaches the
+terminal fixtures, which pass their own facts through `doneJob()`; add run
+facts to `doneJob()`'s facts too, or the feature works live and silently
+fails in fixtures. Same family as the `kgSwapText` fresh-element caveat:
+correct code, wrong composition, silent failure.
+
 ### ?kgdev fixture map — Status tab
 
 | Value | Renders |

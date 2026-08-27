@@ -21,6 +21,9 @@ $ErrorActionPreference = "Stop"
 # Versions this plugin (v1.2.6) was tested against — do not float.
 $TLC_CORE = "3lc==3.1.0"
 $TLC_COMPUTE = "3lc-compute==0.2.1"
+# The plugin version the catalog currently advertises — the single site the
+# W1 env var's version segment derives from (RELEASING.md version-pin list).
+$PLUGIN_VER = "1.2.6"
 $INDEX_PRE = "https://pypi.3lc.ai/public/repositories/prereleases-public/"
 $INDEX_REL = "https://pypi.3lc.ai/public/repositories/releases-public/"
 
@@ -56,8 +59,41 @@ if ($LASTEXITCODE -ne 0) { Write-Error "3lc login failed - check the API key" }
 # match the version the catalog currently advertises, see TESTER_SETUP_0.2 §2).
 # Derivation rule (SDK worker_spec.py): TLC_COMPUTE_PLUGIN_VENV_ +
 # id.upper().replace('-', '_').
-$managed = Join-Path $env:USERPROFILE ".3lc-compute\managed-plugins\kaggle-exdark\1.2.6\.venv\Scripts\python.exe"
+$pluginRoot = Join-Path $env:USERPROFILE ".3lc-compute\managed-plugins\kaggle-exdark"
+$managed = Join-Path $pluginRoot "$PLUGIN_VER\.venv\Scripts\python.exe"
 $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = $managed
+
+# ── D4 preflight: the env var's VERSION SEGMENT must match the venv the
+# shop actually uses. Two failure shapes, checked here because Test-Path
+# alone cannot tell them apart:
+#   * missing  - the pinned venv does not exist. Fine on a fresh machine
+#     (the shop creates it at install; the env var pre-states the path),
+#     wrong after an update - the Kaggle page then fails with the browser
+#     error "Failed to load plugin: Internal Server Error".
+#   * stale-but-existing - the pinned venv EXISTS (uninstall never removes
+#     old venvs, bug W3) while a newer version is installed: the path check
+#     passes and the worker silently runs the OLD plugin code.
+Write-Host "==> Preflight: W1 env-var version pin vs plugin venvs on disk"
+$onDisk = @()
+if (Test-Path $pluginRoot) {
+    $onDisk = @(Get-ChildItem $pluginRoot -Directory | ForEach-Object { $_.Name })
+}
+if ($onDisk.Count -eq 0) {
+    Write-Host "    No plugin venv on disk yet - normal on a fresh machine. The shop creates"
+    Write-Host "    $PLUGIN_VER\.venv at install; the env var pre-states that path."
+} elseif ($onDisk -notcontains $PLUGIN_VER) {
+    Write-Warning ("The env var pins version $PLUGIN_VER but the venv(s) on disk are: " + ($onDisk -join ', ') + ".")
+    Write-Warning "The Kaggle page will fail with: Failed to load plugin: Internal Server Error"
+    Write-Warning "Fix: set `$PLUGIN_VER at the top of this script to the installed version and re-run, or edit the env var in the compute-service window and restart it."
+} else {
+    $newer = @($onDisk | Where-Object { try { [version]$_ -gt [version]$PLUGIN_VER } catch { $false } })
+    if ($newer.Count -gt 0) {
+        Write-Warning ("Version $PLUGIN_VER exists on disk, but newer installed version(s) are present: " + ($newer -join ', ') + ".")
+        Write-Warning "If the catalog installed an update, the env var now pins the STALE venv: the path exists, so nothing fails - the worker just runs the old plugin. Repoint `$PLUGIN_VER (or the env var) to the newest version."
+    } else {
+        Write-Host "    OK: the env var pins $PLUGIN_VER and that venv is the newest on disk."
+    }
+}
 
 # CUDA torch for catalog installs: `uv pip install` does not read the
 # plugin's own [tool.uv.index] config, so without this the worker venv gets

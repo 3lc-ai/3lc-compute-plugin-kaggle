@@ -35,8 +35,9 @@ audit docs, PRETAG checklists, and ideas files stay as written:
 - `docs/TESTER_SETUP_0.2.md` — title line, round-1 migration note
   ("installs under `managed-plugins\kaggle-exdark\<version>\`"), §2 W1
   comment + env-var path, troubleshooting table W1 row.
-- `scripts/setup-0.2-tester.ps1` — header "tested against" comment, W1
-  comment, the `$managed` path.
+- `scripts/setup-0.2-tester.ps1` — header "tested against" comment and
+  the `$PLUGIN_VER` variable (single site since v1.2.7; the W1 path and
+  the preflight both derive from it).
 - `README.md` — the setup env-var line and the troubleshooting
   torch-check path.
 - `CONTEXT.md` — the "Current release" sentence under **tags**.
