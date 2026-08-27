@@ -186,6 +186,12 @@ class _BridgedJobCtx(JobCtx):
     def set_progress(self, progress: dict[str, Any]) -> None:
         super().set_progress(progress)
         try:
+            # Generic writers (download_kit) publish percent/label directly;
+            # the epoch mapping below stays for the train-shaped jobs.
+            if progress.get("percent") is not None:
+                self._sdk.progress(
+                    percent=float(progress["percent"]), label=str(progress.get("label") or "")
+                )
             total = float(progress.get("total_epochs") or 0)
             if total:
                 epoch = float(progress.get("epoch") or 0)
@@ -423,7 +429,12 @@ def active_jobs_generic(project_name: str = "") -> list[dict[str, Any]]:
             "subtitle": str((job.get("params") or {}).get("project_name", "")),
             "run_url": (job.get("facts") or {}).get("run_url"),
         }
-        if progress.get("total_epochs"):
+        if progress.get("percent") is not None:
+            entry["progress"] = {
+                "percent": float(progress["percent"]),
+                "label": str(progress.get("label") or ""),
+            }
+        elif progress.get("total_epochs"):
             entry["progress"] = {
                 "percent": 100.0 * float(progress.get("epoch", 0)) / float(progress["total_epochs"]),
                 "label": f"Epoch {progress.get('epoch', 0)}/{progress['total_epochs']}",

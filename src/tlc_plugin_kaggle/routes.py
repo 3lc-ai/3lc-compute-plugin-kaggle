@@ -82,6 +82,30 @@ class KaggleController(Controller):
 
     path = ""
 
+    @post("/validate/download", sync_to_thread=True)
+    def validate_download(self, data: dict[str, Any]) -> Response:
+        """Fail-fast validation for the starter-kit download job; the UI then
+        POSTs the returned params (plus kind) to the host's /run.
+        Body: {dest_dir?, keep_archives?} — dest_dir defaults server-side."""
+        from tlc_plugin_kaggle import downloader
+
+        try:
+            params = downloader.resolve_params(data if isinstance(data, dict) else {})
+        except ValueError as exc:
+            return Response(content={"error": str(exc)}, status_code=HTTP_400_BAD_REQUEST)
+        return Response(content={"ok": True, "params": params}, status_code=200)
+
+    @get("/download/state", sync_to_thread=True)
+    def download_state(self) -> dict[str, Any]:
+        """Revisit state for the Download section: newest completed download
+        job, re-verified against dataset.yaml on disk."""
+        from tlc_plugin_kaggle import downloader
+
+        try:
+            return downloader.download_state()
+        except Exception as exc:
+            return {"state": "empty", "reason": f"{type(exc).__name__}: {exc}"}
+
     @get("/import/preflight", sync_to_thread=True)
     def import_preflight(self, yaml_path: str = "") -> dict[str, Any]:
         """Read-only dry run of the yaml for the Import form's progressive

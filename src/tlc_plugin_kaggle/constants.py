@@ -33,6 +33,23 @@ def split_dataset(split: str) -> str:
 # Kaggle URL. Replace the value with the public competition slug at launch.
 COMPETITION_SLUG = "the-3-lc-low-light-object-detection-comepetition-test"
 
+# ── Starter-kit CDN ──────────────────────────────────────────────────────
+# The bucket prefix is deliberately DECOUPLED from the Kaggle slug: the slug
+# changes at launch (see COMPETITION_SLUG), the data location never does.
+# COMPETITION_ID is a stable bucket identifier — NOT a LAUNCH-VERIFY item.
+# A version prefix is immutable once staged: a kit update ships as a new
+# STARTER_KIT_VERSION value, never as overwritten objects (the 24h edge
+# cache would otherwise serve a mixed manifest/shard set).
+CDN_BASE_URL = "https://competitions.3lc.ai"
+COMPETITION_ID = "exdark-low-light"
+STARTER_KIT_VERSION = "v1"
+
+
+def starter_kit_prefix() -> str:
+    """The immutable CDN prefix the downloader reads (no trailing slash)."""
+    return f"{CDN_BASE_URL}/kaggle/{COMPETITION_ID}/starter-kit/{STARTER_KIT_VERSION}"
+
+
 # Slugs that must never win over the shipped constant when found persisted
 # as session.slug_override: the placeholder that shipped in early builds,
 # plus every slug this plugin has since retired. LAUNCH-VERIFY: add the

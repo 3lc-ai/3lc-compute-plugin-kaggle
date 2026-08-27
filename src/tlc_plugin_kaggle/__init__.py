@@ -67,15 +67,16 @@ class KagglePlugin(ComputePlugin):
     def run_job(self, ctx: JobContext) -> None:
         """Host-dispatched job entry (POST /api/plugins/kaggle-exdark/run).
 
-        ``ctx.params`` carries ``{"kind": "import" | "train" | "predict" |
-        "kaggle_submit" | "predict_submit", ...job params}``. The job runs
-        synchronously on the worker's dispatch thread; jobs.run_dispatch
+        ``ctx.params`` carries ``{"kind": "download_kit" | "import" | "train" |
+        "predict" | "kaggle_submit" | "predict_submit", ...job params}``. The
+        job runs synchronously on the worker's dispatch thread; jobs.run_dispatch
         bridges our disk-backed store (which the tabs poll) to the ctx event
         stream (which feeds the Queue panel and keeps the worker alive).
         """
-        from tlc_plugin_kaggle import importer, jobs, predictor, trainer
+        from tlc_plugin_kaggle import downloader, importer, jobs, predictor, trainer
 
         targets = {
+            "download_kit": downloader.run_download,
             "import": importer.run_import,
             "train": trainer.run_training,
             "predict": predictor.run_predict,
