@@ -89,7 +89,7 @@ umap = [
 
 [[package]]
 name = "3lc-compute-plugin-kaggle"
-version = "1.2.6"
+version = "1.2.7"
 source = { editable = "." }
 dependencies = [
     { name = "3lc-compute-plugin-sdk", extra = ["shared"] },

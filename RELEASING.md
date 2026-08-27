@@ -48,6 +48,18 @@ every hit that is a pin.
 
 **The repo copy is the source of truth.** The gist (step 3) is only a mirror.
 
+## PRETAG files freeze at their tag
+
+`docs/PRETAG_<version>.md` is the record of what was verified before that
+tag; a later edit makes it evidence of something other than what it claims.
+Everything above the file's **Post-tag verification** section is FROZEN once
+the tag exists. The one legitimate post-tag write is ticking that section
+itself — its checks ("footer reads vX.Y.Z after a catalog install") cannot
+exist before the tag. Tick-only appends there; never edit above the line.
+(Codified 2026-08-27 after review flagged the v1.2.6 file's post-tag tick —
+that edit was exactly this legitimate case, but the boundary was implicit.
+PRETAG_1.2.7 onward makes it structural.)
+
 ## 3. Mirror the change to the gist
 
 Paste the new `catalog.json` content into the gist at

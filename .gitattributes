@@ -1,0 +1,5 @@
+# The kit manifest is a generated verification anchor (84k lines of hashes,
+# regenerable byte-identically by scripts/make_kit_manifest.py). It belongs
+# in the repo but must not dominate diffs, stats, or language detection.
+# See RELEASING.md "Starter-kit data releases".
+kit/**/manifest.json linguist-generated -diff
