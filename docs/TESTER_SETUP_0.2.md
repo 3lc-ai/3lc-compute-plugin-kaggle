@@ -35,6 +35,7 @@ tested against** — don't float them. Time budget: ~15 min + one big download
 
 | What | How |
 |---|---|
+| **Join the competition FIRST** | Open the competition page on Kaggle, click **Join Competition**, and accept the rules — before anything else. Submitting without having entered fails in unhelpful ways (a 500, not a friendly message), and it's the one state nobody can re-test for you after the fact. |
 | Python 3.12 | `winget install Python.Python.3.12` |
 | uv | `winget install astral-sh.uv` — **required**: the plugin shop installs run through uv |
 | git + GitHub access to `3lc-ai` | the plugin repo is private; run `git ls-remote https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git` once so Git Credential Manager stores a token. Without it the shop install fails with `fatal: could not read Username for 'https://github.com'`. |

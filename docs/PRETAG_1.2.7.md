@@ -133,6 +133,16 @@ this build.
 Wall-clock estimate: ~1.5–2.5 h, of which ~45–60 min hands-on; the rest is
 provisioning/downloads/training.
 
+**KNOWN UNTESTED PATH — the "not joined" branch.** The rehearsal account
+has already entered the test competition, so the not-joined connection
+state, the join flow, and the first-submit-after-joining transition cannot
+be exercised on EITHER of our machines. Paul will be the first person to
+walk that branch — and Gudbrand's submit-500 was exactly that state. If
+Paul reports a submit failure early on, check his entered state FIRST,
+before treating it as a plugin defect. Mitigation shipped with his
+prerequisites: joining the competition and accepting the rules is the
+FIRST step in the setup he receives (TESTER_SETUP §0 leads with it).
+
 ## Last things before the tag
 
 - [ ] Rehearsal complete above; any code defect found = fix + re-gate
