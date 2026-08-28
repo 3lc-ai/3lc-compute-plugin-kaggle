@@ -74,22 +74,22 @@ Markers: **[NEVER]** = first execution ever on a machine without prior
 context · **[RECONFIRM]** = walked by round-1/2 testers, re-confirming on
 this build.
 
-- [ ] **0. Zero-state audit** (~5 min): no `~\.3lc-compute`, no
+- [x] **0. Zero-state audit** (~5 min): no `~\.3lc-compute`, no
       `~\.3lc-kaggle-plugin`, no `C:\3lc-hub-next`, fresh browser profile
       for the Hub. Paul-parity requires genuinely empty state.
-- [ ] **1. Prerequisites** per TESTER_SETUP §0 (~10–15 min). [RECONFIRM]
-- [ ] **2. setup-0.2-tester.ps1** (~5–10 min + interactive login).
+- [x] **1. Prerequisites** per TESTER_SETUP §0 (~10–15 min). [RECONFIRM]
+- [x] **2. setup-0.2-tester.ps1** (~5–10 min + interactive login).
       Expect the D4 preflight's fresh-machine branch: "No plugin venv on
       disk yet - normal on a fresh machine." [preflight: NEVER — this
       script version has never executed for real; rest: RECONFIRM]
-- [ ] **3. Catalog add + Install** (provision ~5–20 min, CUDA torch is
+- [x] **3. Catalog add + Install** (provision ~5–20 min, CUDA torch is
       several GB — network-bound). [v1.2.7's first provisioning
       anywhere, and the first fresh install under the $PLUGIN_VER-derived
       W1 path: NEVER; shop UX: RECONFIRM]
-- [ ] **4. First page open**: cold-worker warmup on the first request
+- [x] **4. First page open**: cold-worker warmup on the first request
       (~30–60 s), then footer reads **v1.2.7**, stepper empty, Import
       tab in state 1. [RECONFIRM + the footer is the N7 evidence]
-- [ ] **5. Download starter kit** [NEVER — off-dev, and the true
+- [x] **5. Download starter kit** [NEVER — off-dev, and the true
       first-visit offer state has never rendered on a machine with no
       prior config]: the offer shows the destination fact; the header
       label carries phase + shard N/10 + MB throughout (S1); 625 MB, so
@@ -98,37 +98,66 @@ this build.
       Cancel once mid-download, confirm the cancelled callout, Resume,
       and look for "resuming at byte N" / "skipped" lines in the log
       [NEVER on a second network].
-- [ ] **6. Auto-fill → Import** [NEVER as a chain on a fresh session]:
+- [x] **6. Auto-fill → Import** [NEVER as a chain on a fresh session]:
       yaml fills with zero keystrokes, preflight green, Import &
       Validate → 9/9 checks, three tables, glance card (~2–6 min). The
       import is fed by the CDN kit — rounds 1/2 always used the
       hand-unzipped zip [NEVER].
-- [ ] **7. Revisit + Verify** [NEVER off-dev]: reload the page → quiet
+- [x] **7. Revisit + Verify** [NEVER off-dev]: reload the page → quiet
       "downloaded Nm ago (14,004 files verified then)" line; click
       Verify (~8 s) → "verified just now: 14,004 of 14,004".
-- [ ] **8. KGAT token + join the competition** per README §2 (~5 min,
+- [x] **8. KGAT token + join the competition** per README §2 (~5 min,
       byte-exact save). [RECONFIRM]
-- [ ] **9. Train 2 epochs** from the session project. 2 epochs is
+- [x] **9. Train 2 epochs** from the session project. 2 epochs is
       load-bearing (live ETA, ≥2-point sparklines, epoch-2 band ≈0.55).
       Expect roughly 2.5–4 min/epoch on the 3070 Ti — never measured on
       this GPU; this run IS the measurement, write it down [timing:
       NEVER; mechanics + provenance 4/4 + sha `0ebbc80d4a76…`:
       RECONFIRM].
-- [ ] **10. Banner links**: Open Run in Dashboard [RECONFIRM] and Open
+- [x] **10. Banner links**: Open Run in Dashboard [RECONFIRM] and Open
       Run in Projects → the project's Runs tab [NEVER on a second
       machine/Hub session — the URL scheme's independence from the dev
       browser is what this proves].
-- [ ] **11. Predict** 715 images (~1–3 min): 5/5 format checks, sanity
+- [x] **11. Predict** 715 images (~1–3 min): 5/5 format checks, sanity
       card, CSV row — and NO local-score hero: absence is the
       participant behavior; do not place host files on this machine.
       [RECONFIRM]
-- [ ] **12. Submit** → accepted ref; Status tab history row speaks the
+- [x] **12. Submit** → accepted ref; Status tab history row speaks the
       outcome vocabulary; budget line sane. [RECONFIRM]
-- [ ] **13. Copy diagnostics** from any tab: block stamps v1.2.7.
+- [x] **13. Copy diagnostics** from any tab: block stamps v1.2.7.
       [RECONFIRM]
-- [ ] **14. Record observations here**: provision minutes, download
+- [x] **14. Record observations here**: provision minutes, download
       throughput + label behavior, epoch minutes, predict minutes, and
       any friction a context-free reader hit in the docs.
+
+### Step-14 record (written 2026-08-28)
+
+Machine: fresh 3070 Ti, Windows, user `rishi`, single home, no home
+redirect. Install per the documented pre-tag deviation: local-clone
+catalog with `source` pinned to the bump-commit sha (e702864); that
+catalog file was never published and lives outside the repo.
+
+- Outcome (attested by Rishikesh, 2026-08-28): all steps 0–13 walked
+  end to end using only README + TESTER_SETUP_0.2 + the Kaggle page;
+  everything worked, including an accepted Kaggle submit. No code
+  defects found, so no re-gate needed.
+- Per-phase timings (provision, download, import, train 2 epochs,
+  predict): **NOT RECORDED** during the run. Download/train/predict
+  remain recoverable after the fact from the rehearsal laptop's job
+  records (`~\.3lc-kaggle-plugin\jobs\*.json`,
+  created_at/finished_at); provisioning and the setup script leave no
+  job record and their durations are gone.
+- Clone-to-first-import wall clock: **NOT RECORDED**.
+- Whether the optional mid-download cancel/resume (item 5) was
+  exercised: **NOT RECORDED**.
+- Friction points: **NOT RECORDED** — none were written down during
+  the run; absence of notes is not evidence of absence.
+- Doc defects: **NOT RECORDED** — none were written down during the
+  run.
+- Gap note for the next reader: the 3070 Ti epoch time (item 9's "this
+  run IS the measurement") was not captured. The only measured epoch
+  times remain the dev 5070 Ti gate runs of 2026-08-26 (2-epoch train
+  jobs: 3.9 and 4.3 min total, ≈2 min/epoch).
 
 Wall-clock estimate: ~1.5–2.5 h, of which ~45–60 min hands-on; the rest is
 provisioning/downloads/training.
@@ -145,14 +174,21 @@ FIRST step in the setup he receives (TESTER_SETUP §0 leads with it).
 
 ## Last things before the tag
 
-- [ ] Rehearsal complete above; any code defect found = fix + re-gate
+- [x] Rehearsal complete above; any code defect found = fix + re-gate
       BEFORE tagging (never-retag: Paul's run must not straddle versions).
-- [ ] `pytest` green (80) on the tag candidate commit.
-- [ ] `git grep -n "1\.2\.6"` — remaining hits are history/audit docs
-      only (divergence-paths, PRETAG_1.2.6, notes), no pins.
-- [ ] CONTEXT.md "Current release" sentence updated to v1.2.7 in the
+      (2026-08-28: complete, no defects; timings NOT RECORDED — see the
+      step-14 record.)
+- [x] `pytest` green (80) on the tag candidate commit. (80 passed,
+      2026-08-28, on this commit's tree.)
+- [x] `git grep -n "1\.2\.6"` — remaining hits are history/audit docs
+      only (divergence-paths, PRETAG_1.2.6, notes), no pins. (Verified
+      2026-08-28: docs/history, "since v1.2.6" code comments, and the
+      catalog's own 1.2.6 entry — no pins.)
+- [x] CONTEXT.md "Current release" sentence updated to v1.2.7 in the
       catalog commit (a statement about tags — it rides the post-tag
-      catalog bump per RELEASING, not the pre-tag sweep).
+      catalog bump per RELEASING, not the pre-tag sweep). (2026-08-28:
+      drafted and committed locally alongside the catalog entry,
+      awaiting the tag before push.)
 
 ## Post-tag verification (tick-only below this line; everything above is frozen at the tag)
 
