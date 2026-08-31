@@ -2,6 +2,11 @@
 
 One line per term. Depth: docs/ui-notes.md (UI), ../3lc-hub-next/PORT_PLAN.md (platform).
 
+## Where we are (2026-08-31)
+
+- **Released: v1.2.8** (SDK contract realignment; live on the gist, dev-Hub verified end-to-end incl. provenance 4 PASS, predict 5/5, leaderboard probe). **Awaiting Paul's end-to-end run** on his from-source main host — his two open PRETAG_1.2.8 post-tag ticks: pre-flight warning gone + worker healthy, and Queue-panel Open-run link rendering (the frontend hop 0.2.1 cannot verify).
+- **Open queue, in order:** (a) Kaggle page redesign at Phase 3 — drafts in `../competition_exdark/content_v2/`, Setup section held on the install-source decision; (b) the automated-checks plan, agreed order 2 / 1 / 3 / 5+7; (c) the v1.2.9 backlog — docs/v1.2-ideas.md "v1.2.9 candidates" incl. CC1 (Queue run_url shape: ask platform, don't switch unilaterally) plus ctx.fail() adoption and deleting dead active_jobs_generic; (d) launch decisions blocked on other people: install source (wheel verified viable at 1.2.8 — PyPI-only resolution proven), LICENSE (X1), default-catalog promotion, repo-public.
+
 ## Competition & contract
 
 - **The Loop** — the product story the plugin demos: import → train → inspect/fix labels in the Dashboard (new table revision) → retrain on latest → predict → submit; the revision picker and the Loop's "fix labels" deep-link make it tangible.

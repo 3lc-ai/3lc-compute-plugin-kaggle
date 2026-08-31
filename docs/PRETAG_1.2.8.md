@@ -104,16 +104,23 @@ warning, and never ran the plugin. Open info item for him below.
 
 ## Post-tag verification (tick-only below this line; everything above is frozen at the tag)
 
-- [ ] Tag `v1.2.8` pushed; repo catalog.json gains the 1.2.8 entry
-      (manifest matches plugin.toml verbatim; source pins `@v1.2.8`);
-      gist mirrored by Rishikesh; incognito-fetch the gist raw URL after
-      the CDN lag.
-- [ ] CONTEXT.md "Current release" sentence → v1.2.8 in the catalog
+- [x] Tag `v1.2.8` pushed (cb3037b, 2026-08-31); repo catalog.json gains
+      the 1.2.8 entry (5543616; manifest matches plugin.toml verbatim;
+      source pins `@v1.2.8`); gist mirrored by Rishikesh; incognito
+      fetch of the gist raw URL byte-identical to the repo copy, 1.2.8
+      first.
+- [x] (2026-08-31, in 5543616) CONTEXT.md "Current release" sentence → v1.2.8 in the catalog
       commit (a statement about tags — it rides the post-tag catalog
       bump per RELEASING, not the pre-tag sweep).
-- [ ] Footer reads v1.2.8 after a REAL catalog install; W1 env var
+- [x] (2026-08-31: uninstall 1.2.7 → install 1.2.8 → env repoint →
+      restart → hard-refresh; provisioned venv reports plugin-sdk 0.3.2
+      via importlib.metadata — the release's actual purpose.) Footer
+      reads v1.2.8 after a REAL catalog install; W1 env var
       repointed to the `1.2.8` venv path; hard refresh done.
-- [ ] Config, job history, runs, checkpoints survive the update pass
+- [x] (2026-08-31: config intact through uninstall/reinstall; fresh run
+      kaggle_run_20260831_152527 provenance 4 PASS; predict 5/5; local
+      mAP rendered; leaderboard probe rank 1.) Config, job history,
+      runs, checkpoints survive the update pass
       intact (spot-read ui_config.json + a jobs/ record).
 - [ ] Reporter (from-source main host) installs v1.2.8 from the catalog:
       pre-flight warning gone, worker healthy, Import tab opens.
