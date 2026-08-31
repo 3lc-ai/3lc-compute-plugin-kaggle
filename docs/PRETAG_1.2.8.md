@@ -60,29 +60,26 @@ warning, and never ran the plugin. Open info item for him below.
       README, SMOKE_TEST footer expectation. Remaining `1.2.7` hits are
       historical feature tags only (verified by grep).
 
-- [x] **Queue-panel Open-run link — STATED GAP (2026-08-31 smoke
-      finding, scoped honestly).** What is verified: the bridged
-      `result()` call fires and the wire shape is pinned by unit tests
-      against the real 0.3.x signature (the smoke train job's record
-      carries `facts.run_url`, so the call path executed); the 0.2.1
-      HOST consumes the event and serves it (`job_manager.py:421-422`
-      stores `run_url` from `event == "result"`; the generic job dict
-      includes it). What is NOT verified and cannot be on this stack:
-      whether the SaaS-served Hub FRONTEND renders that field as a link
-      against a 0.2.1 backend — **no first-party plugin on 0.2.1 emits
-      a `result` event at all** (grepped: the event consumer is the only
-      `run_url` writer), so the panel may never have rendered this link
-      here, and our value is a raw local run URL (`C:/Users/...`), not
-      an http href. This is NOT a regression vs v1.2.7: there the kwarg
-      TypeError meant the event never even reached the host. Honest
-      position: **signature corrected and unit-tested; host consumption
-      verified in source; frontend rendering unverified on 0.2.1** —
-      verify rendering on a 0.3-contract host (post-tag tick below).
-      Optional 30-second confirm on the dev Hub: DevTools → Network →
-      the Queue panel's `/api/plugins/jobs` response — the train row
-      carrying `"run_url": "C:/Users/..."` proves the whole plugin-side
-      chain; an empty third column beyond that point is frontend
-      territory.
+- [x] **Queue-panel Open-run link — VERIFIED through emit → host
+      consume → host serve; frontend rendering is the one unverified
+      hop (2026-08-31 smoke finding).** The full chain, each hop
+      evidenced: the bridged `result()` fires (the smoke train job's
+      record carries `facts.run_url`; call shape pinned by unit tests
+      against the real 0.3.x signature) → the 0.2.1 host consumes the
+      event (`job_manager.py:421-422`) → the host SERVES it (confirmed
+      live on the dev Hub: the Queue API response carries
+      `"run_url": "C:/Users/.../runs/kaggle_run_20260831_152527"` on
+      job c8bd1d9a — while run-insights' entry in the same response has
+      `run_url: null`; we are the ONLY plugin on this stack populating
+      the field, which is why the render path had never been exercised).
+      The remaining hop — the SaaS Hub frontend turning that value into
+      a link — did not render, plausibly because the queue panel only
+      links http(s) values and ours is a raw local run URL (the SDK
+      contract's documented shape: "a run or a table URL"); see the CC1
+      entry in v1.2-ideas.md for whether the shape or the frontend is
+      the bug. NOT a regression vs v1.2.7 (the kwarg TypeError meant
+      the event never reached the host at all). Post-tag tick: rendering
+      on a 0.3-contract host.
 
 ## Open pre-tag items
 
