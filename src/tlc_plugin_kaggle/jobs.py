@@ -206,7 +206,13 @@ class _BridgedJobCtx(JobCtx):
         super().set_field(key, value)
         if key == "run_url" and value:
             try:
-                self._sdk.result(run_url=str(value))
+                # Positional: SDK 0.3.x renamed the parameter (0.1.x was
+                # keyword-only `run_url=`, 0.3.x is `url`). The wire event
+                # still carries `run_url`. A wrong-keyword call here fails
+                # INSIDE this try/except — the Open-run link just silently
+                # never reaches the Queue panel — so the call shape is
+                # pinned by tests/test_jobs_bridge.py, not by this comment.
+                self._sdk.result(str(value))
             except Exception:
                 pass
 
