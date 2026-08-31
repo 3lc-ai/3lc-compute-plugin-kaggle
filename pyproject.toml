@@ -1,6 +1,6 @@
 [project]
 name = "3lc-compute-plugin-kaggle"
-version = "1.2.7"
+version = "1.2.8"
 description = "End-to-end Kaggle competition workflow for the 3LC Hub: import, train the fixed baseline, predict, submit."
 # >=3.11: the kaggle client (>=2.2.3) floors at 3.11; uv sync resolves for the
 # whole requires-python range, so a 3.10 floor makes the lock unsatisfiable.
@@ -12,8 +12,10 @@ requires-python = ">=3.11"
 # mirrors the 0.3-contract hosts' own pin (3lc-compute >=0.6: `>=0.3.1,<0.4`);
 # contract compatibility is compared on MAJOR.MINOR, and 3lc-compute >=0.6
 # provisions from public PyPI ONLY (no CloudRepo defaults), where the SDK
-# starts at 0.2.2 — a <0.2 pin is unresolvable there, which is what broke
-# v1.2.7 on modern hosts.
+# starts at 0.2.2 — a <0.2 pin is unresolvable there as a bare/index/wheel
+# requirement. (uv DOES honor a git source's own [tool.uv] indexes, which is
+# how v1.2.7 kept silently shipping SDK 0.1.1 from the retired prereleases
+# index; modern hosts flag the contract mismatch pre-flight.)
 dependencies = [
     "3lc-compute-plugin-sdk>=0.3.1,<0.4.0",
 ]
@@ -58,7 +60,7 @@ kaggle-exdark = "tlc_plugin_kaggle"
 id = "kaggle-exdark"
 name = "Kaggle Competition"
 description = "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit."
-version = "1.2.7"
+version = "1.2.8"
 min_service_version = "0.2.0"
 icon = "🏁"
 repository_url = "https://github.com/3lc-ai/3lc-compute-plugin-kaggle"
