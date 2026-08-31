@@ -60,6 +60,30 @@ warning, and never ran the plugin. Open info item for him below.
       README, SMOKE_TEST footer expectation. Remaining `1.2.7` hits are
       historical feature tags only (verified by grep).
 
+- [x] **Queue-panel Open-run link — STATED GAP (2026-08-31 smoke
+      finding, scoped honestly).** What is verified: the bridged
+      `result()` call fires and the wire shape is pinned by unit tests
+      against the real 0.3.x signature (the smoke train job's record
+      carries `facts.run_url`, so the call path executed); the 0.2.1
+      HOST consumes the event and serves it (`job_manager.py:421-422`
+      stores `run_url` from `event == "result"`; the generic job dict
+      includes it). What is NOT verified and cannot be on this stack:
+      whether the SaaS-served Hub FRONTEND renders that field as a link
+      against a 0.2.1 backend — **no first-party plugin on 0.2.1 emits
+      a `result` event at all** (grepped: the event consumer is the only
+      `run_url` writer), so the panel may never have rendered this link
+      here, and our value is a raw local run URL (`C:/Users/...`), not
+      an http href. This is NOT a regression vs v1.2.7: there the kwarg
+      TypeError meant the event never even reached the host. Honest
+      position: **signature corrected and unit-tested; host consumption
+      verified in source; frontend rendering unverified on 0.2.1** —
+      verify rendering on a 0.3-contract host (post-tag tick below).
+      Optional 30-second confirm on the dev Hub: DevTools → Network →
+      the Queue panel's `/api/plugins/jobs` response — the train row
+      carrying `"run_url": "C:/Users/..."` proves the whole plugin-side
+      chain; an empty third column beyond that point is frontend
+      territory.
+
 ## Open pre-tag items
 
 - [ ] **Dev-Hub smoke (Rishikesh):** reload → Import revisit → short
@@ -71,6 +95,8 @@ warning, and never ran the plugin. Open info item for him below.
       change) — a plain worker reload is NOT enough; uninstall/reinstall
       (or fresh install) so the venv re-resolves, then repoint the W1 env
       var to `...\kaggle-exdark\1.2.8\...` and hard-refresh the page.
+      NOTE: a missing Open-run link on the Queue panel is NOT a smoke
+      failure on this stack — see the stated gap above.
 - [ ] **Info from the reporter (non-blocking, relayed by Rishikesh):**
       exact 3lc-compute main commit/version he runs, and the verbatim
       pre-flight warning text — to confirm main's gate reads the
@@ -94,3 +120,6 @@ warning, and never ran the plugin. Open info item for him below.
       intact (spot-read ui_config.json + a jobs/ record).
 - [ ] Reporter (from-source main host) installs v1.2.8 from the catalog:
       pre-flight warning gone, worker healthy, Import tab opens.
+- [ ] Queue panel on the reporter's 0.3-contract host renders the
+      Open-run link after a train job — the frontend-rendering half the
+      0.2.1 stack cannot verify (see the stated gap above).
