@@ -160,10 +160,11 @@ manual install you may notice:
 
 ## Troubleshooting
 
-> **A traceback in the object-service window at startup is HARMLESS** (known
+> **A traceback in the COMPUTE-service window at startup is HARMLESS** (known
 > bug W5: `ConfigIndexingTable` / `object_type 'configfile'` — public-examples
-> indexing broken in the 0.2.1 + 3.1.0 pairing, caught and logged). Not a
-> finding; don't report it.
+> indexing broken in the 0.2.1 + 3.1.0 pairing, caught and logged). It is one
+> log record from `tlc_compute.app`, printed with its traceback — the object
+> service never emits it. Not a finding; don't report it.
 
 | Symptom | Cause / fix |
 |---|---|
