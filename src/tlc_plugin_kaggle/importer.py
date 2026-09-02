@@ -1,3 +1,5 @@
+# Copyright 2026 3LC Inc.
+# SPDX-License-Identifier: AGPL-3.0-only
 """Import card backend: competition dataset -> three 3LC tables + validation.
 
 Import mechanism (decided empirically against tlc 2.22.3.1, 2026-07-20):

@@ -1,3 +1,5 @@
+# Copyright 2026 3LC Inc.
+# SPDX-License-Identifier: AGPL-3.0-only
 """REST routes for the Kaggle plugin.
 
 Mounted once at service startup (installed host collects controllers only in

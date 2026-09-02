@@ -3,6 +3,9 @@ name = "3lc-compute-plugin-kaggle"
 version = "1.1.1"
 description = "End-to-end Kaggle competition workflow for the 3LC Hub: import, train the fixed baseline, predict, submit."
 requires-python = ">=3.10"
+# AGPL-3.0: this plugin links 3lc-ultralytics (Ultralytics YOLO, AGPL-3.0),
+# so a distributed work must itself be AGPL-3.0. Full text in ./LICENSE.
+license = "AGPL-3.0-only"
 # Installed host (tlc_compute 0.1.1.47) imports in-process: deps must already
 # exist in the host venv. No SDK dependency yet — the installed host has no
 # tlc_plugin_sdk; the ComputePlugin base comes from tlc_compute itself.
@@ -16,7 +19,7 @@ dependencies = []
 [tool.tlc-compute]
 id = "kaggle"
 name = "Kaggle Competition"
-description = "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit."
+description = "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit. Uses Ultralytics YOLO (AGPL-3.0); commercial use may require an Ultralytics Enterprise License."
 version = "1.1.1"
 min_service_version = "0.1.0"
 icon = "🏁"

@@ -1,3 +1,5 @@
+# Copyright 2026 3LC Inc.
+# SPDX-License-Identifier: AGPL-3.0-only
 """Predict + Submit card backend: weights -> inference -> submission.csv -> Kaggle.
 
 Submission schema (must match competition_exdark/metric/metric_exdark.py):

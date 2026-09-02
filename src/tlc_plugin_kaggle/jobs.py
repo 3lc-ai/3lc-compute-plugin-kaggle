@@ -1,3 +1,5 @@
+# Copyright 2026 3LC Inc.
+# SPDX-License-Identifier: AGPL-3.0-only
 """Disk-persisted job store for the Kaggle plugin.
 
 v2 (session 2): every job is mirrored to ``~/.3lc-kaggle-plugin/jobs/<id>.json``
