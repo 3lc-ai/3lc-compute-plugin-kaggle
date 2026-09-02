@@ -89,6 +89,26 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/tlc_plugin_kaggle"]
 
+# The sdist is an ALLOWLIST, not an exclude list, and deliberately so: the
+# default sweep shipped every internal doc plus an untracked
+# .claude/settings.local.json carrying absolute dev paths, the redirected-home
+# layout and service ports. An exclude list leaks each new untracked file by
+# default; naming what ships cannot. pyproject.toml and PKG-INFO are always
+# included by hatchling and need no entry.
+# tests/ and scripts/ are a package deal: tests/test_kit_scripts.py puts
+# scripts/ on sys.path and imports make_kit_manifest, so dropping scripts/
+# breaks the shipped suite at import. It builds a synthetic kit in tmp_path,
+# so kit/manifest.json is NOT needed. Docs, CLAUDE.md, CONTEXT.md,
+# catalog.json, uv.lock and kit/ are all out - none is a build input.
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src/tlc_plugin_kaggle",
+  "/tests",
+  "/scripts",
+  "/README.md",
+  "/LICENSE",
+]
+
 # torch/torchvision from the CUDA 12.8 index on Linux AND Windows — used only
 # when the [kaggle] extra is selected during folder-source venv provisioning
 # (uv sync). Windows needs the explicit index because default-PyPI torch on

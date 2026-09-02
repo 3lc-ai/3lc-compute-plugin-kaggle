@@ -117,21 +117,30 @@ content MD5s (verified at staging, 2026-08-27).
   shards and arrive at the same hashes — the committed manifest is
   verifiable, not trusted. That determinism is what makes "CDN + committed
   manifest" a sufficient canonical record.
-- **Disaster recovery is a GitHub release asset**: tag `kit-exdark-v1`
-  carries `exdark_starter_kit_canonical.zip` (587 MB, sha256
-  `e84105db8f2a74cdaba02f54adcd79461a82b4254ebfa4fd6d05c69919e504ac`;
-  GitHub's computed digest matches the local hash). This zip is the recovery
-  copy of the KIT TREE and is **NOT byte-identical to the CDN shards** —
-  different artifacts on purpose: the zip archives the tree, the shards are
-  the deterministic distribution build generated FROM it. Do not try to
-  reconcile their hashes; parity is checked per-file with
-  `scripts/check_kit_parity.py` against the manifest, on either artifact.
-- **The kit release is the repo's only GitHub Release entry**, so it wears
-  GitHub's "Latest" badge by default. That is cosmetic and harmless — the
-  catalog drives installs, not the badge. Do NOT "fix" it by creating
-  release entries for code tags; code versions are git tags only, and
-  release entries for them would add a maintenance surface this repo
-  deliberately does not have.
+- **Disaster recovery is the kit tree plus the committed manifest**, not a
+  release asset. The `kit-exdark-v1` GitHub Release once carried
+  `exdark_starter_kit_canonical.zip` (587 MB, sha256 `e84105db…`); it was
+  **deleted 2026-09-02, before this repo went public**, with 0 recorded
+  downloads. Recovery is unaffected: the kit tree survives in the workspace
+  and parity is checked per-file with `scripts/check_kit_parity.py` against
+  the committed manifest, which is the actual anchor. The **tag**
+  `kit-exdark-v1` is kept — it marks the kit-tree state and costs nothing.
+  Note the zip was never byte-identical to the CDN shards: the zip archived
+  the tree, the shards are the deterministic build generated FROM it. Never
+  try to reconcile those hashes.
+- **This repo now has no GitHub Release entries at all.** Do NOT create them
+  for code tags; code versions are git tags only, and release entries would
+  add a maintenance surface this repo deliberately does not have.
+
+> **The v1 kit on the CDN still ships un-attributed images.** Deleting the
+> release was hygiene, not a fix. The prefix
+> `https://competitions.3lc.ai/kaggle/exdark-low-light/starter-kit/v1`
+> serves 7,358 ExDark images with no
+> `starter_kit/LICENSE-ExDark.txt`, and BSD-3 clauses 1–2 require the notice
+> to travel with them. That prefix is immutable by the rule above, so the
+> notice cannot be added in place — **only the v2 rebuild closes it** (add
+> the file, regenerate shards + manifest, bump `STARTER_KIT_VERSION`). Tracked
+> as a launch blocker in [docs/v1.1-ideas.md](docs/v1.1-ideas.md).
 
 ### Staging to the CDN
 

@@ -12,3 +12,6 @@ scratch/
 *.log
 *.tmp
 /*.js
+# Personal Claude Code settings. Untracked-but-not-ignored is how this got
+# swept into the sdist; it carries absolute dev paths and service ports.
+.claude/settings.local.json
