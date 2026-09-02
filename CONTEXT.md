@@ -25,7 +25,7 @@ One line per term. Depth: docs/ui-notes.md (UI), ../3lc-hub-next/PORT_PLAN.md (p
 
 ## The four tabs & UI language
 
-- **the four tabs** — Import · Train · Predict + Submit · Status, under the sidebar entry "Kaggle" (AI Tools), joined by the 4-step stepper (pipeline indicator; checkmarks share the tabs' backend truth).
+- **the four tabs** — Import · Train · Predict + Submit · Status, under the sidebar entry "Kaggle Competition" (AI Tools), joined by the 4-step stepper (pipeline indicator; checkmarks share the tabs' backend truth).
 - **six-state machine** — every tab: 1 Empty · 2 Preflight/gate · 3 In progress · 4 Success · 5 Failure · 6 Revisit; tab-open resolution: running job → verified snapshot → form.
 - **Import specifics** — YAML preflight → single staged job → 9/9 cross-split checks incl. the GT-leak guard ("test table carries no ground-truth boxes"); canonical rows 5,910 / 733 / 715.
 - **Train specifics** — gate (read-only table existence checks) → in-run (header + batch-determinate bar + metrics strip/sparklines) → terminal (banner + provenance panel); locked-contract banner with read-only rows.

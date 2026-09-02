@@ -79,7 +79,7 @@ see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
    worker venv (CUDA torch, several GB, one-time). It registers live — **no
    settings.json editing, no dependency pip installs, no service restart.**
 
-4. **Kaggle** appears in the sidebar under **AI TOOLS**.
+4. **Kaggle Competition** appears in the sidebar under **AI TOOLS**.
 
 Updating later: publishing v1.2.x means a new catalog entry — the card grows an
 **Update** button; one click swaps the version. Publishing steps are in

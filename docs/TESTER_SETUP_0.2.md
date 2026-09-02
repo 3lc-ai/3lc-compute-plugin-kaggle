@@ -143,7 +143,7 @@ C:\3lc-hub-next\.venv\Scripts\3lc-compute.exe          # Compute Service :5020 (
 3. The **Kaggle Competition** card appears under Available → **Install**.
    First install builds the worker venv (CUDA torch — several GB; watch the
    card's progress). It registers live; no service restart.
-4. Click **Kaggle** in the sidebar (AI Tools) — the four-tab page loads.
+4. Click **Kaggle Competition** in the sidebar (AI Tools) — the four-tab page loads.
 
 ## 4. Smoke test
 
