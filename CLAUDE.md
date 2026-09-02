@@ -125,3 +125,14 @@ the same session, or the map silently goes stale. [codified 2026-09-02]
 | docs/training-sanity.md | Why from-scratch ≈ 0.004 was normal; pretrained reference trajectory (~0.71 @ 10 ep val, 0.571 test); the answer sheet for "is training broken?" |
 | docs/REMOTE_COMPUTE.md | Browser≠host surface audit, platform matrix, round-1 stumbles, round-2 submit policy |
 | ../competition_exdark/reference/CONCLUSION_MATERIALS.md (workspace) | What gets published when the competition ends |
+
+## F. The restraint ladder
+
+Before writing code, stop at the first rung that holds: does this need to
+exist at all (if not, skip it) → can the stdlib do it → is there a native
+platform feature (3LC SDK, Hub, browser, OS) → is it already an installed
+dependency → can it be one line → only then, the minimum that works. This is
+A2 applied before the first keystroke rather than after.
+Never cut to climb down a rung: security, trust-boundary validation (anything
+crossing participant/host or worker/browser), data-loss handling, and
+accessibility (reduced-motion parity, keyboard, contrast) are floor, not scope.
