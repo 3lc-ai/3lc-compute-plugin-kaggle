@@ -52,7 +52,10 @@ ExDark images carry their own upstream licenses.
 ## 1. Install — catalog (the primary path)
 
 **Full walkthrough with the exact pinned commands and a one-shot setup script:
-[docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md).** The short version:
+[docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md).** The short version below
+is the **0.2.x** route; on a **1.0.x** host three of its steps change — see
+[1.0.x deltas](#10x-deltas) right after it. Same plugin, same `@v1.2.9` tag,
+same four-tab page either way.
 
 1. **Hub venv** (Python 3.12 via uv; `uv` itself is required at runtime — the
    plugin shop installs run through it):
@@ -76,7 +79,7 @@ ExDark images carry their own upstream licenses.
    neither is needed on macOS/Linux, though the second is a harmless no-op there):
 
    ```powershell
-   $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.8\.venv\Scripts\python.exe"
+   $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.9\.venv\Scripts\python.exe"
    $env:UV_TORCH_BACKEND = "auto"
    ```
 
@@ -101,6 +104,35 @@ ExDark images carry their own upstream licenses.
 Updating later: publishing v1.2.x means a new catalog entry — the card grows an
 **Update** button; one click swaps the version. Publishing steps are in
 [RELEASING.md](RELEASING.md).
+
+### 1.0.x deltas
+
+Verified on compute 1.0.1 + 3lc 3.3.0 (2026-09-02). Steps 1, 2 and 3 above are
+0.2.x-specific; the rest of the flow is identical.
+
+- **Step 1 — no 3LC indexes.** 1.0.1 and 3lc 3.3.0 are both on public PyPI:
+  `uv pip install --index-url https://pypi.org/simple "3lc-compute==1.0.1" "3lc==3.3.0"`.
+  `uv` also ships as a dependency now, so it need not be on PATH.
+- **Step 2 — drop the first env var.** Bug W1 is fixed (the host derives
+  `Scripts\python.exe` itself), so `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` and
+  its per-update version repointing are gone. Keep `UV_TORCH_BACKEND=auto`.
+- **Step 3 — the catalog URL is an env var, not a paste.** 1.0.1 defaults to
+  `plugin_install_policy: "catalog-only"`, and that policy **also gates adding a
+  catalog through the API**, so the Hub's *Catalog sources* field returns 403:
+  adding a catalog grants trust, so it sits behind the same gate as installing.
+  Set it on the compute-service command instead, **listing both URLs** — the env
+  value *replaces* the baked-in default catalog, so the gist alone would hide
+  the stock 3LC cards:
+
+  ```powershell
+  $env:TLC_COMPUTE_PLUGIN_CATALOG_URLS = "https://gist.githubusercontent.com/Rishikesh-Jadhav/926ead27a6a1ed6429cf86d1924a24ce/raw/catalog.json,https://3lc-public-examples-2-2.s3.amazonaws.com/hub/catalog.json"
+  ```
+
+  Then start the service and click **Install** on the card as before.
+
+Environment recipe and the full verdict list (W1, W5 and W7 are all closed on
+1.0.1): `../3lc-hub-ga/SETUP.md` and the 2026-09-02 addendum in
+`../3lc-hub-next/PORT_PLAN.md`.
 
 ---
 
@@ -238,7 +270,8 @@ Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
 > in the competition workflow, and is not a finding. Every round-1 tester asked
 > about it, hence this banner.
 
-1. **Kaggle page 500s on first open / every job start fails.**
+1. **Kaggle page 500s on first open / every job start fails.** *(0.2.x only —
+   W1 is fixed on 1.0.x, where this env var should NOT be set.)*
    Cause: the Windows worker-interpreter bug (0.2.1 spawns `<venv>/bin/python`,
    a POSIX path) — the `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` env var from §1
    step 2 is missing or wrong in the compute-service window. (Round-1 machines:

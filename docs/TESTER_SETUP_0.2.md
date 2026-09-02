@@ -118,6 +118,15 @@ C:\3lc-hub-next\.venv\Scripts\3lc-compute.exe          # Compute Service :5020 (
 
 ## 3. Install the plugin from the catalog
 
+> **Check your host version first — this step differs by generation.**
+> `curl http://localhost:5020/health` (or `:5021`/`:5022`) reports it.
+>
+> - **compute 0.2.x** → follow **3a** below. That is this doc's pairing.
+> - **compute 1.0.x** (0.6+ in general) → **3a's catalog paste is refused.**
+>   Skip to **3b**.
+
+### 3a. On a 0.2.x host
+
 1. Open the Hub in your browser and go to **Plugins → Available**.
 2. Under **Catalog sources**, paste the hosted catalog URL:
 
@@ -145,6 +154,40 @@ C:\3lc-hub-next\.venv\Scripts\3lc-compute.exe          # Compute Service :5020 (
    card's progress). It registers live; no service restart.
 4. Click **Kaggle Competition** in the sidebar (AI Tools) — the four-tab page loads.
 
+### 3b. On a 1.0.x host — the catalog URL is a service env var, not a paste
+
+Verified on compute 1.0.1 (2026-09-02, `3lc-hub-ga/`). 1.0.1 boots with
+`plugin_install_policy: "catalog-only"`, and under that policy **the Hub's
+"Catalog sources" field is refused with a 403**: adding a catalog *grants
+trust* (the policy allows any source a configured catalog lists), so it sits
+behind the same gate as installing. The trusted set has to come from the
+operator's own configuration instead.
+
+So the catalog goes on the **compute-service command**, before you start it:
+
+```powershell
+# BOTH urls, comma-separated. Setting this REPLACES the baked-in default
+# catalog, so listing only the gist would hide the ~11 stock 3LC cards.
+$env:TLC_COMPUTE_PLUGIN_CATALOG_URLS = "https://gist.githubusercontent.com/Rishikesh-Jadhav/926ead27a6a1ed6429cf86d1924a24ce/raw/catalog.json,https://3lc-public-examples-2-2.s3.amazonaws.com/hub/catalog.json"
+```
+
+Then start the service in that window and continue from **3a step 3** — the
+card appears under Available and installs normally, and the v1.2.9 entry's git
+source is policy-allowed because a configured catalog lists it. Confirm with
+`3lc-compute`'s startup line `Plugin catalog cache warmed from 2 source(s)`.
+
+Two more 1.0.x deltas worth knowing at setup time:
+
+- **Drop `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK`.** Bug W1 is fixed in 1.0.x
+  (the host now derives `Scripts\python.exe` on Windows itself), so the var —
+  and the version-segment repointing it demanded on every update — is no longer
+  needed. Keep `UV_TORCH_BACKEND=auto`; it still does the GPU-torch work.
+- **`uv` need not be on PATH.** 1.0.x ships uv as a dependency and calls its own
+  copy out of the host venv. The step-0 prerequisite stays true for 0.2.x.
+
+Neither the plugin nor its install source changes between the two generations:
+the same `@v1.2.9` tag, the same card, the same four-tab page.
+
 ## 4. Smoke test
 
 Run `SMOKE_TEST.md` from the repo root as before — the flow is unchanged
@@ -164,7 +207,9 @@ manual install you may notice:
 > bug W5: `ConfigIndexingTable` / `object_type 'configfile'` — public-examples
 > indexing broken in the 0.2.1 + 3.1.0 pairing, caught and logged). It is one
 > log record from `tlc_compute.app`, printed with its traceback — the object
-> service never emits it. Not a finding; don't report it.
+> service never emits it. Not a finding; don't report it. **0.2.x only:** W5 is
+> fixed on 1.0.x, so on that generation this traceback should be absent — if you
+> see it there, that IS worth reporting.
 
 | Symptom | Cause / fix |
 |---|---|
