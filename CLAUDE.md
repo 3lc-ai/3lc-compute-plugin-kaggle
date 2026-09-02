@@ -106,6 +106,12 @@ CONTEXT.md need a corresponding line, and update them in the same commit
 series. These files are only useful while true. Keep them terse — one line
 per fact, link out for depth. [codified 2026-08-10]
 
+The **workspace root** has its own `../CLAUDE.md` (folder canonicality, the
+two-Hub port split, Kaggle credential locations, where this file takes over).
+It is unversioned — no history, no undo, and no commit of its own to ride
+along with — so a change here that moves the workspace map must update it in
+the same session, or the map silently goes stale. [codified 2026-09-02]
+
 ## E. Pointers
 
 | Doc | Answers |
