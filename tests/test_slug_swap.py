@@ -1,8 +1,13 @@
 """The launch-swap case (DP-04): an install carrying an old persisted slug
 plus a version bump that changes COMPETITION_SLUG must resolve to the NEW
-slug — while a deliberate user override survives. At the real launch the
-same mechanics apply with the typo'd test slug added to RETIRED_SLUGS in
-the same commit that swaps the constant (LAUNCH-VERIFY item).
+slug — while a deliberate user override survives.
+
+At the real launch the same mechanics apply, and the retirement half is
+already done: the typo'd test slug was added to constants.RETIRED_SLUGS on
+2026-09-02 (E8), so the launch commit only swaps COMPETITION_SLUG. The
+`launch` fixture below still monkeypatches both, because it has to simulate
+a build where the constant has ALREADY moved — that is the state these
+tests exist to cover, and it is not the shipped state.
 """
 
 from __future__ import annotations

@@ -128,8 +128,15 @@ D1+D2.
 > constant", the migration collapses the current/retired slugs to null, and
 > `tests/test_slug_swap.py` proves the launch-swap case: a persisted
 > v1.2.5-era slug plus a bumped `COMPETITION_SLUG` resolves to the NEW slug
-> while an explicit user override survives. Launch still requires the
-> RETIRED_SLUGS same-commit step (LAUNCH-VERIFY).
+> while an explicit user override survives.
+>
+> **Fully resolved 2026-09-02 (E8):** the RETIRED_SLUGS step no longer has to
+> happen at launch — the typo'd test slug is listed in `RETIRED_SLUGS` now, so
+> the launch commit only swaps `COMPETITION_SLUG`. Listing it early is inert
+> while the constant still holds that value (`config_store.py:255` tests
+> `raw_slug != COMPETITION_SLUG` before the membership test, so it is
+> unreachable for that value today) and becomes load-bearing the instant the
+> constant changes. DP-04 carries no remaining LAUNCH-VERIFY step.
 
 - **Class:** D3 + D1
 - **Steps:**

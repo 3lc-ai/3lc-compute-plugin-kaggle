@@ -52,9 +52,23 @@ def starter_kit_prefix() -> str:
 
 # Slugs that must never win over the shipped constant when found persisted
 # as session.slug_override: the placeholder that shipped in early builds,
-# plus every slug this plugin has since retired. LAUNCH-VERIFY: add the
-# typo'd test slug above to this set IN THE SAME COMMIT that swaps
-# COMPETITION_SLUG, so a v1.2.5-era persisted slug (or an install that
-# skipped v1.2.6) collapses to tracking the new constant instead of
-# submitting to the retired test competition (tests/test_slug_swap.py).
-RETIRED_SLUGS = frozenset({"[SLUG]"})
+# plus every slug this plugin has since retired. A v1.2.5-era persisted slug
+# (or an install that skipped v1.2.6) must collapse to tracking the shipped
+# constant instead of submitting to a retired competition
+# (config_store.py:255, tests/test_slug_swap.py).
+#
+# LAUNCH-VERIFY — the pairing is now PRE-SATISFIED, not pending. The typo'd
+# test slug is listed below already, so the launch commit only has to swap
+# COMPETITION_SLUG above; there is no second edit to forget here. Listing it
+# early is provably inert while COMPETITION_SLUG still holds it: the guard at
+# config_store.py:255 rejects an override on `raw_slug != COMPETITION_SLUG`
+# first, so the membership test is unreachable for that value today
+# (tests/test_slug_swap.py::test_slug_equal_to_current_shipped_collapses
+# covers exactly this pre-launch case). It becomes load-bearing the instant
+# COMPETITION_SLUG changes. Keep the literal in sync if the typo'd slug is
+# ever re-spelled: this set is matched by value, not by reference to the
+# constant, precisely so the retired value survives the swap.
+RETIRED_SLUGS = frozenset({
+    "[SLUG]",
+    "the-3-lc-low-light-object-detection-comepetition-test",
+})
