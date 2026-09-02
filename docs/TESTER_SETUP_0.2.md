@@ -38,7 +38,7 @@ tested against** — don't float them. Time budget: ~15 min + one big download
 | **Join the competition FIRST** | Open the competition page on Kaggle, click **Join Competition**, and accept the rules — before anything else. Submitting without having entered fails in unhelpful ways (a 500, not a friendly message), and it's the one state nobody can re-test for you after the fact. |
 | Python 3.12 | `winget install Python.Python.3.12` |
 | uv | `winget install astral-sh.uv` — **required**: the plugin shop installs run through uv |
-| git + GitHub access to `3lc-ai` | the plugin repo is private; run `git ls-remote https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git` once so Git Credential Manager stores a token. Without it the shop install fails with `fatal: could not read Username for 'https://github.com'`. |
+| git | the shop install resolves a `git+https` source, so git must be on PATH. The repo is public, so no token or GitHub sign-in is needed. |
 | NVIDIA GPU + driver (CUDA ≥ 12.8) | `nvidia-smi` |
 | 3LC API key | dashboard → account |
 | Kaggle credentials | KGAT token saved byte-exact to `~/.kaggle/access_token` — dual-platform commands in README §2 (Submit tab needs it; Import/Train work without; legacy `kaggle.json` also works) |
@@ -135,11 +135,11 @@ C:\3lc-hub-next\.venv\Scripts\3lc-compute.exe          # Compute Service :5020 (
    ```
 
    (That's the latest-revision raw form — the URL never changes; it always
-   serves the newest published catalog. The Hub fetches catalogs without
-   auth, which is why the catalog is hosted on a public gist while the repo
-   is private — repo raw URLs 404. The *install source* inside the catalog
-   is unaffected — it goes through git, which has your credentials; that's
-   what the `git ls-remote` prerequisite above is for.)
+   serves the newest published catalog. The gist mirrors the repo's own
+   `catalog.json` and dates from when this repo was private and its raw URLs
+   404'd; it is superseded by a raw URL on the repo, but remains the URL to
+   paste until that cutover lands. The *install source* inside the catalog is
+   a public `git+https` reference and needs no credentials.)
 
    *Fallback (gist unreachable / offline):* local paths are also a
    supported catalog form — clone the repo and add the absolute path to its

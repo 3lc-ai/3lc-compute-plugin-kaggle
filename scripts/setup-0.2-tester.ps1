@@ -7,8 +7,7 @@
 # Prerequisites you must have first (the script checks and stops if missing):
 #   * Python 3.12 on PATH        (winget install Python.Python.3.12)
 #   * uv on PATH                 (winget install astral-sh.uv)  <- REQUIRED by the plugin shop
-#   * git on PATH + GitHub access to 3lc-ai (private repo; sign in once so
-#     Git Credential Manager has a token: `git ls-remote https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git`)
+#   * git on PATH (the plugin repo is public; no GitHub token needed)
 #   * An NVIDIA GPU + driver (CUDA >= 12.8 userspace)
 #   * Your 3LC API key (dashboard -> account)
 

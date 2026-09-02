@@ -10,14 +10,6 @@ loop on one Hub sidebar page, four tabs: **1 Import → 2 Train → 3 Predict + 
 4 Status** — edit labels in the 3LC Dashboard between rounds, retrain on the newest
 table revision, submit, repeat.
 
-<!-- VALIDATE (user): screenshots not yet captured. Capture per demo/SHOT_LIST.md
-     (workspace), save into docs/shots/ with these filenames, commit, and delete
-     this comment. The provenance panel (?kgdev=train-state4) is the centerpiece. -->
-![Verified provenance panel — the centerpiece](docs/shots/03_provenance_hash.png)
-![Train contract panel](docs/shots/02_train_contract.png)
-![Predict results](docs/shots/05_predict_results.png)
-![Status hero + history](docs/shots/09_status_history.png)
-
 **Version pairing (v1.2.2):** 3LC Hub with `3lc-compute==0.2.1` + `3lc==3.1.0`
 (the 0.2.x plugin platform). For the legacy 0.1.x-host install (plugin v1.1.x),
 see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
@@ -90,11 +82,12 @@ same four-tab page either way.
    https://gist.githubusercontent.com/Rishikesh-Jadhav/926ead27a6a1ed6429cf86d1924a24ce/raw/catalog.json
    ```
 
-   (the Hub fetches catalogs unauthenticated, so the catalog is hosted on a
-   public gist while the repo is private — repo raw URLs 404; the install
-   source inside the catalog goes through git, which has your credentials.
-   Fallback: the absolute path to [`catalog.json`](catalog.json) in a local
-   clone also works as a catalog source), and
+   (the Hub fetches catalogs unauthenticated. The gist mirrors this repo's
+   own [`catalog.json`](catalog.json), which stays the source of truth; it
+   dates from when the repo was private and its raw URLs 404'd. It is
+   superseded by a raw `catalog.json` URL on the repo itself — until that
+   cutover lands, paste the gist URL above. Fallback: the absolute path to
+   `catalog.json` in a local clone also works as a catalog source), and
    click **Install** on the *Kaggle Competition* card. First install builds the
    worker venv (CUDA torch, several GB, one-time). It registers live — **no
    settings.json editing, no dependency pip installs, no service restart.**
@@ -168,15 +161,12 @@ get a CSV either way.
 
 The competition starter kit is **not in this repo** (it is ~616 MB).
 
-<!-- VALIDATE (user): distribution channel for testers — currently the kit exists as
-     a local build artifact and on the private Kaggle competition's Data tab. -->
-- Ask the organizer (Rishikesh) for `starter_kit.zip`.
-- If you received the organizer's build: **615,995,197 bytes**, sha256
-  `5bf297eed3dc6d12811c7c7eee1c8cc28ba6db4197f0530bd2322f63adbbdca1`
+- Download `starter_kit.zip` from the competition's **Data** tab on Kaggle. Kaggle
+  re-zips the files, so that copy is **616,590,902 bytes**, sha256 `39f2b48c…`
   (`Get-FileHash starter_kit.zip` to check).
-- If you downloaded it from the Kaggle competition page instead, Kaggle re-zips the
-  files: **616,590,902 bytes**, sha256 `39f2b48c…` — different hash, byte-identical
-  contents. Don't file a bug about the mismatch.
+- A direct build of the kit is **615,995,197 bytes**, sha256
+  `5bf297eed3dc6d12811c7c7eee1c8cc28ba6db4197f0530bd2322f63adbbdca1` — a different
+  hash, byte-identical contents. Don't file a bug about the mismatch.
 
 **Unzip it somewhere permanent.** The Hub reads images from that folder forever after
 import — don't move or rename it. Inside: `dataset.yaml`, `sample_submission.csv`,
@@ -207,8 +197,6 @@ The strict checklist version of this section, with pass/fail boxes, is
    at a smaller effective batch to fit VRAM — the round-1 fresh laptop
    (RTX 3070 Ti, 8 GB) trained at batch 8 and took roughly twice the desktop
    per-epoch time; slower is normal, only a *failure* is a finding.
-   <!-- VALIDATE (user): fill the measured 3070 Ti per-epoch minutes from the
-        round-1 fresh-laptop run to replace "roughly twice". -->
    After training the plugin frees GPU memory before Predict; Predict itself
    streams inference in VRAM-sized chunks (v1.2.1) — the 12 GB OOM from round 1
    is fixed.
@@ -256,8 +244,7 @@ Happy paths (per tab), then the deliberate failure paths:
 **Found a bug?** Every tab has a **Copy diagnostics** button (also embedded in error
 banners) that copies a fenced block with the plugin version, inputs, checks, and log
 tail. Paste that block plus what you expected vs. saw.
-<!-- VALIDATE (user): where should testers send reports — Slack channel or email? -->
-Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
+Open an issue on this repository with that block attached.
 
 ---
 
@@ -280,9 +267,11 @@ Send reports to Rishikesh (rishikesh.jadhav@3lc.ai).
    and restart the compute service window.
 
 2. **Catalog install fails: `could not read Username for 'https://github.com'`.**
-   Cause: the repo is private and git has no stored GitHub credential.
+   Cause: git is prompting for a credential. The repo is public and the
+   install source needs no token, so this points at a credential helper
+   configured to demand one.
    Fix: `git ls-remote https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git`
-   once (interactive sign-in via Git Credential Manager), retry Install.
+   once to confirm anonymous read works, then retry Install.
 
 3. **Training says CUDA unavailable / crawls on CPU.**
    Cause: the worker venv was built without `UV_TORCH_BACKEND=auto`

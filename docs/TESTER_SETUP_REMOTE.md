@@ -13,10 +13,9 @@ from a Mac or any laptop. Validated surface notes are in
 
 ## 1. Host setup (Linux, NVIDIA GPU)
 
-Prerequisites on the host: Python 3.12, `uv`, `git` (with a GitHub token
-that can read the private repo: run
-`git ls-remote https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git`
-once), NVIDIA driver with CUDA ≥ 12.8 userspace (`nvidia-smi`).
+Prerequisites on the host: Python 3.12, `uv`, `git` (the repo is public, so
+no GitHub token is needed), NVIDIA driver with CUDA ≥ 12.8 userspace
+(`nvidia-smi`).
 
 ```bash
 # Hub venv — the same pinned pairing as the Windows guide

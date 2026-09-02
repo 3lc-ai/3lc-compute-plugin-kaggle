@@ -133,35 +133,32 @@ content MD5s (verified at staging, 2026-08-27).
   release entries for them would add a maintenance surface this repo
   deliberately does not have.
 
-### Staging to the CDN (the pipeline facts)
+### Staging to the CDN
 
-Upload the version dir to the dev bucket, then sync dev → prod:
+Upload the version dir to the dev bucket. **The dev → prod sync is run by the
+Hub team** — ask them to stage the one version prefix you just uploaded, and
+name that prefix explicitly in the request.
 
-- Azure DevOps access must be **Basic**, not Stakeholder — Stakeholder hides
-  the Run option and fails with "Failed to load Azure Repos source specified
-  by this pipeline".
-- Prod (`3lc-competitions`) is a separate AWS account, reachable ONLY via
-  the sync pipeline `TLC-Sync-Public-Examples-OnDemand` (definitionId=151).
-- The pipeline's "List of folders to sync" parameter defaults to `- /`
-  (EVERYTHING). That default is dangerous: always scope it to the one
-  prefix being staged (e.g. `- /kaggle/exdark-low-light`) so a mis-selected
-  bucket pair cannot sync unrelated prefixes.
-- Timing reference: dev→prod of 628 MB took 23 seconds (in-region S3 copy);
-  the slow leg is the upload TO dev from a home connection.
 - Verify after staging: HEAD returns `Accept-Ranges: bytes`, a `-r 0-1023`
   GET returns 206/1024 (the downloader's resume depends on ranges), and the
   manifest round-trips byte-identically through the CDN.
 
 ## Why the gist exists at all
 
-The Hub fetches catalog sources **unauthenticated**, and this repo is private,
-so `raw.githubusercontent.com` URLs on the repo return 404 (verified
-2026-07-31). The public gist hosts only `catalog.json`; the install source
-inside it still goes through git, which carries the tester's credentials —
-hence the `git ls-remote` prerequisite in
-[docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md).
+The Hub fetches catalog sources **unauthenticated**. While this repo was
+private its `raw.githubusercontent.com` URLs returned 404 (verified
+2026-07-31), so the catalog was mirrored to a public gist. That reason is now
+spent: the repo is public and its own raw `catalog.json` URL serves
+anonymously.
 
-**When the repo goes public:** retire the gist in favor of the repo's raw
-`catalog.json` URL (update README, TESTER_SETUP, and this file), and drop the
-git-token prerequisite from the tester docs. Tracked in the launch notes in
-[docs/v1.1-ideas.md](docs/v1.1-ideas.md).
+**The gist is therefore superseded**, and is kept only until the cutover lands
+so that hubs already pointed at it keep resolving. Retiring it means
+publishing the repo's raw `catalog.json` URL in README and TESTER_SETUP and
+here, then deleting the gist once no hub is pointed at it.
+
+**The cutover has one precondition** — the raw URL must serve the CURRENT
+catalog. `catalog.json` on the default branch is stale (plugin id `kaggle`,
+newest 1.2.0); the live one, id `kaggle-exdark` through 1.2.9, is on
+`port/0.2.x`. Pointing testers at a raw URL before that is reconciled would
+serve a catalog whose id does not match the plugin id, and installs would
+fail. Settle which branch is canonical first.
