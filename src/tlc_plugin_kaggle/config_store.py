@@ -1,3 +1,5 @@
+# Copyright 2026 3LC Inc.
+# SPDX-License-Identifier: AGPL-3.0-only
 """Disk-backed store for last-used UI values (one JSON file).
 
 The installed host (tlc_compute 0.1.1.47) ships no shared config-store

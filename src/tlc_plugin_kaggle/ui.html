@@ -1,3 +1,5 @@
+<!-- Copyright 2026 3LC Inc. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <style>
 /* ── Kaggle plugin styles (shared tokens from main.css / plugin-common.css) ── */
 
@@ -32,6 +34,19 @@
 .kgi-muted { color: var(--text-muted); }
 /* Buttons that carry an icon: flex-align icon and label */
 .kgi-btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* License notice: static furniture above the hero, always visible.
+   Recedes (bg-card, not accent-light) — it informs, it does not alert.
+   No motion: nothing to gate under prefers-reduced-motion. */
+.kg-license-note {
+  display: flex; align-items: flex-start; gap: 9px;
+  margin-bottom: 14px; padding: 9px 12px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 8px);
+  font-size: 11px; color: var(--text-muted); line-height: 1.55;
+}
+.kg-license-note > .kgi { margin-top: 2px; }
+.kg-license-note a { color: var(--accent); }
 
 /* Header identity: icon + title + muted one-liner, three deliberate layers
    (identity / constraints / loop) on a 14px rhythm. Static furniture — no
@@ -553,6 +568,18 @@
 </style>
 
 <div class="plugin-page-narrow" style="padding: 24px; max-width: 900px; margin: 0 auto;">
+  <!-- ── License notice ────────────────────────────── -->
+  <div class="kg-license-note">
+    <svg class="kgi kgi-16 kgi-muted" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v11"/><path d="M3 5h10"/><path d="M5 5l-2.2 4.5a2.4 2.4 0 0 0 4.4 0L5 5z"/><path d="M11 5l-2.2 4.5a2.4 2.4 0 0 0 4.4 0L11 5z"/><path d="M6 14h4"/></svg>
+    <span>
+      This plugin uses <a href="https://github.com/ultralytics/ultralytics" target="_blank" rel="noopener">Ultralytics YOLO</a>, which is dual-licensed:
+      free under the <a href="https://github.com/ultralytics/ultralytics/blob/main/LICENSE" target="_blank" rel="noopener">Ultralytics AGPL-3.0 license</a>
+      for use that complies with its open-source terms, while commercial use beyond those terms requires a paid
+      <a href="https://www.ultralytics.com/license" target="_blank" rel="noopener">Ultralytics Enterprise License</a>.
+      It is your responsibility to ensure your use is appropriately licensed.
+    </span>
+  </div>
+
   <!-- ── Hero ──────────────────────────────────────────────────────── -->
   <div class="plugin-hero" style="margin-bottom: 4px;">
     <div class="kg-id-row">

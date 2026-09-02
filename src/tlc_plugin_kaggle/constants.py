@@ -1,3 +1,5 @@
+# Copyright 2026 3LC Inc.
+# SPDX-License-Identifier: AGPL-3.0-only
 """Competition constants — the single definition site (leaf module).
 
 Stdlib-free and imported by config_store, importer, predictor, and routes;

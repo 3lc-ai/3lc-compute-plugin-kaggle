@@ -517,6 +517,29 @@ below it. The pattern for any future in-tab section:
 
 ---
 
+## 16. License notice (v1.2.9)
+
+A permanent, non-dismissible band above the hero — first child of
+`.plugin-page-narrow`, so it is the first thing on every tab. Parity with the
+Ultralytics YOLO plugin's `.yolo-license-note`, which is where the requirement
+and the copy come from; we render its text verbatim.
+
+- **`.kg-license-note`**, a private class, not `.plugin-*`: flex row, 11px,
+  `var(--text-muted)`, `var(--bg-card)` on `var(--border)`. It **recedes** —
+  `bg-card`, never `accent-light`, and never a `.kg-callout` variant. A
+  callout alerts; this informs, permanently, and must not read as a problem.
+- **Static furniture** (like `.kg-id-row`): no entrance motion, so nothing to
+  gate under `prefers-reduced-motion` and no parity work.
+- Icon from our set: `.kgi .kgi-16 .kgi-muted`, 16px grid / 1.5px stroke
+  (banner size per §3) — not a copy of yolo's 14px / 1.4px SVG.
+- Copy uses a colon after "dual-licensed", not an em dash, matching yolo's
+  rendered string and §4's no-em-dash rule. Links: Ultralytics YOLO, the
+  Ultralytics AGPL-3.0 license, the Ultralytics Enterprise License.
+- **No fixture work**: it lives outside the tab panels, so every `?kgdev`
+  render shows it without any fixture change.
+
+---
+
 ## Appendix — Import-tab reference
 
 ### ?kgdev fixture map

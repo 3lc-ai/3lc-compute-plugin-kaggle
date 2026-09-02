@@ -1,3 +1,5 @@
+# Copyright 2026 3LC Inc.
+# SPDX-License-Identifier: AGPL-3.0-only
 """Starter-kit CDN downloader (job kind "download_kit").
 
 Fetches the immutable versioned CDN prefix (constants.starter_kit_prefix()),

@@ -30,6 +30,23 @@ see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
 | Remote compute host (Linux GPU box), browse from any machine incl. Mac | **Supported** — guide: [docs/TESTER_SETUP_REMOTE.md](docs/TESTER_SETUP_REMOTE.md); surface audit: [docs/REMOTE_COMPUTE.md](docs/REMOTE_COMPUTE.md) |
 | Mac-local training (Apple Silicon / MPS) | **Validated** (2026-08-10, round-2 pairing test on v1.2.2) — blank Device auto-selects `mps`; measured ~4 min/epoch training and ~9 s for the full 715-image predict, pinned-checkpoint sha verified. Setup: [TESTER_SETUP_0.2.md macOS appendix](docs/TESTER_SETUP_0.2.md) — no service env vars needed |
 
+## Licensing
+
+This plugin is licensed **AGPL-3.0-only** (full text in [LICENSE](LICENSE)): it links
+`3lc-ultralytics` (Ultralytics YOLO, AGPL-3.0), so a distributed work must itself be
+AGPL-3.0.
+
+Ultralytics YOLO is dual-licensed: free under
+[AGPL-3.0](https://github.com/ultralytics/ultralytics/blob/main/LICENSE) for use that
+complies with its open-source terms, while commercial use beyond those terms requires a
+paid [Ultralytics Enterprise License](https://www.ultralytics.com/license). It is the
+user's responsibility to ensure their use of Ultralytics YOLO through this plugin is
+appropriately licensed. The plugin's UI displays this notice at the top of the page.
+
+**Scope.** This license covers the plugin source in this repository. The competition
+dataset published under the `kit-*` tags is a separate release with its own terms; the
+ExDark images carry their own upstream licenses.
+
 ---
 
 ## 1. Install — catalog (the primary path)

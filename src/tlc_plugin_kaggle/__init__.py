@@ -1,3 +1,5 @@
+# Copyright 2026 3LC Inc.
+# SPDX-License-Identifier: AGPL-3.0-only
 """Kaggle competition plugin for the 3LC Hub.
 
 Tabbed workflow: Import / Train / Submit / Status — the tab bar doubles as

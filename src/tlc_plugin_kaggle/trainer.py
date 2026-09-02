@@ -1,3 +1,5 @@
+# Copyright 2026 3LC Inc.
+# SPDX-License-Identifier: AGPL-3.0-only
 """Train card backend: constrained YOLOv11n pretrained training via 3lc-ultralytics.
 
 Competition constraints are enforced SERVER-SIDE, not in the form:

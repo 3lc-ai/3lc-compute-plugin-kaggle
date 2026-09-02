@@ -1,10 +1,13 @@
 [project]
 name = "3lc-compute-plugin-kaggle"
-version = "1.2.8"
+version = "1.2.9"
 description = "End-to-end Kaggle competition workflow for the 3LC Hub: import, train the fixed baseline, predict, submit."
 # >=3.11: the kaggle client (>=2.2.3) floors at 3.11; uv sync resolves for the
 # whole requires-python range, so a 3.10 floor makes the lock unsatisfiable.
 requires-python = ">=3.11"
+# AGPL-3.0: this plugin links 3lc-ultralytics (Ultralytics YOLO, AGPL-3.0),
+# so a distributed work must itself be AGPL-3.0. Full text in ./LICENSE.
+license = "AGPL-3.0-only"
 # Base = the SDK floor ONLY (the yolo-0.1.3 umbrella pattern). The heavy stack
 # rides the [kaggle] extra below and is installed only into the plugin's
 # provisioned venv. SDK >=0.3 carries `3lc[pandas]` as a BASE dep (the old
@@ -59,9 +62,9 @@ kaggle-exdark = "tlc_plugin_kaggle"
 [tool.tlc-compute]
 id = "kaggle-exdark"
 name = "Kaggle Competition"
-description = "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit."
-version = "1.2.8"
-min_service_version = "0.2.0"
+description = "End-to-end Kaggle competition workflow: import the dataset, train the fixed baseline (YOLOv11n, pinned COCO-pretrained init @ 640), predict and submit. Uses Ultralytics YOLO (AGPL-3.0); commercial use may require an Ultralytics Enterprise License."
+version = "1.2.9"
+min_service_version = "0.6.0"
 icon = "🏁"
 repository_url = "https://github.com/3lc-ai/3lc-compute-plugin-kaggle"
 

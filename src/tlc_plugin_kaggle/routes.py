@@ -1,3 +1,5 @@
+# Copyright 2026 3LC Inc.
+# SPDX-License-Identifier: AGPL-3.0-only
 """REST routes for the Kaggle plugin (0.2.x worker app).
 
 Paths are RELATIVE: the SDK worker serves this controller in the plugin's own
