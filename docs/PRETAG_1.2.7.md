@@ -132,8 +132,8 @@ this build.
 
 ### Step-14 record (written 2026-08-28)
 
-Machine: fresh 3070 Ti, Windows, user `rishi`, single home, no home
-redirect. Install per the documented pre-tag deviation: local-clone
+Machine: fresh 3070 Ti, Windows, a non-administrator user profile, single
+home, no home redirect. Install per the documented pre-tag deviation: local-clone
 catalog with `source` pinned to the bump-commit sha (e702864); that
 catalog file was never published and lives outside the repo.
 

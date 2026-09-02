@@ -156,9 +156,22 @@ so that hubs already pointed at it keep resolving. Retiring it means
 publishing the repo's raw `catalog.json` URL in README and TESTER_SETUP and
 here, then deleting the gist once no hub is pointed at it.
 
-**The cutover has one precondition** — the raw URL must serve the CURRENT
-catalog. `catalog.json` on the default branch is stale (plugin id `kaggle`,
-newest 1.2.0); the live one, id `kaggle-exdark` through 1.2.9, is on
-`port/0.2.x`. Pointing testers at a raw URL before that is reconciled would
-serve a catalog whose id does not match the plugin id, and installs would
-fail. Settle which branch is canonical first.
+**The cutover's precondition is now met.** It required the raw URL to serve
+the CURRENT catalog. That was blocked while `develop` was the default branch,
+because its `catalog.json` is stale (plugin id `kaggle`, newest 1.2.0) and a
+raw URL serving an id that does not match the plugin id would fail every
+install. The default branch is now `port/0.2.x`, which carries the live
+catalog (id `kaggle-exdark`, through 1.2.9), so
+
+```
+https://raw.githubusercontent.com/3lc-ai/3lc-compute-plugin-kaggle/HEAD/catalog.json
+```
+
+resolves to it. `HEAD` is deliberate: it follows the default branch, so the
+URL survives a future rename the way the gist URL does.
+
+**The cutover itself is not done** — README and TESTER_SETUP still tell
+testers to paste the gist URL, and hubs already configured with it must keep
+resolving. Doing it means publishing the raw URL in those two docs and here,
+mirroring the catalog one last time, then deleting the gist once no hub
+points at it. Until then the gist stays authoritative for testers.

@@ -20,8 +20,11 @@ Rules marked **[codified]** existed only as working practice until written here.
 
 ## B. Repo operating rules
 
-- **Branches.** Work on `port/0.2.x` (the v1.2.x line). `develop` is frozen
-  v1.1.x. The 0.1.x service loads the plugin LIVE from this working copy
+- **Branches.** Work on `port/0.2.x` (the v1.2.x line, and the repo's
+  **default branch** since 2026-09-02 — it is what a visitor lands on, what
+  GitHub reads the license badge from, and what `.../HEAD/catalog.json`
+  resolves to). `develop` is frozen v1.1.x. The 0.1.x service loads the
+  plugin LIVE from this working copy
   (`plugin_dirs` → `src/`), so the checkout must sit on `develop` whenever
   the old service runs; the 0.2.x service installs from git tags and never
   reads the checkout. If both are needed, use a git worktree for port work.
