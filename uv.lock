@@ -89,10 +89,10 @@ umap = [
 
 [[package]]
 name = "3lc-compute-plugin-kaggle"
-version = "1.2.7"
+version = "1.2.8"
 source = { editable = "." }
 dependencies = [
-    { name = "3lc-compute-plugin-sdk", extra = ["shared"] },
+    { name = "3lc-compute-plugin-sdk" },
 ]
 
 [package.optional-dependencies]
@@ -114,7 +114,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "3lc", extras = ["pacmap", "umap"], marker = "extra == 'kaggle'", specifier = ">=3.0.0,<4.0.0", index = "https://pypi.3lc.ai/public/repositories/releases-public" },
-    { name = "3lc-compute-plugin-sdk", extras = ["shared"], specifier = ">=0.1.0,<0.2.0", index = "https://pypi.3lc.ai/public/repositories/prereleases-public" },
+    { name = "3lc-compute-plugin-sdk", specifier = ">=0.3.1,<0.4.0" },
     { name = "3lc-ultralytics", marker = "extra == 'kaggle'", specifier = ">=0.3.3" },
     { name = "kaggle", marker = "extra == 'kaggle'", specifier = ">=2.2.3,<3" },
     { name = "torch", marker = "(sys_platform == 'linux' and extra == 'kaggle') or (sys_platform == 'win32' and extra == 'kaggle')", index = "https://download.pytorch.org/whl/cu128" },
@@ -129,20 +129,16 @@ dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "3lc-compute-plugin-sdk"
-version = "0.1.1"
-source = { registry = "https://pypi.3lc.ai/public/repositories/prereleases-public" }
+version = "0.3.2"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "3lc", extra = ["pandas"] },
     { name = "litestar" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://pypi.3lc.ai/public/repositories/prereleases-public/3lc-compute-plugin-sdk/3lc_compute_plugin_sdk-0.1.1.tar.gz" }
+sdist = { url = "https://files.pythonhosted.org/packages/98/85/a9be446ed861ace0284f32f4505ed5e86cc61e5dde38a82552983cabd7c3/3lc_compute_plugin_sdk-0.3.2.tar.gz", hash = "sha256:ce4c055d626c309b093ce577ed6c9b922a3a475e36da260aaf88fa674116f47a", size = 238017, upload-time = "2026-08-31T12:00:20.049Z" }
 wheels = [
-    { url = "https://pypi.3lc.ai/public/repositories/prereleases-public/3lc-compute-plugin-sdk/3lc_compute_plugin_sdk-0.1.1-py3-none-any.whl" },
-]
-
-[package.optional-dependencies]
-shared = [
-    { name = "3lc", extra = ["pandas"] },
+    { url = "https://files.pythonhosted.org/packages/d9/17/84b3294b6fcc37e01367a6ec83770bdd6825aef72e44b48f5e920d605c5a/3lc_compute_plugin_sdk-0.3.2-py3-none-any.whl", hash = "sha256:7730843e66d6d499d60ab26e2d05e69a31ad999a03dd61c562856c65ceaf36d3", size = 75239, upload-time = "2026-08-31T12:00:18.685Z" },
 ]
 
 [[package]]
