@@ -141,11 +141,44 @@ content MD5s (verified at staging, 2026-08-27).
   **deleted 2026-09-02, before this repo went public**, with 0 recorded
   downloads. Recovery is unaffected: the kit tree survives in the workspace
   and parity is checked per-file with `scripts/check_kit_parity.py` against
-  the committed manifest, which is the actual anchor. The **tag**
-  `kit-exdark-v1` is kept — it marks the kit-tree state and costs nothing.
+  the committed manifest, which is the actual anchor.
   Note the zip was never byte-identical to the CDN shards: the zip archived
   the tree, the shards are the deterministic build generated FROM it. Never
   try to reconcile those hashes.
+- **The `kit-exdark-v1` TAG is not a reliable provenance anchor — it names two
+  different commits** (found 2026-09-03 while cross-checking the week's tags):
+
+  | | commit | subject | date |
+  |---|---|---|---|
+  | local | `9aded53` | v1.2.7 phase 2: starter-kit downloader + job wiring | 2026-08-27 |
+  | `origin` | `b1f6ca4` | docs: v1.2.6 shipped — release-walk findings D1-D4 | 2026-08-14 |
+
+  Thirteen days apart, both commits on `port/0.2.x`. This is **not** an
+  annotated-vs-lightweight artifact: `git cat-file -t kit-exdark-v1` returns
+  `commit` locally, and `git ls-remote --tags origin` returns no peeled `^{}`
+  line for it, so both sides are lightweight tags pointing straight at
+  different commits. Whichever side you read, the other disagrees — so the tag
+  cannot be used to establish which kit-tree state `v1` was built from. An
+  earlier version of this bullet claimed the tag "marks the kit-tree state";
+  that claim is withdrawn.
+
+  **Do not retag it.** CLAUDE.md §B forbids retagging outright, and here it
+  would also destroy evidence: anyone who has fetched either side already has
+  that commit cached under this name, so moving the ref makes the two histories
+  silently disagree instead of visibly disagreeing. Leave both as they are.
+
+  **Nothing downstream depends on it.** The verification anchor is the
+  committed `kit/<competition_id>/<version>/manifest.json`, checked per-file by
+  `scripts/check_kit_parity.py` — that is what the two limits above are about,
+  and it is unaffected by this. The kit `v1` prefix on the CDN is likewise
+  unaffected: it is immutable and still verifies against its own manifest. The
+  cost of this divergence is exactly one thing — the tag answers "which commit
+  was the v1 kit tree at?" with two answers, so **do not cite it as provenance**.
+  If that question ever needs a real answer, reconstruct it from the committed
+  v1 manifest against the kit tree in git, not from the tag.
+
+  **`kit-exdark-v2` is clean** — verified the same day: local and `origin` both
+  resolve to `db7b3a8`. So is every code tag `v1.2.9`–`v1.2.12`.
 - **This repo now has no GitHub Release entries at all.** Do NOT create them
   for code tags; code versions are git tags only, and release entries would
   add a maintenance surface this repo deliberately does not have.
