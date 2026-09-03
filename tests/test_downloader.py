@@ -335,3 +335,128 @@ def test_verify_now_requires_record_and_manifest(cdn, tmp_path):
     (_version_dir(tmp_path) / "manifest.json").unlink()
     v2 = downloader.verify_now()
     assert v2["ok"] is False and "manifest.json" in v2["error"]
+
+
+# ── Version skew across a kit bump (F1) ──────────────────────────────────
+#
+# Every other test in this file is deliberately version-AGNOSTIC: the v1 -> v2
+# bump broke nine that spelled the version as a literal, and they were fixed by
+# deriving it from the constant (16795c5). That is right for those tests, and
+# it is exactly why the tests below pin TWO versions on purpose. A suite that
+# derives the version everywhere cannot catch a disagreement about the version:
+# the write path (constants.STARTER_KIT_VERSION) and the read path (the job
+# record's facts.kit_version) only diverge across a bump, so a bump is the
+# thing that has to be staged.
+
+
+@pytest.fixture
+def home(tmp_path, monkeypatch):
+    """Isolated plugin home WITHOUT pinning a kit version.
+
+    The `cdn` fixture bakes constants.STARTER_KIT_VERSION at setup time, which
+    is what makes it version-agnostic; these tests need to move the constant
+    mid-test, so they take the home here and serve the CDN via _serve().
+    """
+    monkeypatch.setattr(downloader, "DEFAULT_DEST", tmp_path / "home" / "kit-default")
+    monkeypatch.setattr(config_store, "CONFIG_PATH", tmp_path / "home" / "ui_config.json")
+    monkeypatch.setattr(jobs, "JOBS_DIR", tmp_path / "home" / "jobs")
+    monkeypatch.setattr(jobs, "_jobs", {})
+
+
+def _serve(tmp_path, monkeypatch, version: str) -> FakeCDN:
+    """Ship `version`: build a synthetic kit for it and make it the constant."""
+    monkeypatch.setattr(constants, "STARTER_KIT_VERSION", version)
+    srv = tmp_path / f"srv-{version}"
+    kit = _make_kit(srv)
+    make_kit_manifest.generate(
+        kit, srv / "cdn", "test-comp", version, shard_bytes=2048, created_utc=_CREATED,
+    )
+    fake = FakeCDN(srv / "cdn" / version)
+    monkeypatch.setattr(downloader, "_open", fake.open)
+    return fake
+
+
+def test_recorded_version_behind_the_constant_is_superseded(home, tmp_path, monkeypatch):
+    # The v1.2.11 bug: the record is complete and its dataset.yaml is on disk,
+    # so download_state answered "success" forever and the UI kept rendering
+    # the quiet "downloaded N ago" line. The participant was never told a newer
+    # kit existed.
+    _serve(tmp_path, monkeypatch, "v1")
+    ctx = FakeCtx()
+    result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
+    _write_record(ctx, result)
+    assert downloader.download_state()["state"] == "success"
+
+    monkeypatch.setattr(constants, "STARTER_KIT_VERSION", "v2")  # the bump
+
+    state = downloader.download_state()
+    assert state["state"] == "superseded"
+    assert state["kit_version"] == "v1"
+    assert state["current_version"] == "v2"
+    # Served, not rebuilt client-side: the fragment renders this path verbatim.
+    assert state["kit_dir"] == str(_dest(tmp_path) / "v1")
+    assert state["dataset_yaml"] == result["dataset_yaml"]
+
+
+def test_superseded_is_not_the_missing_kit_state(home, tmp_path, monkeypatch):
+    # "stale" already means "kit no longer on disk". The two conditions need
+    # different names or the UI cannot tell a superseded kit from a gone one.
+    _serve(tmp_path, monkeypatch, "v1")
+    ctx = FakeCtx()
+    result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
+    _write_record(ctx, result)
+    monkeypatch.setattr(constants, "STARTER_KIT_VERSION", "v2")
+    assert downloader.download_state()["state"] == "superseded"
+
+    Path(result["dataset_yaml"]).unlink()
+    assert downloader.download_state()["state"] == "stale"
+
+
+def test_superseded_kit_still_verifies_against_its_own_manifest(home, tmp_path, monkeypatch):
+    # Verify must keep working for exactly the population this release is for.
+    # The manifest beside the v1 tree IS v1's, so the check is honest.
+    _serve(tmp_path, monkeypatch, "v1")
+    ctx = FakeCtx()
+    result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
+    _write_record(ctx, result)
+    monkeypatch.setattr(constants, "STARTER_KIT_VERSION", "v2")
+
+    v = downloader.verify_now()
+    assert v["ok"] is True
+    assert v["matched"] == result["file_count"]
+    # The denominator the fragment renders; unread before v1.2.12 (F10).
+    assert v["file_count"] == result["file_count"]
+
+
+def test_record_without_a_recorded_version_does_not_probe_the_current_one(
+    home, tmp_path, monkeypatch
+):
+    # The bug in miniature: with no recorded version, verify_now used to fall
+    # back to the CURRENT constant and report the manifest missing under v2/
+    # while a perfectly good v1 kit sat beside it. Say so instead of guessing.
+    _serve(tmp_path, monkeypatch, "v1")
+    ctx = FakeCtx()
+    result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
+    ctx.facts.pop("kit_version")
+    _write_record(ctx, result)
+    monkeypatch.setattr(constants, "STARTER_KIT_VERSION", "v2")
+
+    v = downloader.verify_now()
+    assert v["ok"] is False
+    assert "predates" in v["error"]
+    assert "v2" not in v["error"]  # never names a directory it only guessed
+
+
+def test_manifest_version_disagreeing_with_the_constant_is_refused(
+    home, tmp_path, monkeypatch
+):
+    # Staging error: published under the v1 prefix, manifest says v2. Before
+    # v1.2.12 this downloaded and verified green, the disagreement visible only
+    # in a check-detail line nothing compared.
+    fake = _serve(tmp_path, monkeypatch, "v1")
+    manifest = json.loads((fake.dir / "manifest.json").read_text(encoding="utf-8"))
+    manifest["kit_version"] = "v2"
+    fake.tamper["manifest.json"] = json.dumps(manifest).encode("utf-8")
+
+    with pytest.raises(RuntimeError, match="v2"):
+        downloader.run_download({"dest_dir": str(_dest(tmp_path))}, FakeCtx())

@@ -3089,11 +3089,16 @@
       // The claim is exactly as strong as its check (T1): download_state
       // stats dataset.yaml, so the line says when the FULL verification
       // happened, and the Verify action re-runs the real files[] pass.
-      function dlRenderQuiet(fileCount, when, justVerified) {
+      // `matched` (the verify numerator) is passed only by the Verify action.
+      // It used to be passed as the denominator TOO, so the line read
+      // "N of N files match" whatever N was: a ratio that could not go
+      // non-green. The denominator is the manifest's own file_count, which the
+      // server has always published and this fragment had been discarding.
+      function dlRenderQuiet(fileCount, when, matched) {
         el('kg-dl-offer').hidden = true;
         el('kg-dl-progress').innerHTML = '';
-        var text = justVerified
-          ? 'Starter kit verified just now: ' + fmtCount(fileCount) +
+        var text = (matched !== null && matched !== undefined)
+          ? 'Starter kit verified just now: ' + fmtCount(matched) +
             ' of ' + fmtCount(fileCount) + ' files match the manifest.'
           : 'Starter kit downloaded' + (when ? ' ' + kgFmtAgo(when) : '') +
             (fileCount ? ' (' + fmtCount(fileCount) + ' files verified then)' : '') + '.';
@@ -3118,7 +3123,7 @@
         API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/download/verify')
           .then(function (r) { return r.json(); })
           .then(function (v) {
-            if (v.ok) { dlRenderQuiet(v.matched, null, true); return; }
+            if (v.ok) { dlRenderQuiet(v.file_count, null, v.matched); return; }
             var parts = [];
             if (v.missing_count) { parts.push(fmtCount(v.missing_count) + ' missing'); }
             if (v.mismatch_count) { parts.push(fmtCount(v.mismatch_count) + ' changed'); }
@@ -3136,6 +3141,40 @@
             btn.disabled = false;
             btn.classList.remove('kg-spin');
           });
+      }
+
+      // A complete, intact kit of an older version. INFORMATION, not a fault:
+      // the info vocabulary only (never warn/err, never the x-circle glyph) and
+      // the ordinary offer beneath, so no new button or wiring exists.
+      //
+      // The copy carries the whole burden here, so it is exact about what a
+      // download does and does not do. parse_dataset_yaml resolves `path: .`
+      // against the yaml's own directory, so the new version lands in a NEW
+      // directory while tables the participant already imported keep resolving
+      // into the old one. They will not naturally re-import either, because
+      // those tables still exist and verified_import_state still passes, so the
+      // Import tab stays in its revisit view. Downloading gets the current kit
+      // present; it does not change what they train against, and the line must
+      // not imply otherwise. It also does not invite deleting the old kit:
+      // that would break exactly those tables.
+      function dlRenderSuperseded(state) {
+        el('kg-dl-progress').innerHTML = '';
+        var have = String(state.kit_version || '');
+        var current = String(state.current_version || '');
+        var when = state.created_at ? ', downloaded ' + kgFmtAgo(state.created_at) : '';
+        var path = String(state.kit_dir || '');
+        el('kg-dl-banner').innerHTML =
+          '<div class="kg-callout info">' + kgIcon('info') +
+          '<span>An updated starter kit is available. This machine has ' +
+          esc(have) + when + '; the current kit is ' + esc(current) + '. ' +
+          'The update adds the ExDark license notice and corrects the README’s ' +
+          'licensing text, which previously described the data as non-commercial ' +
+          'research use only. The images and labels are identical. Downloading is ' +
+          'optional and places ' + esc(current) + ' alongside the current kit' +
+          (path ? ' at <code style="word-break:break-all">' + esc(path) + '</code>' : '') +
+          '; tables you have already imported keep reading from the kit they were ' +
+          'imported from, so training is unaffected either way.</span></div>';
+        dlShowOffer(false, false);
       }
 
       function dlRenderSuccess(job, animate) {
@@ -3350,6 +3389,9 @@
                 if (state.state === 'success') {
                   dlJobId = String(state.job_id || '');
                   dlRenderQuiet(state.file_count, state.created_at);
+                } else if (state.state === 'superseded') {
+                  dlJobId = String(state.job_id || '');
+                  dlRenderSuperseded(state);
                 } else {
                   dlShowOffer(false, false);
                 }
@@ -3487,8 +3529,13 @@
             dlShowSection(true);
             el('kg-dl-dest').textContent = devDest;
             var dlNow = Date.now() / 1000;
-            if (mode === 'dl-success' || mode === 'dl-revisit') {
-              el('kg-yaml').value = devDlYaml;
+            if (mode === 'dl-success' || mode === 'dl-revisit' || mode === 'dl-superseded') {
+              // dl-superseded holds the OLDER kit's yaml: the session still
+              // points where it was imported from, and preflight is green
+              // against it. That is the whole point of the state.
+              el('kg-yaml').value = mode === 'dl-superseded'
+                ? devDest + '\\v1\\starter_kit\\dataset.yaml'
+                : devDlYaml;
               kgPreflight = pfGreen;
               kgRenderPreflight(pfGreen);
             } else {
@@ -3536,6 +3583,15 @@
               el('kg-dl-log-details').style.display = 'block';
             } else if (mode === 'dl-revisit') {
               dlRenderQuiet(14005, dlNow - 7200);
+            } else if (mode === 'dl-superseded') {
+              // A v1 holder on a v2 plugin. Real values: v1 shipped 14,004
+              // files, v2 ships 14,005 (the ExDark notice), and kit_dir is the
+              // path the server resolves, not one the fragment builds.
+              dlRenderSuperseded({
+                kit_version: 'v1', current_version: 'v2',
+                created_at: dlNow - 259200, file_count: 14004,
+                kit_dir: devDest + '\\v1'
+              });
             } else {
               kgInitImportTab();   // unknown dl-* value → normal resolution
             }

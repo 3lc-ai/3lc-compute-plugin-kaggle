@@ -63,10 +63,24 @@ Rules marked **[codified]** existed only as working practice until written here.
     a hand-paste once introduced a duplicate-key error. Repo `catalog.json`
     is source of truth; the gist only ever mirrors it. [codified 2026-08-10]
 - **Tests.** `tests/` is a pytest layer over config_store / migrations /
-  predictor state (dev dependency group only — never ships, never enters the
-  provisioned venv; the ui-notes no-new-dependencies rule governs runtime
-  deps). Run before any tag; the migration tests pin the two real-world
+  predictor state, the downloader, the jobs→SDK bridge, the kit scripts, and
+  the cross-language / packaging invariants (dev dependency group only —
+  never ships, never enters the provisioned venv; the ui-notes
+  no-new-dependencies rule governs runtime deps. The group carries `pytest`
+  and `hatchling`, the latter a TEST input: test_packaging builds the real
+  wheel). Run before any tag; the migration tests pin the two real-world
   configs in `tests/fixtures/`. [codified 2026-08-13]
+- **Divergence tests are the suite's job, not just behavior tests.** Both
+  v1.2.10 and v1.2.12 were one value read from two sources with nothing
+  comparing them, and both survived nine-plus releases because every test
+  exercised ONE side with the other stubbed. The three standing guards:
+  `test_url_regex_parity` (the ui.html/config_store regex pair),
+  `test_packaging` (the version strings + wheel contents), and
+  `test_downloader`'s two-version block. That last one pins two kit versions
+  DELIBERATELY — the rest of that file derives the version from the constant,
+  which is right for them and is exactly why a version-agnostic suite cannot
+  catch a version skew. Don't "simplify" it to derive. The open register is
+  docs/v1.2-ideas.md "v1.2.12 divergent-source audit". [codified 2026-09-03]
 - **Identity.** Commit as Rishikesh-Jadhav only; no co-author trailers.
   Settings already enforce this — verify `git config user.name` if in doubt.
   [codified]

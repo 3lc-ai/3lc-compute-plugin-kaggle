@@ -130,6 +130,18 @@ def fetch_manifest(version_dir: Path, log: Callable[[str], None]) -> dict[str, A
             f"this plugin understands schema {_SCHEMA_VERSION}. Update the plugin, "
             "then run the download again."
         )
+    # The prefix is built from STARTER_KIT_VERSION, so a manifest naming a
+    # different version means the object under that prefix is not the kit this
+    # plugin asked for: a staging mistake, not drift. It used to pass silently,
+    # visible only in a check-detail line nothing compared.
+    served = str(manifest.get("kit_version") or "")
+    if served != constants.STARTER_KIT_VERSION:
+        raise RuntimeError(
+            f"The published manifest is for kit {served or '(unnamed)'}, but this "
+            f"plugin asked for kit {constants.STARTER_KIT_VERSION}. The starter kit "
+            "is misconfigured on the server. Report this to the organizers; there "
+            "is nothing to fix on this machine."
+        )
     (version_dir / "manifest.json").write_bytes(raw)
     return manifest
 
@@ -266,7 +278,24 @@ def _publish_session_yaml(yaml_path: Path) -> None:
 def download_state() -> dict[str, Any]:
     """Revisit state for the Download section: the newest completed
     download_kit job, re-verified against dataset.yaml on disk (the same
-    honesty rule as import_state: success means "on disk right now")."""
+    honesty rule as import_state: success means "on disk right now") AND
+    against the shipped kit version.
+
+    Three distinct states, deliberately named apart:
+
+      "success"    — the kit on disk is the version this plugin ships.
+      "superseded" — a complete, intact kit of an OLDER version. Not a fault
+                     and not an error: the participant keeps training. It
+                     carries kit_dir (the resolved directory) so the fragment
+                     renders the real path instead of rebuilding it.
+      "stale"      — the recorded kit is gone from disk.
+
+    "superseded" is not folded into "stale": one state string covering two
+    conditions is the divergence class this release exists to close, and the
+    two need opposite copy (one offers a fresh download, the other says
+    nothing is wrong). Before v1.2.12 nothing compared the versions at all, so
+    a v1 holder was told "downloaded 2 days ago" forever after the v2 bump.
+    """
     from tlc_plugin_kaggle import jobs
 
     for job in jobs.list_jobs("download_kit"):
@@ -274,20 +303,28 @@ def download_state() -> dict[str, Any]:
             continue
         facts = job.get("facts") or {}
         yaml_path = str(facts.get("dataset_yaml") or "")
-        if yaml_path and Path(yaml_path).is_file():
+        if not (yaml_path and Path(yaml_path).is_file()):
             return {
-                "state": "success",
-                "job_id": job.get("id"),
-                "created_at": job.get("created_at"),
-                "dest_dir": facts.get("dest_dir"),
-                "dataset_yaml": yaml_path,
-                "kit_version": facts.get("kit_version"),
-                "file_count": (job.get("result") or {}).get("file_count"),
+                "state": "stale",
+                "reason": f"kit no longer on disk at {yaml_path or facts.get('dest_dir')}",
             }
-        return {
-            "state": "stale",
-            "reason": f"kit no longer on disk at {yaml_path or facts.get('dest_dir')}",
+        recorded = str(facts.get("kit_version") or "")
+        dest_dir = str(facts.get("dest_dir") or "")
+        out: dict[str, Any] = {
+            "state": "success" if recorded == constants.STARTER_KIT_VERSION else "superseded",
+            "job_id": job.get("id"),
+            "created_at": job.get("created_at"),
+            "dest_dir": facts.get("dest_dir"),
+            "dataset_yaml": yaml_path,
+            "kit_version": facts.get("kit_version"),
+            "current_version": constants.STARTER_KIT_VERSION,
+            "file_count": (job.get("result") or {}).get("file_count"),
         }
+        if out["state"] == "superseded":
+            # Resolved here, not in the fragment: the kit directory is a
+            # server-side fact and the copy names it verbatim.
+            out["kit_dir"] = str(Path(dest_dir) / recorded) if (dest_dir and recorded) else ""
+        return out
     return {"state": "empty"}
 
 
@@ -300,9 +337,22 @@ def verify_now() -> dict[str, Any]:
     import json
 
     state = download_state()
-    if state.get("state") != "success":
+    # A superseded kit verifies exactly like a current one: the manifest beside
+    # it is its OWN version's, so the check is honest for the population this
+    # release is for. Refusing here would break Verify for precisely them.
+    if state.get("state") not in ("success", "superseded"):
         return {"ok": False, "error": "No completed download on record. Download the starter kit first."}
-    version_dir = Path(str(state["dest_dir"])) / str(state.get("kit_version") or constants.STARTER_KIT_VERSION)
+    recorded = str(state.get("kit_version") or "")
+    if not recorded:
+        # No falling back to the CURRENT constant: that is the bug in
+        # miniature — it would look under a directory this record never wrote
+        # and report the manifest missing while a good kit sat beside it.
+        return {
+            "ok": False,
+            "error": "This download predates kit-version recording, so the kit "
+                     "directory cannot be identified. Download the starter kit again.",
+        }
+    version_dir = Path(str(state["dest_dir"])) / recorded
     manifest_path = version_dir / "manifest.json"
     if not manifest_path.is_file():
         return {"ok": False, "error": f"manifest.json is no longer on disk at {manifest_path}."}

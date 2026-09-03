@@ -543,6 +543,50 @@ and the copy come from; we render its text verbatim.
 
 ---
 
+## 17. Kit versions (v1.2.12)
+
+The starter kit is versioned by directory (`.../data/<competition>/<version>/`)
+and the version is a shipped constant, `constants.STARTER_KIT_VERSION`. Three
+things could answer "which version is this": the constant, the download job
+record's `facts.kit_version`, and the CDN manifest's own `kit_version`. Until
+v1.2.12 nothing compared any of them, so the v1 to v2 bump left every existing
+holder being told "downloaded 2 days ago" forever, with no surface anywhere
+naming a newer kit.
+
+`download_state` now returns **three distinct states**, and they stay distinct:
+
+| State | Means | Renders |
+|---|---|---|
+| `success` | on disk, and it is the shipped version | quiet line + Verify |
+| `superseded` | on disk, intact, older version | info callout + the ordinary offer |
+| `stale` | the recorded kit is gone from disk | the offer |
+
+`superseded` is **not** folded into `stale`. One state string covering two
+conditions is the divergence class this release closes, and the two need
+opposite copy: `stale` says something is missing, `superseded` says nothing is
+wrong. It carries `kit_dir` — resolved server-side, rendered verbatim — because
+the fragment rebuilding a path the server already knows is the `kgUrlSeg`
+mistake in another costume.
+
+**What the copy may and may not claim.** `parse_dataset_yaml` resolves `path: .`
+against the yaml's own directory, so a new version lands in a NEW directory
+while tables the participant already imported keep resolving into the old one.
+They will not naturally re-import either: those tables still exist, so
+`verified_import_state` passes and the Import tab stays in its revisit view. So
+downloading gets the current kit *present*; it does not change what they train
+against, and it does not make the old kit deletable — deleting it would break
+exactly those tables. The line says so. The version that actually corrects an
+existing holder is an in-place top-up (docs/v1.2-ideas.md), not this.
+
+**Verify** accepts `superseded` as readily as `success`: the manifest beside a
+kit is that kit's own, so the check stays honest for precisely the population
+this release is for. What it no longer does is fall back to the current
+constant when a record names no version — that fallback looked under a
+directory the record never wrote and reported the manifest missing while a good
+kit sat beside it.
+
+---
+
 ## Appendix — Import-tab reference
 
 ### ?kgdev fixture map
@@ -570,10 +614,22 @@ show the quiet kit-on-disk line.
 | `dl-empty` | The offer: intro copy, destination fact, Download CTA (disabled demo), empty import form |
 | `dl-running` | Determinate download: shard 4/10, 231 of 625 MB, 37%, elapsed, Cancel, log open |
 | `dl-verify` | Verify phase: 97%, "Verifying files", full shard log |
-| `dl-success` | Green verified banner (14,004 files), yaml field filled with the A5 path, green preflight |
+| `dl-success` | Green verified banner (14,005 files), yaml field filled with the A5 path, green preflight |
 | `dl-fail` | Red banner with the mid-shard network error + resume copy, Copy diagnostics, Resume CTA |
 | `dl-cancelled` | Info callout (finished parts kept), Resume CTA |
-| `dl-revisit` | Quiet downloaded-kit line ("downloaded 2h ago, 14,004 files verified then") + Verify action + filled yaml + green preflight |
+| `dl-revisit` | Quiet downloaded-kit line ("downloaded 2h ago, 14,005 files verified then") + Verify action + filled yaml + green preflight |
+| `dl-superseded` | Info callout: v1 on disk, v2 shipped, the licence reason, the v1 path, offer beneath. Yaml field holds the **v1** path with green preflight, because that is what a v1 holder actually has |
+
+The two file counts above read 14,005 (v2). They said 14,004 until v1.2.12 —
+v1's count, left behind by the v2 bump. Same divergence class as the bug that
+release fixed, one layer out: the fixture derived nothing and the doc copied a
+number.
+
+**`dl-superseded` is deliberately not red.** The kit on disk is complete and
+intact; only its version is behind. It renders in the info vocabulary with the
+ordinary offer beneath, and the copy is explicit that downloading places the new
+version *alongside* the old one and does not change what already-imported tables
+resolve against. See §"Kit versions" below.
 
 ### ?kgdev fixture map — Train tab
 
