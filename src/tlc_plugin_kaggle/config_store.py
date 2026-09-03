@@ -87,22 +87,49 @@ def default_session() -> dict[str, Any]:
 
 # ── URL helpers (public: trainer/predictor asserts reuse them) ──────────
 # Table URLs follow the deterministic layout
-# .../projects/<project>/datasets/<dataset>/tables/<table>; both slash
+# <project root>/<project>/datasets/<dataset>/tables/<table>; both slash
 # styles occur in real configs (importer writes /, yaml paths use \).
+#
+# The PROJECT ROOT IS CONFIGURABLE (tlc's project-root-url), so "projects"
+# is NOT a literal path segment — it only happens to end the default root.
+# v1.2.10: the project pattern anchored on /projects/ and so returned None
+# for a root like D:/3lc-data, which made classify_override answer "drop"
+# and silently discarded a corrected or hand-picked revision URL. The
+# project is therefore identified by POSITION in the layout tail, anchored
+# at end-of-string so a path that contains "datasets/" higher up cannot
+# match first.
+#
+# MIRRORED IN ui.html (kgUrlSeg): the fragment classifies overrides at
+# write time with these same three patterns and cannot ask the service for
+# the root on every keystroke. Edit both sides together —
+# tests/test_url_regex_parity.py fails on a one-sided edit.
+URL_SEG_PATTERNS = {
+    "project": r"([^\\/]+)[\\/]datasets[\\/][^\\/]+[\\/]tables[\\/][^\\/]+[\\/]?$",
+    "dataset": r"[\\/]datasets[\\/]([^\\/]+)[\\/]tables[\\/]",
+    "table": r"[\\/]tables[\\/]([^\\/]+)[\\/]?$",
+}
+
+
+def _url_seg(url: str, kind: str) -> str | None:
+    """The project / dataset / table segment of a table URL, or None.
+
+    Trims first, like the fragment's kgUrlSeg — the anchored patterns would
+    otherwise miss on a pasted value with trailing whitespace.
+    """
+    m = re.search(URL_SEG_PATTERNS[kind], str(url).strip())
+    return m.group(1) if m else None
+
 
 def url_project(url: str) -> str | None:
-    m = re.search(r"[\\/]projects[\\/]([^\\/]+)[\\/]datasets[\\/]", str(url))
-    return m.group(1) if m else None
+    return _url_seg(url, "project")
 
 
 def url_dataset(url: str) -> str | None:
-    m = re.search(r"[\\/]datasets[\\/]([^\\/]+)[\\/]tables[\\/]", str(url))
-    return m.group(1) if m else None
+    return _url_seg(url, "dataset")
 
 
 def url_table(url: str) -> str | None:
-    m = re.search(r"[\\/]tables[\\/]([^\\/]+)[\\/]?$", str(url).strip())
-    return m.group(1) if m else None
+    return _url_seg(url, "table")
 
 
 def classify_override(url: str, project: str, table_name: str, split: str) -> str:

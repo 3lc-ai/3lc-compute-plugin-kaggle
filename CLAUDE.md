@@ -78,6 +78,14 @@ Rules marked **[codified]** existed only as working practice until written here.
   host dir when the worker's home isn't the organizer's — TESTER_SETUP
   organizer appendix). Mac and remote-host deltas live
   in the TESTER_SETUP_0.2 macOS appendix and TESTER_SETUP_REMOTE.
+- **3LC config is read through `tlc.config`** — never tlcconfig's
+  `ConfigStore` (string-keyed: an `Option` object misses silently, and it
+  returns values unexpanded) and never its private `_get_*` defaults. The
+  project root is `tlc.config.project_root_url`; nothing in the plugin
+  imports `tlcconfig`. v1.2.10 fixed nine releases of every derived table
+  URL pointing at the DEFAULT project root because of that. Table URLs are
+  parsed by position in the layout tail, never by a literal `/projects/`
+  segment: the root is configurable. [codified 2026-09-03]
 
 ## C. Tester-finding triage (round 2)
 

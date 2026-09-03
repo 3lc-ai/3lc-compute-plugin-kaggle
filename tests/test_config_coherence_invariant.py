@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import fixture_config, materialize_tables, write_config
+from conftest import ROOT_SHAPES, fixture_config, materialize_tables, write_config
 
 from tlc_plugin_kaggle.config_store import url_project
 
@@ -27,8 +27,10 @@ def walk_keys(node, path=""):
 
 
 @pytest.mark.parametrize("name", ["oldstack", "newstack"])
-def test_config_coherence_invariant(store, tmp_path, name):
-    cfg = fixture_config(name, tmp_path)
+def test_config_coherence_invariant(store, tmp_path, name, root_shape):
+    # v1.2.10: the invariant is stated in terms of url_project, so it was
+    # only ever checked under a default-shaped project root.
+    cfg = fixture_config(name, tmp_path, projects_tail=ROOT_SHAPES[root_shape])
     materialize_tables(cfg)
     write_config(store, cfg)
     data = store.load()

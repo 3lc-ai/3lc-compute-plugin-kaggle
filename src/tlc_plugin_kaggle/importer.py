@@ -213,20 +213,23 @@ def _list_images(images_dir: Path) -> list[Path]:
 
 
 def _project_root_url() -> str:
-    """The configured 3LC project root (explicit config value, else default).
+    """The RESOLVED 3LC project root: config file / env / CLI, else default.
 
-    3.x note: there is no public names->URL builder (Url.create_table_url is
-    gone) and ROOT_URL's config default is computed lazily, so this falls back
-    to tlcconfig's private default helper. Flagged upstream — swap to the
-    public accessor when one exists.
+    ``tlc.config`` is the public accessor and the only one that resolves the
+    value. Do not "simplify" this back to a tlcconfig store read: v1.2.10
+    fixed exactly that. ``ConfigStore.get()`` is **string**-keyed, so the
+    old ``get(tlc_options.ROOT_URL)`` (an Option object) missed silently and
+    returned None, and a truthiness fallback substituted the DEFAULT root on
+    every host for nine releases; and even keyed correctly it returns the
+    RAW value, so ``~/3lc-data``, ``$VAR`` and ``<ALIAS>`` arrive unexpanded
+    (expansion happens above the store). The plugin SDK reads this same
+    property (tlc_plugin_sdk/shared/url_utils.py). Because tlc.config
+    supplies the default itself, tlcconfig — including its private
+    ``_get_default_root_url`` — is no longer imported anywhere in the plugin.
     """
-    import tlcconfig.options as tlc_options
-    import tlcconfig.store as tlc_store
+    import tlc
 
-    val = tlc_store.ConfigStore.instance().get(tlc_options.ROOT_URL)
-    if val:
-        return str(val)
-    return str(tlc_options._get_default_root_url())
+    return str(tlc.config.project_root_url)
 
 
 def _table_url(table_name: str, dataset_name: str, project: str) -> Any:

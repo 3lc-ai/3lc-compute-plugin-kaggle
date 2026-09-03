@@ -1875,10 +1875,19 @@
 
       // JS mirrors of config_store's URL parsers + classify_override: one
       // predicate per runtime (a literal shared function is impossible
-      // across languages), cross-pinned by the PRETAG manual steps and
-      // recorded as a mirrored pair alongside TR_BOUNDS.
+      // across languages), recorded as a mirrored pair alongside TR_BOUNDS.
+      // The three PATTERNS below are config_store.URL_SEG_PATTERNS, pinned
+      // automatically since v1.2.10 by tests/test_url_regex_parity.py (a
+      // one-sided edit fails the suite); kgOverrideDisposition's verdicts
+      // stay cross-pinned by the PRETAG manual steps.
+      //
+      // "projects" is NOT a literal segment — the project root is
+      // configurable — so the project is the segment before
+      // datasets/<ds>/tables/<t>, anchored at end-of-string. In JS escaping
+      // "\/" is the "/" that a regex literal must escape. Edit both sides
+      // together.
       function kgUrlSeg(url, kind) {
-        var re = { project: /[\\\/]projects[\\\/]([^\\\/]+)[\\\/]datasets[\\\/]/,
+        var re = { project: /([^\\\/]+)[\\\/]datasets[\\\/][^\\\/]+[\\\/]tables[\\\/][^\\\/]+[\\\/]?$/,
                    dataset: /[\\\/]datasets[\\\/]([^\\\/]+)[\\\/]tables[\\\/]/,
                    table: /[\\\/]tables[\\\/]([^\\\/]+)[\\\/]?$/ }[kind];
         var m = String(url).trim().match(re);

@@ -433,7 +433,10 @@ table-URL overrides. The rules, settled like everything else here:
   AND the job targets. One predicate decides what may live in
   `session.overrides` (`classify_override`, mirrored as
   `kgOverrideDisposition` — a recorded mirrored pair, same class as
-  TR_BOUNDS): **only values that pass it are stored.** Storing a value
+  TR_BOUNDS; since v1.2.10 the URL **patterns** under it are pinned
+  automatically by `tests/test_url_regex_parity.py`, while the verdicts
+  stay cross-pinned by the PRETAG manual steps): **only values that pass
+  it are stored.** Storing a value
   already judged invalid would mean overrides can hold garbage and every
   future reader must re-validate — the self-healer pattern this release
   deleted. Don't-store keeps overrides valid-by-construction, which is

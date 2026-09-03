@@ -11,7 +11,7 @@ live in v124check2.
 
 from __future__ import annotations
 
-from conftest import fixture_config, materialize_tables, write_config
+from conftest import ROOT_SHAPES, fixture_config, materialize_tables, write_config
 
 from tlc_plugin_kaggle import constants
 
@@ -31,8 +31,8 @@ def assert_retired_gone(data):
                 assert key not in data[tab], f"{tab}.{key} survived the migration"
 
 
-def migrate(store, tmp_path, name, resolve_tables):
-    cfg = fixture_config(name, tmp_path)
+def migrate(store, tmp_path, name, resolve_tables, projects_tail=None):
+    cfg = fixture_config(name, tmp_path, projects_tail=projects_tail)
     if resolve_tables:
         materialize_tables(cfg)
     write_config(store, cfg)
@@ -42,8 +42,14 @@ def migrate(store, tmp_path, name, resolve_tables):
 # ── oldstack: July 0.1.x config — no _migrations key at all ─────────────
 
 
-def test_oldstack_snapshot_branch(store, tmp_path):
-    data = migrate(store, tmp_path, "oldstack", resolve_tables=True)
+def test_oldstack_snapshot_branch(store, tmp_path, root_shape):
+    # v1.2.10: replayed under all three project-root shapes. The branch
+    # derives the project from the verified URL's own segments, so under a
+    # bare root (no "/projects/") it used to fall through to the snapshot's
+    # string copy — and to the SHIPPED DEFAULT for any config that lacked
+    # one.
+    data = migrate(store, tmp_path, "oldstack", resolve_tables=True,
+                   projects_tail=ROOT_SHAPES[root_shape])
     assert data["_migrations"]["session_v1"] == "import_state"
     sess = data["session"]
     assert sess["project_name"] == "exdark-competition-test-init3"
@@ -149,8 +155,11 @@ def test_form_branch_without_any_snapshot(store, tmp_path):
 # ── B1: same-project URL overrides survive; cross-project ones don't ────
 
 
-def test_same_project_revision_override_preserved(store, tmp_path):
-    cfg = fixture_config("newstack", tmp_path)
+def test_same_project_revision_override_preserved(store, tmp_path, root_shape):
+    # v1.2.10: this is the one Gudbrand hit. Under a project root with no
+    # "/projects/" segment the override classified as "drop" and the
+    # tester's revision choice was silently discarded on every reload.
+    cfg = fixture_config("newstack", tmp_path, projects_tail=ROOT_SHAPES[root_shape])
     materialize_tables(cfg)
     # A revision-picker choice in the CORRECT project (fixed-labels Loop
     # progress): same project, non-default table revision.

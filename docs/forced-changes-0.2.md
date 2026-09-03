@@ -10,11 +10,28 @@ deltas, all empirically verified on 3.1.0.28).
 | Change | Where |
 |---|---|
 | `Table.from_yolo(dataset_yaml_file=, split=)` → `Table.from_yolo_url(images_url, categories=)`; yaml parsing (already ours) now feeds it directly | importer.py `_import_labeled_split`, `_import_test_split` |
-| `Url.create_table_url` removed → `_table_url()` rebuilds the layout from the configured project root (uses tlcconfig's **private** `_get_default_root_url` as fallback — upstream asked for a public builder) | importer.py (+ routes.py `table_defaults`) |
+| `Url.create_table_url` removed → `_table_url()` rebuilds the layout from the resolved project root, read from the public `tlc.config.project_root_url` (upstream asked for a public *builder*; the accessor was always public) | importer.py (+ routes.py `table_defaults`) |
 | `tlc.ImagePath("image")` → `tlc.schemas.ImageSchema()`; TableWriter kwarg `column_schemas=` → `schema=` | importer.py test-split GT-leak-guard path |
 | `latest(wait_for_rescan=False)` → `latest()` | importer.py (`list_project_tables`, `table_revisions`) |
 | Detection row shape `bbs.bb_list[*]` → `bbs.instances[*]` (+ labels in `bbs.instances_additional_data.label`; boxes absolute XYXY) | importer.py `_count_boxes`, `_value_map_labels` |
 | Value-map path `bbs.bb_list.label` → `bbs.instances_additional_data.label` | importer.py `_value_map_labels` |
+
+**Honesty note (v1.2.10).** The row above understates what the first version
+of that workaround cost. It read the root with
+`ConfigStore.instance().get(tlc_options.ROOT_URL)` — a **string**-keyed API
+handed an `Option` **object**. The lookup missed, returned `None` with no
+raise and no warning, and the truthiness fallback then substituted
+`_get_default_root_url()`, so `_table_url` built every URL under the
+**default** project root on every host for nine releases. It was invisible
+because the default root is correct on every machine that has not set
+`project-root-url`, and because table *creation* passes
+`project_name=`/`dataset_name=` and lets tlc resolve the root itself: Import
+wrote to the right place while every derived URL pointed at the wrong one.
+The private `_get_default_root_url` is gone with it — `tlc.config` supplies
+the default — and the plugin no longer imports `tlcconfig` at all. Measured
+while fixing it: `ConfigStore.get()` also returns values **unexpanded**, so
+even keyed correctly it hands back a literal `~/3lc-data` or `$VAR`. Keep
+reading the root through `tlc.config`.
 
 NOT forced (verified compatible, unchanged): `Table.from_url`, `Run.from_url`
 (present on 3.x despite not appearing in `dir()`), `run.constants`

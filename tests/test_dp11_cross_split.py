@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import fixture_config, materialize_tables, write_config
+from pathlib import Path
+
+from conftest import fixture_config, materialize_tables, project_root, write_config
 
 from tlc_plugin_kaggle import predictor, trainer
 from tlc_plugin_kaggle.config_store import classify_override
@@ -24,29 +26,38 @@ from tlc_plugin_kaggle.config_store import classify_override
 ROOT = "X:/home/AppData/Local/3LC/3LC/projects/p1/datasets"
 
 
+@pytest.fixture
+def root(root_shape):
+    """The datasets prefix under each project-root shape (v1.2.10). The
+    DP-11 verdicts must not depend on how the project root is spelled: under
+    a bare root like D:/3lc-data they all collapsed to "drop", which
+    discarded genuine revision choices instead of catching mis-clicks."""
+    return f"{project_root(Path('X:/'), root_shape)}/p1/datasets"
+
+
 # ── The predicate itself ─────────────────────────────────────────────────
 
 
-def test_classify_keep_same_split_revision():
-    assert classify_override(f"{ROOT}/exdark_train/tables/round2", "p1", "initial", "train") == "keep"
+def test_classify_keep_same_split_revision(root):
+    assert classify_override(f"{root}/exdark_train/tables/round2", "p1", "initial", "train") == "keep"
 
 
-def test_classify_drop_cross_split():
-    assert classify_override(f"{ROOT}/exdark_val/tables/initial", "p1", "initial", "train") == "drop"
+def test_classify_drop_cross_split(root):
+    assert classify_override(f"{root}/exdark_val/tables/initial", "p1", "initial", "train") == "drop"
 
 
-def test_classify_drop_cross_project():
-    assert classify_override(f"{ROOT}/exdark_train/tables/round2", "p2", "initial", "train") == "drop"
+def test_classify_drop_cross_project(root):
+    assert classify_override(f"{root}/exdark_train/tables/round2", "p2", "initial", "train") == "drop"
 
 
 def test_classify_drop_unparseable():
     assert classify_override("not-a-table-url", "p1", "initial", "train") == "drop"
 
 
-def test_classify_suppress_derived_equal():
+def test_classify_suppress_derived_equal(root):
     # M1: equals what derivation yields — storing it would freeze future
     # table-name changes for this field while its sibling followed.
-    assert classify_override(f"{ROOT}/exdark_train/tables/round2", "p1", "round2", "train") == "suppress"
+    assert classify_override(f"{root}/exdark_train/tables/round2", "p1", "round2", "train") == "suppress"
 
 
 # ── session_v1 applies it (migration call site) ──────────────────────────
