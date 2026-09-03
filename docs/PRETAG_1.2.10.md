@@ -98,6 +98,16 @@ at the wrong one.
 - [x] **The new tests fail on the pre-fix source.** With the three source
       files stashed and the new tests kept: **39 failed, 16 passed**. This
       suite would have caught both defects.
+- [x] **The two mirrors agree in BEHAVIOR, not just in text.**
+      `test_url_regex_parity.py` compares the pattern strings; that cannot
+      see an engine difference or a broken regex literal. So `kgUrlSeg` was
+      extracted from ui.html and run under node v24.16.0 against the Python
+      helpers on the same eight inputs — default / relocated / bare roots, a
+      backslash URL, one with surrounding whitespace, the
+      `D:/datasets/staging/…` first-match trap, an unparseable string, and a
+      dataset-level URL. **All eight agree**, `None`/`null` included. Not
+      added as a test: node is not a dev dependency and the suite stays
+      pytest-only (the textual parity test is the standing guard).
 - [x] **Manifest/catalog integrity** (RELEASING.md step 2, machine-checked
       before writing): `catalog.json` round-trips byte-identically through
       `json.dumps(indent=2, ensure_ascii=False)`; the new 1.2.10 manifest
