@@ -10,9 +10,11 @@ loop on one Hub sidebar page, four tabs: **1 Import → 2 Train → 3 Predict + 
 4 Status** — edit labels in the 3LC Dashboard between rounds, retrain on the newest
 table revision, submit, repeat.
 
-**Version pairing (v1.2.2):** 3LC Hub with `3lc-compute==0.2.1` + `3lc==3.1.0`
-(the 0.2.x plugin platform). For the legacy 0.1.x-host install (plugin v1.1.x),
-see [Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
+**Version pairing (v1.2.9):** 3LC Hub with `3lc-compute==0.2.1` + `3lc==3.1.0`
+(the 0.2.x plugin platform), or `3lc-compute==1.0.1` + `3lc==3.3.0` (the 1.0.x
+line). v1.2.9 installs on both — see [1.0.x deltas](#10x-deltas) for the three
+steps that differ. For the legacy 0.1.x-host install (plugin v1.1.x), see
+[Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
 
 **Platform support — no promises beyond what's tested:**
 
@@ -123,9 +125,8 @@ Verified on compute 1.0.1 + 3lc 3.3.0 (2026-09-02). Steps 1, 2 and 3 above are
 
   Then start the service and click **Install** on the card as before.
 
-Environment recipe and the full verdict list (W1, W5 and W7 are all closed on
-1.0.1): `../3lc-hub-ga/SETUP.md` and the 2026-09-02 addendum in
-`../3lc-hub-next/PORT_PLAN.md`.
+W1, W5 and W7 — the three platform issues this README notes against 0.2.x —
+are all closed on 1.0.1.
 
 ---
 
