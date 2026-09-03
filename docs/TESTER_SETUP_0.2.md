@@ -1,4 +1,4 @@
-# Tester setup — 0.2.x Hub + Kaggle plugin v1.2.9 (catalog install)
+# Tester setup — 0.2.x Hub + Kaggle plugin v1.2.10 (catalog install)
 
 > **MIGRATION — round-1 testers only (installed v1.2.0 under the old id `kaggle`).**
 > v1.2.1 renamed the plugin id to **`kaggle-exdark`** (collision safety). The old
@@ -22,7 +22,7 @@
 >    the compute service.
 > 4. **Re-add the catalog** only if you had the local-clone fallback (pull first);
 >    the gist URL is unchanged. **Install** the new card — it installs under
->    `managed-plugins\kaggle-exdark\1.2.9\`.
+>    `managed-plugins\kaggle-exdark\1.2.10\`.
 >
 > Job history, saved form values, and run artifacts live in `~/.3lc-kaggle-plugin/`
 > and survive the rename untouched. *(This note comes out once round-2 starts clean.)*
@@ -77,11 +77,11 @@ Windows-required**:
 # OS. On Windows that file doesn't exist and every plugin worker fails with a
 # 500 on first use. This per-plugin override pins the correct interpreter path
 # (pre-stating where the shop materializes the venv: id kaggle-exdark,
-# version 1.2.9 — the env-var name is TLC_COMPUTE_PLUGIN_VENV_ +
+# version 1.2.10 — the env-var name is TLC_COMPUTE_PLUGIN_VENV_ +
 # id.upper() with hyphens as underscores. The version segment tracks the
 # INSTALLED plugin version — repoint on every update, see the note after
 # the service-start block):
-$env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.9\.venv\Scripts\python.exe"
+$env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.10\.venv\Scripts\python.exe"
 
 # CUDA torch: shop installs (uv pip install) don't read the plugin's own uv
 # index config, so plain `torch` resolves CPU-only on Windows without this.
@@ -172,7 +172,7 @@ $env:TLC_COMPUTE_PLUGIN_CATALOG_URLS = "https://gist.githubusercontent.com/Rishi
 ```
 
 Then start the service in that window and continue from **3a step 3** — the
-card appears under Available and installs normally, and the v1.2.9 entry's git
+card appears under Available and installs normally, and the v1.2.10 entry's git
 source is policy-allowed because a configured catalog lists it. Confirm with
 `3lc-compute`'s startup line `Plugin catalog cache warmed from 2 source(s)`.
 
@@ -186,7 +186,7 @@ Two more 1.0.x deltas worth knowing at setup time:
   copy out of the host venv. The step-0 prerequisite stays true for 0.2.x.
 
 Neither the plugin nor its install source changes between the two generations:
-the same `@v1.2.9` tag, the same card, the same four-tab page.
+the same `@v1.2.10` tag, the same card, the same four-tab page.
 
 ## 4. Smoke test
 
@@ -217,13 +217,14 @@ manual install you may notice:
 | Install fails: `Repository not found` | git has a **stale** GitHub credential (vs. row below = none at all). Credential Manager → Windows Credentials → delete `git:https://github.com`, re-run the `git ls-remote` prerequisite, sign in fresh. |
 | uv behaves unlike this doc / version mismatch | An older uv shadows the winget one until the shell restarts. `(Get-Command uv).Source` + `uv --version` to see which runs; restart the shell after installing. |
 | `ERROR ... API key` printed before your first login | Normal ordering artifact — clears on the next start after `3lc login`. Only a persistent key error *after* a successful login is a finding. |
-| Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle-exdark\1.2.9\.venv\Scripts\python.exe`. Round-1 machines: the OLD name `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` no longer does anything. |
+| Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle-exdark\1.2.10\.venv\Scripts\python.exe`. Round-1 machines: the OLD name `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` no longer does anything. |
 | `Failed to load plugin: Internal Server Error` on the Kaggle page | The W1 env var's **version segment** points at a plugin venv that doesn't exist — typical after a plugin update (the shop installs the new version under a new `...\kaggle-exdark\<version>\.venv` and the old pin was never repointed). List what's actually on disk with `Get-ChildItem $env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark`, repoint the env var's version segment in the compute-service window, restart the service. **The silent twin:** if the OLD version's venv is still on disk (uninstall never removes venvs, bug W3), the stale pin *passes* the path check and the worker quietly runs the old plugin — no error, wrong footer version. The setup script's preflight now detects both shapes. |
 | Install fails: `could not read Username for 'https://github.com'` | git has no GitHub token — prerequisite row 3 |
 | Install fails: `uv executable not found` | uv not on the PATH of the compute-service process |
 | Training says CUDA unavailable | `UV_TORCH_BACKEND=auto` was not set when the plugin venv was built → uninstall the plugin in the shop, set the env var, reinstall. (Round-1/2 machines: the old `TLC_COMPUTE_PLUGIN_INDEX_URLS` cu128 pin still works, but `UV_TORCH_BACKEND=auto` supersedes it.) |
 | Settings don't persist / revert on reload (after an update) | Stale cached fragment: the old page saves settings in a format the new version rejects, and nothing visible fails at save time. **Hard-refresh the plugin page** (Ctrl+Shift+R) once — see step 3 of the update note in §2. |
 | `API key not found` at service start | run `3lc login` **from this venv** (3.x key store is new) |
+| Train / Predict autofill a table path that "isn't on disk yet", but Import succeeded | Fixed in **1.2.10**. Before that, a non-default `project-root-url` in `config.yaml` was ignored when the plugin built table URLs: it used the default project root, so the autofilled paths pointed nowhere, the revision picker listed nothing, and a hand-corrected path went green but reverted on reload. Any project root works from 1.2.10 on, wherever it lives and however it is spelled. On an older version, update first. |
 | `The filename, directory name, or volume label syntax is incorrect` on the setup commands | You're in **cmd**, not PowerShell — the setup commands are PowerShell. Type `powershell` first, then re-run the block. |
 
 ## Appendix — macOS (Apple silicon)
