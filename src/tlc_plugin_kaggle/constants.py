@@ -44,7 +44,7 @@ COMPETITION_SLUG = "the-3-lc-low-light-object-detection-comepetition-test"
 # cache would otherwise serve a mixed manifest/shard set).
 CDN_BASE_URL = "https://competitions.3lc.ai"
 COMPETITION_ID = "exdark-low-light"
-STARTER_KIT_VERSION = "v1"
+STARTER_KIT_VERSION = "v2"
 
 
 def starter_kit_prefix() -> str:

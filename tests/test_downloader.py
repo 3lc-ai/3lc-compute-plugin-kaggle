@@ -82,10 +82,10 @@ class FakeCtx:
 def cdn(tmp_path, monkeypatch):
     kit = _make_kit(tmp_path / "srv")
     make_kit_manifest.generate(
-        kit, tmp_path / "srv" / "cdn", "test-comp", "v1",
+        kit, tmp_path / "srv" / "cdn", "test-comp", constants.STARTER_KIT_VERSION,
         shard_bytes=2048, created_utc=_CREATED,
     )
-    fake = FakeCDN(tmp_path / "srv" / "cdn" / "v1")
+    fake = FakeCDN(tmp_path / "srv" / "cdn" / constants.STARTER_KIT_VERSION)
     monkeypatch.setattr(downloader, "_open", fake.open)
     monkeypatch.setattr(downloader, "DEFAULT_DEST", tmp_path / "home" / "kit-default")
     monkeypatch.setattr(config_store, "CONFIG_PATH", tmp_path / "home" / "ui_config.json")
@@ -102,6 +102,15 @@ def _dest(tmp_path: Path) -> Path:
     return tmp_path / "participant" / "data"
 
 
+def _version_dir(tmp_path: Path) -> Path:
+    """Where the downloader lands the kit: dest / STARTER_KIT_VERSION.
+
+    Derived from the constant, never spelled, so a kit-version bump needs no
+    edit here (v1 -> v2 broke nine of these tests when it was a literal).
+    """
+    return _dest(tmp_path) / constants.STARTER_KIT_VERSION
+
+
 def test_fresh_download_end_to_end(cdn, tmp_path):
     ctx = FakeCtx()
     result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
@@ -112,7 +121,7 @@ def test_fresh_download_end_to_end(cdn, tmp_path):
     assert result["verified_files"] == manifest["file_count"]
     assert all(c["ok"] for c in ctx.checks)
 
-    version_dir = _dest(tmp_path) / "v1"
+    version_dir = _version_dir(tmp_path)
     yaml_path = version_dir / "starter_kit" / "dataset.yaml"
     assert yaml_path.is_file()
     assert result["dataset_yaml"] == str(yaml_path)
@@ -139,7 +148,7 @@ def test_session_write_merges_not_replaces(cdn, tmp_path):
 def test_completed_shard_skipped_and_partial_resumed(cdn, tmp_path):
     manifest = _manifest(cdn)
     names = [a["name"] for a in manifest["archives"]]
-    version_dir = _dest(tmp_path) / "v1"
+    version_dir = _version_dir(tmp_path)
     version_dir.mkdir(parents=True)
     # First shard already complete and valid -> no request at all.
     (version_dir / names[0]).write_bytes((cdn.dir / names[0]).read_bytes())
@@ -157,7 +166,7 @@ def test_range_ignored_falls_back_to_full_shard(cdn, tmp_path):
     cdn.ignore_ranges = True
     manifest = _manifest(cdn)
     name = manifest["archives"][0]["name"]
-    version_dir = _dest(tmp_path) / "v1"
+    version_dir = _version_dir(tmp_path)
     version_dir.mkdir(parents=True)
     (version_dir / (name + ".part")).write_bytes((cdn.dir / name).read_bytes()[:100])
 
@@ -171,7 +180,7 @@ def test_range_ignored_falls_back_to_full_shard(cdn, tmp_path):
 def test_corrupt_shard_on_disk_is_redownloaded(cdn, tmp_path):
     manifest = _manifest(cdn)
     entry = manifest["archives"][0]
-    version_dir = _dest(tmp_path) / "v1"
+    version_dir = _version_dir(tmp_path)
     version_dir.mkdir(parents=True)
     (version_dir / entry["name"]).write_bytes(b"\x00" * entry["bytes"])
 
@@ -213,7 +222,7 @@ def test_cancel_between_shards_stays_resumable(cdn, tmp_path):
     ctx = FakeCtx(cancel_on_call=2)  # first shard completes, then cancel
 
     result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
-    version_dir = _dest(tmp_path) / "v1"
+    version_dir = _version_dir(tmp_path)
     assert result["cancelled"] is True and result["resumable"] is True
     assert (version_dir / names[0]).is_file()  # kept for resume
     assert not (version_dir / "starter_kit").exists()  # never extracted
@@ -222,7 +231,7 @@ def test_cancel_between_shards_stays_resumable(cdn, tmp_path):
 
 def test_extra_files_are_reported_not_fatal(cdn, tmp_path):
     downloader.run_download({"dest_dir": str(_dest(tmp_path))}, FakeCtx())
-    extra = _dest(tmp_path) / "v1" / "starter_kit" / "my-notes.txt"
+    extra = _version_dir(tmp_path) / "starter_kit" / "my-notes.txt"
     extra.write_text("mine", encoding="utf-8")
 
     ctx = FakeCtx()
@@ -245,7 +254,7 @@ def test_default_dest_lives_under_the_plugin_home():
 def test_resolve_params_defaults_and_rejections(cdn, tmp_path):
     params = downloader.resolve_params({})
     assert params == {"dest_dir": str(downloader.DEFAULT_DEST), "keep_archives": False}
-    assert (downloader.DEFAULT_DEST / "v1").is_dir()  # probed into existence
+    assert (downloader.DEFAULT_DEST / constants.STARTER_KIT_VERSION).is_dir()  # probed into existence
 
     with pytest.raises(ValueError, match="absolute"):
         downloader.resolve_params({"dest_dir": "relative/path"})
@@ -262,7 +271,7 @@ def test_keep_archives_keeps_shards(cdn, tmp_path):
         {"dest_dir": str(_dest(tmp_path)), "keep_archives": True}, FakeCtx()
     )
     manifest = _manifest(cdn)
-    version_dir = _dest(tmp_path) / "v1"
+    version_dir = _version_dir(tmp_path)
     assert len(list(version_dir.glob("part-*.zip"))) == len(manifest["archives"])
 
 
@@ -307,7 +316,7 @@ def test_verify_now_passes_then_names_the_tamper(cdn, tmp_path):
     assert v["matched"] == result["file_count"]
     assert v["missing_count"] == 0 and v["mismatch_count"] == 0
 
-    kit_root = _dest(tmp_path) / "v1" / "starter_kit"
+    kit_root = _version_dir(tmp_path) / "starter_kit"
     tampered = next(kit_root.rglob("*.jpg"))
     tampered.write_bytes(b"xx")
     v2 = downloader.verify_now()
@@ -323,6 +332,6 @@ def test_verify_now_requires_record_and_manifest(cdn, tmp_path):
     ctx = FakeCtx()
     result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
     _write_record(ctx, result)
-    (_dest(tmp_path) / "v1" / "manifest.json").unlink()
+    (_version_dir(tmp_path) / "manifest.json").unlink()
     v2 = downloader.verify_now()
     assert v2["ok"] is False and "manifest.json" in v2["error"]

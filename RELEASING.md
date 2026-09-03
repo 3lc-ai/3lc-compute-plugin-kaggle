@@ -116,7 +116,25 @@ content MD5s (verified at staging, 2026-08-27).
   timestamps, sorted entries), so anyone with the kit tree can REBUILD the
   shards and arrive at the same hashes — the committed manifest is
   verifiable, not trusted. That determinism is what makes "CDN + committed
-  manifest" a sufficient canonical record.
+  manifest" a sufficient canonical record. Two limits on that rebuild claim,
+  both established at the v2 build (2026-09-03):
+  - **The kit tree tracks the newest staged version only.** There is one
+    mutable kit tree and N immutable prefixes, so after a kit update
+    `check_kit_parity.py --dir` against an OLDER version's manifest is
+    *expected* to exit 1, naming exactly the files the update changed. That is
+    not drift. The older tree state is recovered from git (the kit's config
+    trio is tracked in `../competition_exdark/`) plus that version's committed
+    anchor. Every staged prefix stays byte-verifiable against its own
+    manifest, which is what participants and the downloader actually use.
+  - **`part-09-root-labels.zip`'s archive sha256 is Windows-specific.**
+    `_plan_shards` sorts `Path` objects, and `PurePath.__lt__` case-folds on
+    Windows but compares bytewise on POSIX, so the two uppercase basenames
+    (`LICENSE-ExDark.txt`, `README.md`) order differently and the zip's
+    central directory differs. This was already true of v1 (whose `files[]`
+    records normcase order). Rebuild on Windows to reproduce the archive
+    hash, or verify with `check_kit_parity.py`, which compares `files[]`
+    per path and is order-independent. The image shards are unaffected —
+    every other basename is digits plus a lowercase extension.
 - **Disaster recovery is the kit tree plus the committed manifest**, not a
   release asset. The `kit-exdark-v1` GitHub Release once carried
   `exdark_starter_kit_canonical.zip` (587 MB, sha256 `e84105db…`); it was
@@ -132,15 +150,21 @@ content MD5s (verified at staging, 2026-08-27).
   for code tags; code versions are git tags only, and release entries would
   add a maintenance surface this repo deliberately does not have.
 
-> **The v1 kit on the CDN still ships un-attributed images.** Deleting the
-> release was hygiene, not a fix. The prefix
-> `https://competitions.3lc.ai/kaggle/exdark-low-light/starter-kit/v1`
-> serves 7,358 ExDark images with no
-> `starter_kit/LICENSE-ExDark.txt`, and BSD-3 clauses 1–2 require the notice
-> to travel with them. That prefix is immutable by the rule above, so the
-> notice cannot be added in place — **only the v2 rebuild closes it** (add
-> the file, regenerate shards + manifest, bump `STARTER_KIT_VERSION`). Tracked
-> as a launch blocker in [docs/v1.1-ideas.md](docs/v1.1-ideas.md).
+> **The un-attributed-images blocker is CLOSED as of 2026-09-03** — v2 is
+> built and `STARTER_KIT_VERSION` is `"v2"`. `v1` still serves 7,358 ExDark
+> images with no `starter_kit/LICENSE-ExDark.txt` and is immutable by the rule
+> above, so it is not fixed but superseded: `v2` carries the notice (1,502 B,
+> sha256 `51340966…`) plus a README that attributes ExDark under BSD-3, cites
+> Loh & Chan, licenses the organizers' own contributions CC BY 4.0, and drops
+> the wrong "non-commercial" claim. **v1 must not be advertised once v2 is
+> live**; leave the prefix in place for installs already pinned to it.
+>
+> **Ordering that must not be inverted:** the `v2` prefix has to be LIVE
+> before the tag that ships `STARTER_KIT_VERSION = "v2"` is pushed.
+> `starter_kit_prefix()` resolves at download time with no fallback and
+> `fetch_manifest` fails the job on a 404, so a tester who installs the new
+> tag while the dev → prod sync is pending gets a hard failure on the Import
+> tab — in the exact surface the change exists to improve.
 
 ### Staging to the CDN
 

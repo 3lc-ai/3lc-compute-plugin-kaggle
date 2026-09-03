@@ -3436,15 +3436,15 @@
         };
 
         // Download-section fixtures (?kgdev=dl-*): real shard names and
-        // byte counts from the published v1 manifest, so screenshots show
+        // byte counts from the published v2 manifest, so screenshots show
         // the true shapes. devDlYaml is the A5-written path (under the
         // plugin home), distinct from devYaml's hand-unzipped Downloads path.
         var devDest = 'C:\\Users\\participant\\.3lc-kaggle-plugin\\data\\exdark-low-light';
-        var devDlYaml = devDest + '\\v1\\starter_kit\\dataset.yaml';
+        var devDlYaml = devDest + '\\v2\\starter_kit\\dataset.yaml';
         var DLLOG = [
-          'Fetching https://competitions.3lc.ai/kaggle/exdark-low-light/starter-kit/v1/manifest.json',
-          'PASS manifest fetched from the CDN — v1: 14004 files, 623,648,864 bytes in 10 shards',
-          'PASS enough disk space at the destination — 412.0 GB free, ~1.3 GB needed',
+          'Fetching https://competitions.3lc.ai/kaggle/exdark-low-light/starter-kit/v2/manifest.json',
+          'PASS manifest fetched from the CDN — v2: 14005 files, 623,652,065 bytes in 10 shards',
+          'PASS enough disk space at the destination — 412.0 GB free, ~1.4 GB needed',
           'part-00-images-test.zip: 59,969,490 bytes, sha256 verified',
           'part-01-images-train-00.zip: 73,460,567 bytes, sha256 verified',
           'part-02-images-train-01.zip: 73,382,298 bytes, sha256 verified',
@@ -3454,10 +3454,10 @@
           'part-06-images-train-05.zip: 73,532,479 bytes, sha256 verified',
           'part-07-images-train-06.zip: 61,659,130 bytes, sha256 verified',
           'part-08-images-val.zip: 61,329,085 bytes, sha256 verified',
-          'part-09-root-labels.zip: 1,496,845 bytes, sha256 verified',
-          'PASS all 10 shards downloaded and sha256-verified — 625,412,226 bytes',
-          'PASS all 10 shards extracted — 14004 files',
-          'PASS extracted kit matches the manifest — 14004/14004 files verified',
+          'part-09-root-labels.zip: 1,498,578 bytes, sha256 verified',
+          'PASS all 10 shards downloaded and sha256-verified — 625,413,959 bytes',
+          'PASS all 10 shards extracted — 14005 files',
+          'PASS extracted kit matches the manifest — 14005/14005 files verified',
           'PASS dataset.yaml present at the kit root — ' + devDlYaml,
           'Session updated: Import now points at the downloaded dataset.yaml',
           'Shard archives removed after verification (manifest.json kept)'
@@ -3480,7 +3480,7 @@
               dlShowSection(false);
             } else {
               dlShowSection(true);
-              dlRenderQuiet(14004, Date.now() / 1000 - 7200);
+              dlRenderQuiet(14005, Date.now() / 1000 - 7200);
             }
           }
           if (mode && mode.indexOf('dl-') === 0) {
@@ -3507,12 +3507,12 @@
                 progress: mode === 'dl-verify'
                   ? { percent: 97, label: 'Verifying files', phase: 'verify' }
                   : { percent: 37, label: 'Downloading shard 4/10', phase: 'download',
-                      bytes_done: 231402524, bytes_total: 625412226 }
+                      bytes_done: 231403167, bytes_total: 625413959 }
               });
               el('kg-dl-log').textContent = DLLOG.slice(0, mode === 'dl-verify' ? 15 : 7).join('\n');
               el('kg-dl-log-details').style.display = 'block';
             } else if (mode === 'dl-success') {
-              dlRenderSuccess({ result: { file_count: 14004 } }, false);
+              dlRenderSuccess({ result: { file_count: 14005 } }, false);
               el('kg-dl-log').textContent = DLLOG.join('\n');
               el('kg-dl-log-details').style.display = 'block';
             } else if (mode === 'dl-fail') {
@@ -3535,7 +3535,7 @@
               ]).join('\n');
               el('kg-dl-log-details').style.display = 'block';
             } else if (mode === 'dl-revisit') {
-              dlRenderQuiet(14004, dlNow - 7200);
+              dlRenderQuiet(14005, dlNow - 7200);
             } else {
               kgInitImportTab();   // unknown dl-* value → normal resolution
             }
