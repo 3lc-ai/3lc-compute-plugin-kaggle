@@ -3019,6 +3019,7 @@
         kgLastJobId = String(snap.job_id || '');
         kgRevisitActive = true;
         dlShowSection(false);
+        dlInit(true);   // reveals itself only for a running download or a superseded kit
         el('kg-import-form').style.display = 'none';
         var result = { tables: {}, mechanisms: snap.mechanisms || {} };
         ['train', 'val', 'test'].forEach(function (s) {
@@ -3408,8 +3409,21 @@
       // verified kit on disk → quiet line, else the offer. Fetch-free under
       // ?kgdev (fixtures own the section, same H1 rule as the other
       // page-load fetches).
-      function dlInit() {
-        if (kgDevMode) { dlShowOffer(false, false); return; }
+      // revisitOnly: called from the Import tab's REVISIT resolution, where the
+      // section is hidden and the kit is normally a solved problem. It then
+      // reveals itself only for the two states that have something to say - a
+      // download running right now, and a superseded kit - and stays hidden
+      // otherwise. Before v1.2.13 dlInit ran only from kgEnterFormState, so a
+      // participant who had already imported could start a download, navigate
+      // away, come back, and find no section, no progress and a dead poll while
+      // 625 MB carried on downloading in the worker. The same gap hid v1.2.12's
+      // superseded notice from exactly the population it was written for:
+      // already-imported v1 holders, who reach revisit and never the form.
+      function dlInit(revisitOnly) {
+        if (kgDevMode) {
+          if (!revisitOnly) { dlShowOffer(false, false); }
+          return;
+        }
         API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/jobs?kind=download_kit')
           .then(function (r) { return r.json(); })
           .catch(function () { return []; })
@@ -3418,6 +3432,9 @@
             if (running && !dlPollTimer) {
               dlJobId = running.id;
               dlRunning = true;
+              // Reveal before painting: the reconnect writes into the section's
+              // progress slot, and on the revisit path the section is hidden.
+              if (revisitOnly) { dlShowSection(true); }
               el('kg-dl-offer').hidden = true;
               dlPollTimer = setInterval(function () { dlPoll(running.id); }, 1000);
               return;
@@ -3426,12 +3443,20 @@
               .then(function (r) { return r.json(); })
               .catch(function () { return { state: 'empty' }; })
               .then(function (state) {
+                if (state.state === 'superseded') {
+                  dlJobId = String(state.job_id || '');
+                  if (revisitOnly) { dlShowSection(true); }
+                  dlRenderSuperseded(state);
+                  return;
+                }
+                // Everything below is form-state furniture. On revisit a
+                // current kit earns no line at all: the tab's own success view
+                // already says the import worked, and a quiet "downloaded 2h
+                // ago" under it would be a second answer to a solved question.
+                if (revisitOnly) { return; }
                 if (state.state === 'success') {
                   dlJobId = String(state.job_id || '');
                   dlRenderQuiet(state.file_count, state.created_at);
-                } else if (state.state === 'superseded') {
-                  dlJobId = String(state.job_id || '');
-                  dlRenderSuperseded(state);
                 } else {
                   dlShowOffer(false, false);
                 }
@@ -3700,6 +3725,30 @@
               'FAIL test table carries no ground-truth boxes — 3 boxes found',
               'FAILED: Your local copy does not match the competition dataset.']).join('\n');
             el('kg-log-details').style.display = 'block';
+          } else if (mode === 'state6-superseded') {
+            // The population v1.2.12's superseded state was written for, in the
+            // view they actually reach: already imported, so the Import tab
+            // resolves to REVISIT, where the Download section was hidden and
+            // dlInit never ran. Until v1.2.13 this state was unreachable - the
+            // notice existed and nobody in it could see the notice. The section
+            // is revealed here the way dlInit(true) reveals it live, over the
+            // revisit view rather than over a form.
+            kgRenderRevisit({
+              state: 'success', synthesized: false, job_available: false,
+              snapshot: {
+                project: 'exdark-competition', table_name: 'initial',
+                dataset_yaml: devDest + '\v1\starter_kit\dataset.yaml',
+                tables: { train: T('train', 5910, true), val: T('val', 733, true), test: T('test', 715, true) },
+                mechanisms: {}, checks: CHECKS()
+              }
+            });
+            dlShowSection(true);
+            el('kg-dl-dest').textContent = devDest;
+            dlRenderSuperseded({
+              kit_version: 'v1', current_version: 'v2',
+              created_at: Date.now() / 1000 - 259200, file_count: 14004,
+              kit_dir: devDest + '\v1'
+            });
           } else if (mode === 'state6') {
             kgRenderRevisit({
               state: 'success', synthesized: false, job_available: false,

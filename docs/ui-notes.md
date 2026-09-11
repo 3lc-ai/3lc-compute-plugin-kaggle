@@ -519,6 +519,20 @@ below it. The pattern for any future in-tab section:
   reconnect hide it. The section resolves its own state inside that
   (running download_kit job → reconnect, `/download/state` success → quiet
   line, else the offer).
+  **Amended v1.2.13.** "Revisit hides it" was too absolute, and the cost was
+  not cosmetic. `dlInit` ran ONLY from `kgEnterFormState`, so a participant who
+  had already imported could start a download, navigate away, come back, and
+  find no section, no progress and a dead poll while 625 MB carried on in the
+  worker. The job was always fine (it runs on the worker's dispatch thread and
+  the pid stamp marks restart orphans `stale`, never `running`); what was
+  missing was any way back to it. The same gap hid v1.2.12's `superseded`
+  notice from precisely the population it was written for: already-imported v1
+  holders reach revisit and never the form, so the notice existed and nobody in
+  it could see it. Revisit now calls `dlInit(true)`, which reveals the section
+  for exactly two states, a running download and a superseded kit, and leaves
+  it hidden otherwise. A CURRENT kit still earns no line on revisit: the tab's
+  own success view already says the import worked, and a quiet "downloaded 2h
+  ago" underneath would be a second answer to a solved question.
 - **Cancel without confirm**: cancelling a download is cheap (finished
   shards resume), so the one destructive control skips the confirm and the
   cancelled callout states the resume fact instead. Failure banners carry
@@ -673,11 +687,13 @@ neither is penalised. Only growing a split past its shipped size is refused.
 | `state4` | Success: val CREATED + train/test REUSED, GT-guard note, grouped checks, log |
 | `state5` | Failure: val count + GT-leak failed, remediation, Re-run CTA, Copy diagnostics |
 | `state6` | Revisit (form hidden, Start over) |
+| `state6-superseded` | Revisit WITH the Download section revealed: superseded callout over the revisit view, the v1 yaml in the snapshot. The v1.2.13 resolution, and the state a v1 holder actually lands in |
 
 The classic states also decorate the Download section: `state1` shows the
 offer (a true first visit), `state3`/`state6` hide the section (like the
-live running-import and revisit resolutions), and the yaml-bearing states
-show the quiet kit-on-disk line.
+live running-import resolution, and like a revisit whose kit is current), and
+the yaml-bearing states show the quiet kit-on-disk line. `state6-superseded`
+is the revisit that DOES show it, added in v1.2.13.
 
 ### ?kgdev fixture map — Download section (Import tab)
 
