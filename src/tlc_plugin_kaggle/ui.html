@@ -3212,19 +3212,28 @@
       }
 
       // A complete, intact kit of an older version. INFORMATION, not a fault:
-      // the info vocabulary only (never warn/err, never the x-circle glyph) and
-      // the ordinary offer beneath, so no new button or wiring exists.
+      // the info vocabulary only (never warn/err, never the x-circle glyph).
+      // The offer beneath is the TOP-UP, not the ordinary download:
+      // dlShowOffer(..., 'top_up') swaps in KG_BTN_TOPUP and the top-up blurb,
+      // because a plain download would not reach this participant at all.
       //
-      // The copy carries the whole burden here, so it is exact about what a
-      // download does and does not do. parse_dataset_yaml resolves `path: .`
-      // against the yaml's own directory, so the new version lands in a NEW
-      // directory while tables the participant already imported keep resolving
-      // into the old one. They will not naturally re-import either, because
-      // those tables still exist and verified_import_state still passes, so the
-      // Import tab stays in its revisit view. Downloading gets the current kit
-      // present; it does not change what they train against, and the line must
-      // not imply otherwise. It also does not invite deleting the old kit:
-      // that would break exactly those tables.
+      // Why it cannot: parse_dataset_yaml resolves `path: .` against the
+      // yaml's own directory, so a FRESH download lands in a new directory
+      // while tables the participant already imported keep resolving into the
+      // old one. They will not naturally re-import either, because those
+      // tables still exist and verified_import_state still passes, so the
+      // Import tab stays in its revisit view. Through v1.2.12 this state could
+      // only DESCRIBE that limit and stop. v1.2.13 removes it: the top-up
+      // writes the changed files into the directory those tables already read,
+      // so the corrections arrive without a re-import and without deleting the
+      // old kit, which would break exactly those tables.
+      //
+      // The copy still carries the whole burden, so it stays exact about what
+      // the update does: only the changed files move; in place at kit_dir,
+      // which is a RECORDED fact and not dest/<version> (after a top-up the
+      // derived path names a directory that does not exist while the good kit
+      // sits next door); and files the participant added are left alone.
+      // Full rule: ui-notes §17.
       function dlRenderSuperseded(state) {
         el('kg-dl-progress').innerHTML = '';
         var have = String(state.kit_version || '');

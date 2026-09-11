@@ -750,10 +750,13 @@ release fixed, one layer out: the fixture derived nothing and the doc copied a
 number.
 
 **`dl-superseded` is deliberately not red.** The kit on disk is complete and
-intact; only its version is behind. It renders in the info vocabulary with the
-ordinary offer beneath, and the copy is explicit that downloading places the new
-version *alongside* the old one and does not change what already-imported tables
-resolve against. See §"Kit versions" below.
+intact; only its version is behind. It renders in the info vocabulary, and the
+offer beneath is the **top-up**, not the ordinary download: the copy is explicit
+that only the changed files move and that they are written IN PLACE, into the
+directory already-imported tables resolve against. (Through v1.2.12 this
+paragraph said the opposite - that a download placed the new version
+*alongside* the old one and could not reach those tables. That was true of the
+download and is the limit v1.2.13 exists to remove.) See §"Kit versions" below.
 
 ### ?kgdev fixture map — Train tab
 
