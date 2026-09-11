@@ -138,12 +138,28 @@ pins the structure rather than the instance.
 - [x] **`pytest` immediately before the tag** (RELEASING.md). Green on 227
       tests at the tagged commit `0385dce`, and green again on every commit
       since.
-- [ ] **Reduced-motion parity** on the top-up offer (ui-notes §2). It renders
-      through `dlShowOffer(false, false, 'top_up')` with `animate` false, so
-      there should be nothing to gate — confirm rather than assume.
-- [ ] **`?kgdev=dl-superseded` fixture** now shows the v2 → v3 pair and the
-      **Update the starter kit** CTA. Eyeball it in participant view; fixtures
-      always render participant view (ui-notes).
+- [x] **Reduced-motion parity** on the top-up offer (ui-notes §2) —
+      confirmed 2026-09-11 with Windows animation effects off. The offer
+      renders and reads correctly, and **nothing depends on the animation to
+      appear**, which is the actual bar: a motion-gated element that only
+      exists once it animates is invisible to a reduced-motion user. It
+      renders through `dlShowOffer(false, false, 'top_up')` with `animate`
+      false, so there was nothing to gate — now verified rather than
+      reasoned.
+- [x] **`?kgdev=dl-superseded` fixture** — confirmed 2026-09-11. Shows the
+      v2 → v3 pair with the participant path, copy matching the live callout,
+      and actions disabled. All three are the fixture contract: the pair must
+      be the one this release ships (it was re-pinned from v1 → v2 with the
+      bump), the path must be the participant-shaped one rather than this
+      machine's, and the actions must be inert so a fixture can never start a
+      real job. Fixtures always render the participant view (ui-notes).
+
+      **No em dashes in any rendered string**, per the copy rule (ui-notes §4).
+      Independently re-checked statically over the strings this release added
+      or rewrote — `KG_BTN_TOPUP`, the top-up blurb, `dlRenderSuperseded`'s
+      callout, `dlShowOffer`, `dlRenderSuccess` — all clean of em and en
+      dashes. JS comments are exempt and do contain them; the rule is about
+      what renders.
 
 ## Known defect in the tag: uv.lock
 
