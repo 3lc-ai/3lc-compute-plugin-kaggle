@@ -41,6 +41,12 @@ audit docs, PRETAG checklists, and ideas files stay as written:
 - `README.md` — the setup env-var line and the troubleshooting
   torch-check path.
 - `CONTEXT.md` — the "Current release" sentence under **tags**.
+- `SMOKE_TEST.md` — the footer expectation in §0 and the "Plugin version
+  shown in the page footer" field in the header block. **Added 2026-09-11**,
+  after this file read v1.2.9 through three releases: it was missing from this
+  list since the list was written, so the sweep could be performed faithfully
+  and still leave it stale. That is the case for automating the list
+  (v1.2.14 candidate, docs/v1.2-ideas.md).
 
 Until the Phase C version-drift CI check exists the sweep is manual:
 grep the tree for the OLD version string (`*.md`, `*.ps1`) and update
