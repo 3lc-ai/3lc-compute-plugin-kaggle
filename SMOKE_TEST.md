@@ -8,7 +8,7 @@ check it off only if the expectation holds **exactly**, otherwise note what you 
 and keep going. Report the filled checklist plus any **Copy diagnostics** output.
 
 Tester: ______________  Date: ______________  GPU: ______________
-Plugin version shown in the page footer: ______________ (expect **v1.2.9**)
+Plugin version shown in the page footer: ______________ (expect **v1.2.13**)
 
 > Updating from an earlier version? **Hard-refresh the plugin page**
 > (Ctrl+Shift+R) after the update — required, not optional. A stale cached
@@ -23,7 +23,7 @@ Plugin version shown in the page footer: ______________ (expect **v1.2.9**)
 
 - [ ] Sidebar shows **Kaggle** under AI TOOLS; the page opens with four tabs
       (Import / Train / Predict + Submit / Status) and a stepper.
-- [ ] Footer reads `3LC Kaggle Competition plugin v1.2.9`.
+- [ ] Footer reads `3LC Kaggle Competition plugin v1.2.13`.
 
 ## 1. Import (~2–5 min)
 
