@@ -144,6 +144,30 @@ pins the structure rather than the instance.
       **Update the starter kit** CTA. Eyeball it in participant view; fixtures
       always render participant view (ui-notes).
 
+## Known defect in the tag: uv.lock
+
+`v1.2.13` (`0385dce`) ships a `uv.lock` whose
+`[[package]] name = "3lc-compute-plugin-kaggle"` entry still reads
+`version = "1.2.12"`. The pin sweep missed it because `uv.lock` was not on
+RELEASING.md's census — the same way v1.2.10 missed it. **Not retagged**
+(RELEASING.md: never retag); corrected on `port/0.2.x` after the tag, and
+`uv.lock` is now on the census.
+
+**Impact, assessed rather than assumed: none on the shipped install path.** A
+catalog install resolves through `uv pip install "<dist>[kaggle] @ git+...@v1.2.13"`
+(`provisioning.run_uv_pip_install`), which does not read `uv.lock` at all. The
+lock is read by `uv sync` in a source root, which is the folder-source
+provisioning path — a dev-Hub shape, not a tester's — and uv re-locks on a
+changed `pyproject.toml` unless run `--locked`/`--frozen`, so even there it
+self-heals rather than failing. The defect is a stale metadata value in a file
+nobody on the tester path reads, not a broken pin.
+
+What makes it worth recording anyway: it is the second instance of one class
+(a release input that is GENERATED rather than typed, so a by-hand sweep walks
+past it), and the first instance was three releases ago with nothing written
+down in between. That is the argument for the automated version-drift check
+parked as a v1.2.14 candidate, now with two data points instead of one.
+
 ## Post-tag verification
 
 - [ ] Footer reads **1.2.13** after a catalog install (RELEASING.md §4).

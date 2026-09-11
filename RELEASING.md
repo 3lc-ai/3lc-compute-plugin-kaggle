@@ -47,6 +47,13 @@ audit docs, PRETAG checklists, and ideas files stay as written:
   list since the list was written, so the sweep could be performed faithfully
   and still leave it stale. That is the case for automating the list
   (v1.2.14 candidate, docs/v1.2-ideas.md).
+- `uv.lock` — the `[[package]] name = "3lc-compute-plugin-kaggle"` entry's own
+  `version`. **Added 2026-09-11, on its SECOND miss** (v1.2.10 was the first;
+  v1.2.13 shipped a lock reading 1.2.12). It is not a hand-edit: bump
+  pyproject/plugin.toml first, then run `uv lock` (or any `uv sync`/`uv pip
+  install -e .` against the repo) and commit the result. It is the one census
+  entry that regenerates rather than being typed, which is exactly why a
+  by-hand sweep keeps walking past it.
 
 Until the Phase C version-drift CI check exists the sweep is manual:
 grep the tree for the OLD version string (`*.md`, `*.ps1`) and update
