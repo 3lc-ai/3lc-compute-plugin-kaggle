@@ -227,6 +227,33 @@ class _BridgedJobCtx(JobCtx):
         return super().is_cancelled()
 
 
+def _error_text(exc: BaseException) -> str:
+    """The participant-facing string for a failed job record.
+
+    Ordinary exceptions keep the type prefix — a genuine fault should say what
+    kind it was. The SDK's ``JobFailed`` does not: it is documented as the
+    "clean, user-facing message" channel, reported by the worker "verbatim — no
+    exception-type prefix, unlike an ordinary exception"
+    (tlc_plugin_sdk/job_context.py). Our store is what the tabs actually poll,
+    so without this the SDK's contract held on the Queue panel and not in our
+    own banners, and a deliberate refusal rendered as "ValueError: ..." — a
+    sentence wearing a crash (the D4 shape, docs/v1.2-ideas.md).
+
+    Nothing raises JobFailed today, so this is a SEAM, not a behaviour change:
+    it is inert for every existing job kind and lands the parked ctx.fail()
+    adoption (CONTEXT.md) for whoever needs it first. The import is lazy and
+    guarded because this module is stdlib-only at import time (tests import it
+    with the SDK absent); an empty tuple makes isinstance() cleanly False.
+    """
+    try:
+        from tlc_plugin_sdk import JobFailed
+    except Exception:  # pragma: no cover - SDK always present in the worker
+        JobFailed = ()  # type: ignore[assignment]
+    if isinstance(exc, JobFailed):
+        return str(exc)
+    return f"{type(exc).__name__}: {exc}"
+
+
 def run_dispatch(
     kind: str,
     params: dict[str, Any],
@@ -277,7 +304,7 @@ def run_dispatch(
         return result
     except Exception as exc:
         with _lock:
-            job["error"] = f"{type(exc).__name__}: {exc}"
+            job["error"] = _error_text(exc)
             job["status"] = "failed"
             job["log"].append(f"FAILED: {exc}")
             _flush_locked(job)
