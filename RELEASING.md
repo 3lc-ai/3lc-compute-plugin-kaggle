@@ -281,9 +281,11 @@ has.
   `cwd = <managed-plugins>\<id>` and a python resolved through
   `resolve_managed_python` (honouring `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK`),
   so `import tlc_plugin_kaggle` resolves from that venv's `site-packages` and
-  the source tree is never on the worker's path. Read from the 0.2.1 source, not
-  observed live - verify against a `Spawning worker for plugin` log line before
-  relying on it.
+  the source tree is never on the worker's path. **Confirmed live 2026-09-11**:
+  the running worker's command line is
+  `<managed-plugins>\kaggle-exdark.2.12\.venv\Scripts\python.exe -m
+  tlc_plugin_sdk.worker --entry tlc_plugin_kaggle:KagglePlugin` - the managed
+  venv's interpreter, with the checkout nowhere in the command.
 
 ## Why the gist exists at all
 

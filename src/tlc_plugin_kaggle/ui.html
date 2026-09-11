@@ -666,7 +666,11 @@
         <div class="kg-sec-head">Starter kit</div>
         <div id="kg-dl-banner" role="status"></div>
         <div id="kg-dl-offer" hidden>
-          <div id="kg-dl-blurb">
+          <!-- Two blurbs, TOGGLED by dlShowOffer, never rewritten. #kg-dl-dest
+               lives in here and is dereferenced unguarded by /config load and
+               by dlStart; replacing this block's innerHTML deleted it and took
+               the Update button's handler down with it (v1.2.13). -->
+          <div id="kg-dl-blurb-dl">
           <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 6px; line-height: 1.55;">
             Downloads the competition images and labels from the 3LC content
             network to the machine running the compute service, then verifies
@@ -675,6 +679,14 @@
             Saves to <code id="kg-dl-dest" style="word-break: break-all;"></code>
             on the service machine. An interrupted download keeps its finished
             parts and resumes.</p>
+          </div>
+          <div id="kg-dl-blurb-topup" hidden>
+          <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; line-height: 1.55;">
+            Downloads only the files that changed and writes them into the kit
+            you already have, then re-checks every file against the published
+            manifest. Tables you have imported keep working: they read from this
+            same folder, which is why the update goes here rather than
+            alongside.</p>
           </div>
           <div style="display: flex; gap: 10px; align-items: center;">
             <button type="button" id="kg-dl-btn" class="btn btn-primary btn-sm kgi-btn"></button>
@@ -2205,7 +2217,9 @@
             if (seg) { seg.hidden = !kgHost || !!kgDevMode; }
             // Download destination fact (server-resolved default). Guarded
             // like every page-load live value: fixtures keep their own path.
-            if (!kgDevMode) { el('kg-dl-dest').textContent = String(cfg._meta.kit_dest || ''); }
+            if (!kgDevMode && el('kg-dl-dest')) {
+              el('kg-dl-dest').textContent = String(cfg._meta.kit_dest || '');
+            }
             // The locked contract, SERVED. Not guarded on kgDevMode: the
             // contract is the same in every fixture (no fixture has a reason
             // to claim a different sha), and rendering it here is what lets
@@ -3103,7 +3117,6 @@
       // update the kit already on disk, in place. One button and one poll
       // path, because the two share every rendering state they pass through.
       var dlMode = '';
-      var KG_BLURB_DL = el('kg-dl-blurb').innerHTML;
 
       function dlMB(bytes) { return fmtCount(Math.round((bytes || 0) / 1e6)); }
 
@@ -3135,14 +3148,8 @@
           : (resume ? KG_BTN_DL_RESUME : KG_BTN_DL);
         el('kg-dl-btn').disabled = !!kgDevMode;
         el('kg-dl-state').textContent = '';
-        el('kg-dl-blurb').innerHTML = dlMode === 'top_up'
-          ? '<p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; ' +
-            'line-height: 1.55;">Downloads only the files that changed and writes them ' +
-            'into the kit you already have, then re-checks every file against the ' +
-            'published manifest. Tables you have imported keep working: they read from ' +
-            'this same folder, which is why the update goes here rather than alongside.' +
-            '</p>'
-          : KG_BLURB_DL;
+        el('kg-dl-blurb-dl').hidden = dlMode === 'top_up';
+        el('kg-dl-blurb-topup').hidden = dlMode !== 'top_up';
         if (animate) { kglEnter(el('kg-dl-offer')); }
       }
 
@@ -3403,8 +3410,15 @@
         // download for that path starts — the section owns the narrative
         // until the job lands. Idle the gate; success re-gates through
         // dlAdoptSessionYaml, cancel and failure leave it idle, not red.
-        var dest = el('kg-dl-dest').textContent;
-        var yamlVal = el('kg-yaml').value.trim();
+        // NOT for a top-up: nothing moves, the yaml keeps resolving to the same
+        // kit, so a green gate stays honest and idling it would be a lie.
+        // el() can return null (a fixture or a future markup change); read
+        // defensively, because this runs BEFORE the job starts and a throw here
+        // leaves dlRunning latched true and the button dead for the session.
+        var destEl = dlMode === 'top_up' ? null : el('kg-dl-dest');
+        var dest = destEl ? destEl.textContent : '';
+        var yamlEl = el('kg-yaml');
+        var yamlVal = yamlEl ? yamlEl.value.trim() : '';
         if (dest && yamlVal && yamlVal.toLowerCase().indexOf(dest.toLowerCase()) === 0 &&
             !(kgPreflight && kgPreflight.all_ok)) {
           kgPreflight = null;
