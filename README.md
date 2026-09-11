@@ -160,20 +160,33 @@ get a CSV either way.
 
 ## 3. Getting the data
 
-The competition starter kit is **not in this repo** (it is ~616 MB).
+The competition starter kit is **not in this repo** (it is ~625 MB), and it is
+**not on the Kaggle Data tab** either. That tab carries the competition README and
+`sample_submission.csv`; the plugin is how you get the data.
 
-- Download `starter_kit.zip` from the competition's **Data** tab on Kaggle. Kaggle
-  re-zips the files, so that copy is **616,590,902 bytes**, sha256 `39f2b48c…`
-  (`Get-FileHash starter_kit.zip` to check).
-- A direct build of the kit is **615,995,197 bytes**, sha256
-  `5bf297eed3dc6d12811c7c7eee1c8cc28ba6db4197f0530bd2322f63adbbdca1` — a different
-  hash, byte-identical contents. Don't file a bug about the mismatch.
+**Get it from the plugin.** The Import tab opens with a **Starter kit** section:
+click **Download starter kit**. It fetches the kit from 3LC's content network,
+verifies every file against a published manifest by sha256, and fills the Dataset
+YAML path for you, so the Import gate goes green without a keystroke.
 
-**Unzip it somewhere permanent.** The Hub reads images from that folder forever after
-import — don't move or rename it. Inside: `dataset.yaml`, `sample_submission.csv`,
+- It downloads to the **compute host**, which is the machine that needs it — the
+  browser can be somewhere else entirely (docs/TESTER_SETUP_REMOTE.md).
+- Interruptions resume from the finished shards rather than restarting, and it is
+  safe to navigate away: the job runs in the worker, and the section reattaches to
+  a download in progress when you return.
+- The revisit line's quiet **Verify** action re-checks every file on demand.
+
+It lands in a versioned folder under `~/.3lc-kaggle-plugin/data/` (the section names
+the exact path). **Leave it where it is** — the Hub reads your images from that
+folder for as long as the tables exist, so don't move or rename it after importing.
+Inside: `dataset.yaml`, `sample_submission.csv`, the ExDark licence notice,
 `images/` (train 5,910 · val 733 · test 715) and `labels/` (train + val only; test
 ground truth is hidden). There is nothing to run in the kit — the whole loop happens
 in the plugin.
+
+Already have a copy from somewhere else? Point the Dataset YAML field at its
+`dataset.yaml` and Import reads it the same way; the download is an offer, not a
+gate.
 
 ---
 

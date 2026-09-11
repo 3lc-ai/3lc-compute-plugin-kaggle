@@ -36,32 +36,30 @@ chmod 600 ~/.kaggle/access_token
 # (printf, not echo — the file must have no trailing newline)
 ```
 
-**Starter kit onto the host** (~616 MB; it must live on the host, that's
-where Import reads it). Either push it from your laptop:
+**Starter kit onto the host** (~625 MB; it must live on the host, that's
+where Import reads it). **Use the plugin**: the Import tab's "Starter kit"
+section has a **Download starter kit** button that fetches the kit from 3LC's
+content network, verifies every file against a published manifest by checksum,
+and fills the Dataset YAML path for you.
 
-```bash
-scp starter_kit.zip user@gpu-host:~/kits/
-```
+This is the one setup step that a remote host makes *easier* rather than
+harder. The download runs in the plugin's worker, which lives on the **host**,
+so the bytes go straight to the machine that needs them. Nothing travels
+through your laptop, there is no scp, and there is no path to paste: a browser
+sitting somewhere else changes none of it (docs/REMOTE_COMPUTE.md is the
+browser-is-not-the-host audit). A dropped connection resumes from the finished
+shards rather than restarting, which matters more on a remote link than a
+local one.
 
-or pull it on the host from the competition's Data tab (needs the Kaggle
-token above; the CLI resumes partial downloads):
+Navigating away is safe. The job runs in the worker, not the browser, and the
+section reattaches to a download in progress when you come back.
 
-```bash
-~/path/to/venv/bin/kaggle competitions download -c <competition-slug> -p ~/kits/
-```
+The kit lands in a versioned folder under `~/.3lc-kaggle-plugin/data/` on the
+host; the section names the exact path. Leave it where it is — the Hub reads
+your images from there for as long as the tables exist.
 
-then:
-
-```bash
-cd ~/kits && unzip starter_kit.zip -d starter_kit   # keep this folder permanent
-```
-
-The Import tab's "Dataset YAML path" is then the **host** path, e.g.
-`/home/user/kits/starter_kit/dataset.yaml`.
-
-> v1.2's planned auto-download/auto-slug will erase the scp/wget step and
-> the manual path paste entirely — the plugin will pull the kit from Kaggle
-> on the host by itself. The venv/login/token steps above survive that.
+> The Kaggle **Data** tab does not carry the dataset. It holds the competition
+> README and `sample_submission.csv`; the plugin is how you get the data.
 
 ## 2. Expose the services / connect the browser
 

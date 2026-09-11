@@ -1,7 +1,9 @@
 # Smoke test — the 15-minute path
 
-Prereqs: README §1–§3 done (services up, plugin in sidebar, Kaggle token saved,
-starter kit unzipped). Work top to bottom; every step has an expected result —
+Prereqs: README §1–§2 done (services up, plugin in sidebar, Kaggle token saved).
+The starter kit is the **first box of §1**, not a prerequisite: the plugin
+downloads it.
+Work top to bottom; every step has an expected result —
 check it off only if the expectation holds **exactly**, otherwise note what you saw
 and keep going. Report the filled checklist plus any **Copy diagnostics** output.
 
@@ -25,7 +27,14 @@ Plugin version shown in the page footer: ______________ (expect **v1.2.9**)
 
 ## 1. Import (~2–5 min)
 
-- [ ] Paste the full path to the kit's `dataset.yaml` → preflight panel goes
+- [ ] **Starter kit** section is at the top of the tab. Click **Download starter
+      kit** → determinate progress through download / extract / verify, naming
+      the shard and the bytes. Expected: a green verified banner, and the
+      **Dataset YAML path field fills itself** (the server writes it; the page
+      re-reads it).
+      Already have the kit on disk? Skip to the next box and paste the path
+      instead — both routes end in the same place.
+- [ ] The kit's `dataset.yaml` path is in the field → preflight panel goes
       **green** (12 classes; 5,910 / 733 / 715 rows found on disk).
 - [ ] Set **Project name** to `smoke-` + your initials (e.g. `smoke-ab`).
       Deliberately NOT the default: a later step checks that everything lands
