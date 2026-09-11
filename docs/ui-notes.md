@@ -604,7 +604,7 @@ kit sat beside it.
 
 ---
 
-## 18. The contract is served (v1.2.13)
+## 18. The contract is served, and the row budget (v1.2.13)
 
 Two rules that were previously restated in the fragment now arrive from
 `GET /config` as `_meta.contract`: the locked training contract (model, imgsz,
@@ -628,6 +628,34 @@ the fragment does not get an opinion about them.
   the trainer log line, the Import check text) keep their numbers: those are
   demo data imitating the server, not the contract being claimed.
   `tests/test_contract_parity.py` holds the allowlist and its reasons.
+
+**The row budget** is an UPPER BOUND on train and val rows, never an equality.
+Pruning rows is legitimate competition work and so is setting a weight to 0;
+weight and row count are orthogonal, and both layers read raw `row_count`, so
+neither is penalised. Only growing a split past its shipped size is refused.
+
+- **Layer 1 is the surface that matters.** The Train gate names it before the
+  click, in the amber vocabulary, with `noProjectHint` (re-importing is not the
+  remediation here - it would overwrite tables the participant edited on
+  purpose). Layer 3 in `run_training` is the backstop that a stale fragment or
+  a hand-rolled `/run` hits, and it renders as one string, because Train has no
+  `KG_REMEDIES` table.
+- **The verdict depends on a checkbox, so it is derived, not fetched.**
+  `trVerifyTables` stores what the server said (`trTableInfo`); `trEvaluateGate`
+  decides. `Use latest revision` follows `.latest()` at job start, so a base
+  table inside the ceiling can sit under a revision above it. The toggle
+  handler used to re-render only an already-green gate - correct while the
+  checkbox changed nothing but wording, wrong the moment it changes a verdict:
+  an amber raised by an over-size latest revision has to clear when the box is
+  cleared, or the participant does exactly what the copy asks and is still
+  refused.
+- **Unknown counts never refuse.** A count that cannot be read is named, not
+  acted on. Treating unknown as "fine" would be the absorbed-failure shape;
+  treating it as "over" would block a legitimate run on a read failure.
+- **The conditional line earns its place.** "Use latest revision is on, so this
+  is the newest revision of exdark_train" renders only when the box is on AND
+  every over-size split's base revision is inside the ceiling. Naming the
+  checkbox when going back a revision would not help is misdirection.
 
 ---
 
@@ -682,6 +710,7 @@ resolve against. See §"Kit versions" below.
 | `train-state1` | Empty form (URLs cleared), gate hint, Start disabled |
 | `train-state2` | Gate green ("Tables verified: exdark_train · exdark_val"), Start enabled |
 | `train-state2-missing` | Amber gate (val table missing) + Go to Import, Start disabled |
+| `train-state2-rows` | Amber row-budget gate: train latest revision at 6,204 over a 5,910 ceiling, Start disabled. Base revision is inside the ceiling, so clearing Use latest revision turns it green |
 | `train-state2-invalid` | Gate green + epochs 999 inline bounds error, Start disabled |
 | `train-state3` | In-run: epoch 12/50, determinate bar, metrics strip + sparklines (12-point deterministic curve), ETA, Cancel enabled |
 | `train-state4` | Live success: banner (pre-drawn check), weights + copy, Continue to Submit + Dashboard + Projects links, provenance panel, form visible |

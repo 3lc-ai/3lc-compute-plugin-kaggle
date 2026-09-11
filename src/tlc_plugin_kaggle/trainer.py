@@ -230,6 +230,59 @@ def validate_table_urls(train_url: str, val_url: str) -> None:
         )
 
 
+def check_row_budget(tables: dict[str, Any], use_latest: bool = False) -> None:
+    """Refuse a train run whose tables carry MORE rows than the competition
+    splits. Server-side like every other locked-contract rule.
+
+    An UPPER BOUND, never an equality. Pruning rows is legitimate competition
+    work and so is setting a row's weight to 0; weight and row count are
+    orthogonal, and this reads raw `row_count`, so neither is penalised. Only
+    growing a split past its shipped size is refused, because that is the one
+    edit that buys an advantage the leaderboard cannot see: `check_provenance`
+    records model, imgsz, pretrained and the checkpoint sha, and NOT row
+    counts, so an over-size run is indistinguishable after the fact
+    (docs/divergence-paths.md).
+
+    Takes resolved `tlc.Table` objects, not URLs, and that is the whole point:
+    it must run AFTER `_resolve_table`, because `use_latest` follows
+    `.latest()` and a base table within the ceiling can have a newer revision
+    above it. Checking before resolution would read the wrong table and pass.
+    `validate_table_urls` asserts only the DATASET segment, so every revision
+    in the exdark_train lineage clears it, including a grown one.
+
+    Bounds come from `importer.EXPECTED_ROWS`, the same constant the Import
+    job asserts against and the same one served to the fragment as
+    `_meta.contract.max_rows` — one definition, three readers.
+
+    Raises:
+        ValueError: participant-facing, naming each offending split, what it
+            found, the ceiling, and that pruning and zero-weighting are fine.
+    """
+    from tlc_plugin_kaggle.importer import EXPECTED_ROWS
+
+    over = []
+    for role, table in tables.items():
+        ceiling = EXPECTED_ROWS[role]
+        found = int(getattr(table, "row_count", 0) or 0)
+        if found > ceiling:
+            over.append(
+                f"{role.capitalize()} table has {found:,} rows. "
+                f"The competition {role} split has {ceiling:,}."
+            )
+    if not over:
+        return
+    tail = (
+        " Rows cannot be added to the competition splits. Removing rows is "
+        "fine, and so is setting a row's weight to 0. Neither raises the count."
+    )
+    if use_latest:
+        tail += (
+            " This run resolved each table to its latest revision; clearing "
+            "Use latest revision trains on the exact revisions in the fields."
+        )
+    raise ValueError(" ".join(over) + tail)
+
+
 def build_train_kwargs(params: dict[str, Any]) -> dict[str, Any]:
     """Exposed fields + validated extra args + locked args (locked last)."""
     kwargs: dict[str, Any] = {}
@@ -430,6 +483,17 @@ def run_training(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     use_latest = bool(params.get("use_latest", True))
     train_table = _resolve_table(params["train_table_url"], use_latest, ctx, "train")
     val_table = _resolve_table(params["val_table_url"], use_latest, ctx, "val")
+    # AFTER both resolves, never before: use_latest follows .latest(), so the
+    # row count that matters belongs to the revision this run will actually
+    # train on. Ordering pinned by tests/test_row_budget.py, not just by this
+    # comment. JobFailed for the same reason as the predict gate: a refusal is
+    # a message for the participant, not a fault.
+    try:
+        check_row_budget({"train": train_table, "val": val_table}, use_latest)
+    except ValueError as exc:
+        from tlc_plugin_sdk import JobFailed
+
+        raise JobFailed(str(exc)) from exc
 
     save_root = str(params.get("save_root") or DEFAULT_SAVE_ROOT)
     Path(save_root).mkdir(parents=True, exist_ok=True)

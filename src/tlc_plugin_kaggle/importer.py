@@ -638,6 +638,16 @@ def list_project_tables(project: str) -> dict[str, Any]:
     return out
 
 
+def _row_count(table: Any) -> int | None:
+    """Best-effort row count. None, never 0, when it cannot be read: a gate
+    that treats "unknown" as "zero rows" would pass every budget silently,
+    which is the absorbed-failure shape v1.2.10 was about."""
+    try:
+        return int(table.row_count)
+    except Exception:
+        return None
+
+
 def table_revisions(table_url: str) -> dict[str, Any]:
     """Best-effort revision info for the force-reimport confirmation guard.
 
@@ -653,14 +663,32 @@ def table_revisions(table_url: str) -> dict[str, Any]:
     if not url.exists():
         return {"exists": False, "has_revisions": False, "revisions": 0}
     base = tlc.Table.from_url(url)
+    # row_count rides along because this endpoint already holds the Table
+    # objects: the Train gate needs BOTH numbers to judge a row budget without
+    # a second fetch, and which one applies depends on the Use-latest checkbox
+    # (v1.2.13). Cheap to add here, a whole round trip to add anywhere else.
+    base_rows = _row_count(base)
     try:
         latest = base.latest()
     except Exception:
-        return {"exists": True, "has_revisions": None, "revisions": None}
+        return {"exists": True, "has_revisions": None, "revisions": None, "row_count": base_rows}
     if str(latest.url) == str(base.url):
-        return {"exists": True, "has_revisions": False, "revisions": 0, "latest_url": str(latest.url)}
+        return {
+            "exists": True,
+            "has_revisions": False,
+            "revisions": 0,
+            "latest_url": str(latest.url),
+            "row_count": base_rows,
+            "latest_row_count": base_rows,
+        }
 
-    out: dict[str, Any] = {"exists": True, "has_revisions": True, "latest_url": str(latest.url)}
+    out: dict[str, Any] = {
+        "exists": True,
+        "has_revisions": True,
+        "latest_url": str(latest.url),
+        "row_count": base_rows,
+        "latest_row_count": _row_count(latest),
+    }
     try:
         # Walk latest -> base along the first-input lineage, counting steps.
         count, cur = 0, latest

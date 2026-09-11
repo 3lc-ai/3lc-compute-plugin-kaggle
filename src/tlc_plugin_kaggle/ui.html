@@ -3844,6 +3844,7 @@
             el('tr-train-url').value = '';
             el('tr-val-url').value = '';
             trGate = null;
+            trTableInfo = null;
             trRenderGate(null);
             trCheckReady();
           } else if (mode === 'train-state2') {
@@ -3852,12 +3853,30 @@
             el('tr-train-url').value = trainUrl;
             el('tr-val-url').value = valUrl;
             trGate = null;
+            trTableInfo = null;
             trRenderGate({
               ok: false, headline: 'These tables aren’t on disk yet.',
               problems: ['val table not found on disk (<code title="' + esc(valUrl) + '">' +
                          esc(midTrunc(valUrl, 64)) + '</code>).']
             });
             trCheckReady();
+          } else if (mode === 'train-state2-rows') {
+            // Over-size train split (v1.2.13). Drives the REAL verdict path
+            // rather than painting a canned amber: the fixture supplies only
+            // what /import/revisions returns, and trEvaluateGate decides. So
+            // toggling Use latest revision in the fixture behaves exactly as
+            // it does live, which is the behaviour worth demonstrating - the
+            // base revision here is inside the ceiling, so clearing the box
+            // turns the gate green.
+            el('tr-train-url').value = trainUrl;
+            el('tr-val-url').value = valUrl;
+            el('tr-latest').checked = true;
+            trTableInfo = {
+              train: { exists: true, row_count: 5910, latest_row_count: 6204 },
+              val: { exists: true, row_count: 733, latest_row_count: 733 },
+              train_url: trainUrl, val_url: valUrl
+            };
+            trEvaluateGate();
           } else if (mode === 'train-state2-invalid') {
             gateGreen();
             el('tr-epochs').value = '999';
@@ -4629,6 +4648,68 @@
       // bounded field is in range. Verification reuses the read-only
       // /import/revisions existence check — no new endpoint needed.
       var trGate = null;            // truthy {ok: true} only on green
+      var trTableInfo = null;       // last /import/revisions pair, verdict-free
+
+      // Derive the gate's verdict from the server's answer plus the Use-latest
+      // checkbox. Separate from the fetch because the checkbox can change after
+      // the fetch lands and it changes WHICH revision's row count applies:
+      // .latest() is followed at job start, so a base table inside the ceiling
+      // can sit under a revision that is over it. Re-deriving here costs no
+      // round trip; re-fetching would cost two and replay the enter animation.
+      function trEvaluateGate() {
+        if (!trTableInfo) { return; }
+        var useLatest = el('tr-latest').checked;
+        var maxRows = (kgContract && kgContract.max_rows) || null;
+        var over = [], anyBaseWouldPass = true;
+
+        if (maxRows) {
+          ['train', 'val'].forEach(function (role) {
+            var info = trTableInfo[role] || {};
+            var ceiling = maxRows[role];
+            // Unknown counts never refuse: a gate that read "unknown" as
+            // "fine" is wrong, but one that read it as "over" would block a
+            // legitimate run on a read failure. Name it, don't act on it.
+            var rows = useLatest && info.latest_row_count != null
+              ? info.latest_row_count : info.row_count;
+            if (ceiling == null || rows == null || rows <= ceiling) { return; }
+            var label = role.charAt(0).toUpperCase() + role.slice(1);
+            over.push(label + ' table has ' + fmtCount(rows) + ' rows. ' +
+                      'The competition ' + role + ' split has ' + fmtCount(ceiling) + '.');
+            if (info.row_count == null || info.row_count > ceiling) {
+              anyBaseWouldPass = false;
+            }
+          });
+        }
+
+        if (!over.length) {
+          trGate = { ok: true, train_url: trTableInfo.train_url, val_url: trTableInfo.val_url };
+          trRenderGate(trGate);
+          trCheckReady();
+          return;
+        }
+
+        // Remediation, not another import: re-running Import would overwrite
+        // tables the participant edited on purpose. noProjectHint suppresses
+        // the wrong-project hint and the Go-to-Import button, same as the
+        // split-mismatch amber.
+        var help = ['Training runs on the competition splits, so rows cannot be added. ' +
+                    'Removing rows is fine, and so is setting a row’s weight to 0. ' +
+                    'Neither raises the count.'];
+        if (useLatest && anyBaseWouldPass) {
+          // Only when going back a revision would actually clear it. Naming
+          // the checkbox otherwise is misdirection.
+          help.push('Use latest revision is on, so this is the newest revision of ' +
+                    kgSplitDataset('train') + '. Clear the checkbox, or pick a revision in ' +
+                    'the field, to train on an earlier one.');
+        }
+        trGate = null;
+        trRenderGate({
+          ok: false, noProjectHint: true,
+          headline: 'These tables have more rows than the competition splits.',
+          problems: over.map(esc), help: help
+        });
+        trCheckReady();
+      }
       var trGateKind = 'idle';      // entrance animates on kind transitions only
       var trGateTimer = null;
       var trGateSeq = 0;            // stale-response guard
@@ -4672,6 +4753,9 @@
           kgIcon('alert-triangle') +
           '<span><strong>' + esc(data.headline || 'Tables not found.') + '</strong>' +
           (problems.length ? '<br>' + problems.map(function (p) { return '• ' + p; }).join('<br>') : '') +
+          (data.help ? data.help.map(function (h) {
+            return '<br><span class="form-help">' + h + '</span>';
+          }).join('') : '') +
           (data.noProjectHint ? '' :
             '<br><span class="form-help">Looking in project <code>' + esc(kgCurrentProject()) +
             '</code> — no import has produced these tables there yet. If you just changed the ' +
@@ -4691,6 +4775,7 @@
         if (!force && key === trLastGateKey) { return; }
         trLastGateKey = key;
         trGate = null;
+        trTableInfo = null;
         trCheckReady();
         if (!trainUrl || !valUrl) { trRenderGate(null); return; }
         // Split identity before existence (DP-11): a cross-split URL is
@@ -4734,14 +4819,22 @@
                               '">' + esc(midTrunc(row[2], 64)) + '</code>).');
               }
             });
-            if (!problems.length) {
-              trGate = { ok: true, train_url: trainUrl, val_url: valUrl };
-              trRenderGate(trGate);
-            } else {
+            if (problems.length) {
+              trTableInfo = null;
               trGate = null;
               trRenderGate({ ok: false, headline: 'These tables aren’t on disk yet.', problems: problems });
+              trCheckReady();
+              return;
             }
-            trCheckReady();
+            // What the SERVER said, kept apart from what the gate CONCLUDES.
+            // The row-budget verdict depends on the Use-latest checkbox, which
+            // the participant can flip after this fetch lands, so the verdict
+            // has to be derivable without re-fetching (/import/revisions
+            // already returned both revisions' counts).
+            trTableInfo = {
+              train: res[0], val: res[1], train_url: trainUrl, val_url: valUrl
+            };
+            trEvaluateGate();
           })
           .catch(function (e) {
             if (seq !== trGateSeq) { return; }
@@ -4753,6 +4846,7 @@
               return;
             }
             trGate = null;
+            trTableInfo = null;
             trRenderGate({ ok: false, headline: 'Could not verify the tables: ' + e.message + '.' });
             trCheckReady();
           });
@@ -4853,7 +4947,15 @@
         trVerifyTables(true);
       }, 'val');
       el('tr-latest').addEventListener('change', function () {
-        if (trGate && trGate.ok) { trRenderGate(trGate); }   // same kind: no re-entrance
+        // Re-EVALUATE, not just re-render. Before v1.2.13 this only repainted
+        // an already-green gate ("same kind: no re-entrance"), which was true
+        // when the checkbox only changed the green line's wording. It now
+        // changes the row-budget verdict, so an amber raised by an over-size
+        // latest revision has to clear when the box is unchecked: otherwise
+        // the participant does the exact thing the copy asks for and the gate
+        // keeps refusing.
+        if (trTableInfo) { trEvaluateGate(); }
+        else if (trGate && trGate.ok) { trRenderGate(trGate); }
       });
 
       // Client-side mirror of the server bounds (trainer._EXPOSED and
