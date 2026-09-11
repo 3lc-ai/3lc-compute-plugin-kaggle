@@ -235,21 +235,55 @@ then persistent external dirs, and **installed plugins last** — the comment sa
 source shadows an installed plugin of the same id; **nothing has to be
 uninstalled first.**
 
-Two consequences worth keeping:
+### Read the home the PROCESS has, not the home the docs name
 
-- **A dev Hub drifts silently.** An install pins a commit, and nothing ages it.
-  On 2026-09-11 this repo's dev Hub was still serving the v1.2.8 install from
-  2026-08-31 (`git+...@4bf22ae4`) while v1.2.9 through v1.2.12 had shipped —
-  four tags, three of which changed the Import tab. Click-throughs done in that
-  window tested 1.2.8, whatever the working tree said. **PRETAG step: state
-  which install shape the verification ran against, and for a tag install state
-  the version, from `settings.json` `installed_plugins` rather than from
-  memory.**
+This is where the first version of this section went wrong, so it leads. The
+workspace map says `3lc-hub-next` runs under a **redirected** home
+(`3lc-hub-next\home\`). On 2026-09-11 the service on `:5020` was started from
+that environment's venv but with **no redirect**, so its actual home was
+`C:\Users\Owner\`. Both homes exist, both have a `.3lc-compute` with its own
+`settings.json`, `managed-plugins` and `installed_plugins` list, and they
+disagree:
+
+| | `3lc-hub-next\home\.3lc-compute` | `C:\Users\Owner\.3lc-compute` |
+|---|---|---|
+| `installed_plugins` | kaggle-exdark **1.2.8** (2026-08-31) | kaggle-exdark **1.2.12** (2026-09-03) |
+| `managed-plugins` | `1.2.8` | `1.2.11`, `1.2.12` |
+| `plugin_dirs` | empty | hello-world + `<repo>\src` |
+| Last used | to 2026-09-02 (service logs) | 2026-09-03 onward |
+
+Reading the first one produced a confident, wrong answer — "this Hub is four
+tags behind" — about a Hub that was current. **Resolve the home from the
+running process**, not from the environment's name or its venv path: the venv
+says which code runs the service, never which home it reads. On Windows, read
+the process's own environment block (`USERPROFILE` / `LOCALAPPDATA`, plus any
+`TLC_COMPUTE_PLUGIN_VENV_*` override, which names the exact venv the worker
+spawns from). Then confirm by content: hash the `tlc_plugin_kaggle` in that
+venv against the checkout, or grep it for a marker only the version in question
+has.
+
+### Two consequences worth keeping
+
+- **A tag install pins a commit and nothing ages it**, so a dev Hub CAN drift
+  silently — that half of the original note stands even though its example did
+  not. **PRETAG step: state which install shape the verification ran against,
+  and for a tag install the version, read from the running process's home
+  rather than from memory.**
 - **"Stale" is not one fact.** Before telling anyone to reload, check which
-  shape they are on: `plugin_dirs` non-empty and naming the checkout means
-  folder source; an `installed_plugins` entry for the id means a tag install.
-  A reload on the second is not a no-op with no effect - it kills the worker and
-  wipes in-memory job state, and then changes nothing.
+  shape they are on: `plugin_dirs` naming the checkout means a folder source is
+  registered; an `installed_plugins` entry for the id means a tag install. A
+  reload on the second is not a harmless no-op - it kills the worker and wipes
+  in-memory job state, and then changes nothing.
+- **Registered as a folder source is not the same as imported from it.** The
+  real home has `<repo>\src` in `plugin_dirs` AND a 1.2.12 tag install, and the
+  worker was running 1.2.12. Our `plugin.toml` sets `provision_extra = "kaggle"`,
+  which takes the umbrella branch of `worker_spec.py`: the worker spawns with
+  `cwd = <managed-plugins>\<id>` and a python resolved through
+  `resolve_managed_python` (honouring `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK`),
+  so `import tlc_plugin_kaggle` resolves from that venv's `site-packages` and
+  the source tree is never on the worker's path. Read from the 0.2.1 source, not
+  observed live - verify against a `Spawning worker for plugin` log line before
+  relying on it.
 
 ## Why the gist exists at all
 
