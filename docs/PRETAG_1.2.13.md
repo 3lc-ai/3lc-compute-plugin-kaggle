@@ -135,8 +135,9 @@ pins the structure rather than the instance.
 
 ## Open pre-tag items
 
-- [ ] **`pytest` immediately before the tag** (RELEASING.md). Green at
-      2026-09-11 19:49 on 227 tests; re-run if anything lands after.
+- [x] **`pytest` immediately before the tag** (RELEASING.md). Green on 227
+      tests at the tagged commit `0385dce`, and green again on every commit
+      since.
 - [ ] **Reduced-motion parity** on the top-up offer (ui-notes §2). It renders
       through `dlShowOffer(false, false, 'top_up')` with `animate` false, so
       there should be nothing to gate — confirm rather than assume.
@@ -170,7 +171,13 @@ parked as a v1.2.14 candidate, now with two data points instead of one.
 
 ## Post-tag verification
 
-- [ ] Footer reads **1.2.13** after a catalog install (RELEASING.md §4).
+- [x] Footer reads **1.2.13** after a catalog install (RELEASING.md §4) —
+      confirmed 2026-09-11. Worth stating because the failure mode here is
+      silent: `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` still named the 1.2.12
+      venv, whose path continues to exist after the install, so an unchecked
+      host would have run the OLD plugin and passed everything below against
+      it. The footer is the cheap proof that the var was repointed and the
+      service restarted.
 - [x] **Gist mirror — DONE 2026-09-11.** Mirrored by Rishikesh with
       `gh gist edit`, so the repo file went over **verbatim** rather than by
       hand (a hand-paste once introduced a duplicate-key error). Repo and
@@ -187,6 +194,31 @@ parked as a v1.2.14 candidate, now with two data points instead of one.
 
       The repo copy remains the source of truth; the gist is a mirror and
       nothing else reads from it.
-- [ ] A real catalog install on a host that had 1.2.12, confirming the
-      superseded callout offers the top-up and that it lands v3 in the
-      existing directory.
+- [x] **A real catalog install on a host that had 1.2.12 — PASSED
+      2026-09-11.** This is the one that mattered: every prior top-up run had
+      gone through an EDITABLE install of the checkout, and a packaged build is
+      a different install shape (a copied tree in a managed venv, resolved
+      through the git spec). The gap between those two shapes is what produced
+      a wrong reload diagnosis earlier the same week, so the release is not
+      verified until the packaged form runs it.
+
+      Installed 1.2.13 from the catalog on a host holding v2, footer confirmed
+      **v1.2.13**, and the v2 → v3 top-up wrote **one file from one shard**
+      (`part-09-root-labels.zip`), **14,005 verified**.
+
+      `starter_kit/README.md` landed at sha256
+      `84bc4c26b9f5bdb47b94643569a67405005f5c54c84fab7c6a4ebd73cbfa02d8`, and
+      that value chains end to end — it is identical to the `files[]` entry in
+      the committed v3 manifest anchor AND to
+      `../competition_exdark/starter_kit/README.md`, the kit's source of
+      truth. The packaged build delivered exactly the byte the release anchors
+      claim, through the CDN, into an existing participant directory.
+
+      `check_kit_parity.py` against the resulting tree: **RESULT PARITY**,
+      14,005 matched, 0 size / 0 sha / 0 missing / 0 extra — byte-identical to
+      the published v3 kit, from a packaged install, into a directory still
+      named `…\v2`.
+
+      Test-machine state restored afterwards: the parked job records were moved
+      back into `jobs/` and the `jobs-parked/` directory removed, so nothing
+      hand-curated is left behind to confuse the next reader.
