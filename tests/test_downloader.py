@@ -434,6 +434,53 @@ def test_record_without_a_recorded_version_does_not_probe_the_current_one(
     # The bug in miniature: with no recorded version, verify_now used to fall
     # back to the CURRENT constant and report the manifest missing under v2/
     # while a perfectly good v1 kit sat beside it. Say so instead of guessing.
+    #
+    # A pre-v1.2.12 record carries NEITHER fact - it predates kit_version and
+    # predates kit_dir. Dropping only one of them models no release that ever
+    # shipped, and (since v1.2.13 records kit_dir) would leave the directory
+    # perfectly well known.
+    _serve(tmp_path, monkeypatch, "v1")
+    ctx = FakeCtx()
+    result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
+    ctx.facts.pop("kit_version")
+    ctx.facts.pop("kit_dir")
+    _write_record(ctx, result)
+    monkeypatch.setattr(constants, "STARTER_KIT_VERSION", "v2")
+
+    v = downloader.verify_now()
+    assert v["ok"] is False
+    assert "predates" in v["error"]
+    assert "v2" not in v["error"]  # never names a directory it only guessed
+
+
+def test_recorded_kit_dir_is_read_not_derived(home, tmp_path, monkeypatch):
+    """The v1.2.13 fact, and the reason it exists: after an in-place top-up the
+    directory no longer equals dest/<version>, so a derived path names a
+    directory that does not exist while a good kit sits next door."""
+    _serve(tmp_path, monkeypatch, "v1")
+    ctx = FakeCtx()
+    result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
+    _write_record(ctx, result)
+
+    # The topped-up shape: v3 content, still in the v1 directory.
+    stamped = dict(ctx.facts)
+    stamped["kit_version"] = "v3"
+    assert downloader.kit_dir_of(stamped) == str(_dest(tmp_path) / "v1")
+    assert downloader.kit_dir_of(stamped) != str(_dest(tmp_path) / "v3")
+
+    # Derivation survives only for records written before kit_dir existed.
+    legacy = {"dest_dir": str(_dest(tmp_path)), "kit_version": "v1"}
+    assert downloader.kit_dir_of(legacy) == str(_dest(tmp_path) / "v1")
+    assert downloader.kit_dir_of({"dest_dir": str(_dest(tmp_path))}) == ""
+    assert downloader.kit_dir_of({}) == ""
+
+
+def test_verify_works_when_only_the_version_fact_is_missing(
+    home, tmp_path, monkeypatch
+):
+    """kit_dir alone is enough: the directory is known even when the version is
+    not, so Verify runs instead of refusing. This is the half of the old guard
+    that was collateral, not the point of it."""
     _serve(tmp_path, monkeypatch, "v1")
     ctx = FakeCtx()
     result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
@@ -442,9 +489,8 @@ def test_record_without_a_recorded_version_does_not_probe_the_current_one(
     monkeypatch.setattr(constants, "STARTER_KIT_VERSION", "v2")
 
     v = downloader.verify_now()
-    assert v["ok"] is False
-    assert "predates" in v["error"]
-    assert "v2" not in v["error"]  # never names a directory it only guessed
+    assert v["ok"] is True
+    assert v["matched"] == v["file_count"]
 
 
 def test_manifest_version_disagreeing_with_the_constant_is_refused(
@@ -460,3 +506,244 @@ def test_manifest_version_disagreeing_with_the_constant_is_refused(
 
     with pytest.raises(RuntimeError, match="v2"):
         downloader.run_download({"dest_dir": str(_dest(tmp_path))}, FakeCtx())
+
+
+# ── In-place top-up (v1.2.13) ───────────────────────────────────────────
+#
+# The population this exists for: a holder whose Tables already resolve through
+# the dataset.yaml in an OLD version directory. v1.2.12 made them informed; a
+# fresh download makes the new kit merely present, in a directory nothing reads.
+# Only writing into the directory they already read reaches them.
+
+
+def _serve_next(tmp_path, monkeypatch, version: str, mutate=None) -> FakeCDN:
+    """Ship `version`, optionally mutating the kit tree before it is sharded.
+
+    `mutate(kit_dir)` runs on the built tree, so a test can express "the next
+    kit changes README.md" or "drops a label file" as the edit it actually is.
+    """
+    monkeypatch.setattr(constants, "STARTER_KIT_VERSION", version)
+    srv = tmp_path / f"srv-{version}"
+    kit = _make_kit(srv)
+    if mutate is not None:
+        mutate(kit)
+    make_kit_manifest.generate(
+        kit, srv / "cdn", "test-comp", version, shard_bytes=2048, created_utc=_CREATED,
+    )
+    fake = FakeCDN(srv / "cdn" / version)
+    monkeypatch.setattr(downloader, "_open", fake.open)
+    return fake
+
+
+def _hold_v1(tmp_path, monkeypatch):
+    """A completed v1 download on disk, with its record written."""
+    _serve(tmp_path, monkeypatch, "v1")
+    ctx = FakeCtx()
+    result = downloader.run_download({"dest_dir": str(_dest(tmp_path))}, ctx)
+    _write_record(ctx, result)
+    return ctx, result
+
+
+def _bump_readme(kit: Path) -> None:
+    kit.joinpath("README.md").write_bytes(b"# kit\n\nThe Loop, not Tips & Tricks.\n")
+
+
+def test_top_up_updates_in_place_and_restamps(home, tmp_path, monkeypatch):
+    _hold_v1(tmp_path, monkeypatch)
+    v1_dir = _dest(tmp_path) / "v1"
+    assert downloader.download_state()["state"] == "success"
+
+    fake = _serve_next(tmp_path, monkeypatch, "v2", _bump_readme)
+    assert downloader.download_state()["state"] == "superseded"
+
+    ctx = FakeCtx()
+    result = downloader.run_download({"mode": "top_up"}, ctx)
+
+    # The whole point: same directory, new content.
+    assert result["updated"] is True
+    assert result["kit_dir"] == str(v1_dir)
+    assert result["from_version"] == "v1" and result["kit_version"] == "v2"
+    assert (v1_dir / "starter_kit" / "README.md").read_bytes().endswith(
+        b"The Loop, not Tips & Tricks.\n"
+    )
+    assert not (_dest(tmp_path) / "v2").exists()  # nothing landed alongside
+
+    # Restamped: the record now says v2 while still naming the v1 directory,
+    # which is exactly the shape kit_dir_of() exists to survive.
+    _write_record(ctx, result)
+    state = downloader.download_state()
+    assert state["state"] == "success"
+    assert state["kit_version"] == "v2"
+    assert state["kit_dir"] == str(v1_dir)
+    assert downloader.verify_now()["ok"] is True
+
+    # And the manifest beside the tree was restamped too.
+    beside = json.loads((v1_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert beside["kit_version"] == "v2"
+    assert not list(v1_dir.glob("*.zip"))  # shards cleaned up
+
+
+def test_top_up_fetches_only_the_shards_the_delta_needs(home, tmp_path, monkeypatch):
+    _hold_v1(tmp_path, monkeypatch)
+    fake = _serve_next(tmp_path, monkeypatch, "v2", _bump_readme)
+    fake.requests.clear()
+
+    result = downloader.run_download({"mode": "top_up"}, FakeCtx())
+
+    fetched = {n for n, _ in fake.requests if n != "manifest.json"}
+    assert result["fetched_archives"] == 1
+    assert len(fetched) == 1
+    # README.md is a root file, so it rides the root-labels shard; the image
+    # shards are byte-identical and must never cross the wire.
+    assert all("images" not in n for n in fetched)
+    assert result["written_files"] == 1
+
+
+def test_top_up_removes_kit_files_but_never_the_participants(home, tmp_path, monkeypatch):
+    _hold_v1(tmp_path, monkeypatch)
+    v1_kit = _dest(tmp_path) / "v1" / "starter_kit"
+
+    # The participant's own work, sitting in the kit tree.
+    mine = v1_kit / "labels" / "train" / "my_notes.txt"
+    mine.write_bytes(b"my own file\n")
+
+    def drop_a_label(kit: Path) -> None:
+        _bump_readme(kit)
+        kit.joinpath("labels", "train", "a.txt").unlink()
+
+    _serve_next(tmp_path, monkeypatch, "v2", drop_a_label)
+    result = downloader.run_download({"mode": "top_up"}, FakeCtx())
+
+    assert result["removed_files"] == 1
+    assert not (v1_kit / "labels" / "train" / "a.txt").exists()  # kit dropped it
+    assert mine.read_bytes() == b"my own file\n"                 # never touched
+
+
+def test_top_up_without_a_manifest_beside_the_kit_removes_nothing(
+    home, tmp_path, monkeypatch
+):
+    """Without the old manifest there is no way to tell a file the kit dropped
+    from a file the participant added, so the safe half is chosen and said."""
+    _hold_v1(tmp_path, monkeypatch)
+    v1_dir = _dest(tmp_path) / "v1"
+    (v1_dir / "manifest.json").unlink()
+
+    def drop_a_label(kit: Path) -> None:
+        _bump_readme(kit)
+        kit.joinpath("labels", "train", "a.txt").unlink()
+
+    _serve_next(tmp_path, monkeypatch, "v2", drop_a_label)
+    ctx = FakeCtx()
+    result = downloader.run_download({"mode": "top_up"}, ctx)
+
+    assert result["removed_files"] == 0
+    assert (v1_dir / "starter_kit" / "labels" / "train" / "a.txt").exists()
+    assert any("removals could not be determined" in c["label"] for c in ctx.checks)
+
+
+def test_top_up_refuses_a_dataset_yaml_that_changes_load_bearing_keys(
+    home, tmp_path, monkeypatch
+):
+    """SYNTHETIC BY NECESSITY. The real v2 -> v3 changes README.md only, so no
+    live upgrade can exercise this gate - and it is the one branch where being
+    wrong silently re-points data the participant has already imported. The
+    refusal has to be proven against a kit built to trip it."""
+    _hold_v1(tmp_path, monkeypatch)
+    v1_dir = _dest(tmp_path) / "v1"
+    before_readme = (v1_dir / "starter_kit" / "README.md").read_bytes()
+
+    def repoint(kit: Path) -> None:
+        kit.joinpath("dataset.yaml").write_bytes(b"path: ../elsewhere\nnc: 11\n")
+
+    _serve_next(tmp_path, monkeypatch, "v2", repoint)
+    ctx = FakeCtx()
+    with pytest.raises(RuntimeError) as exc:
+        downloader.run_download({"mode": "top_up"}, ctx)
+
+    assert "already imported" in str(exc.value)
+    assert "path" in str(exc.value) and "nc" in str(exc.value)
+    assert "unchanged" in str(exc.value)
+
+    # "The kit on disk is unchanged" has to be true, not just claimed.
+    assert (v1_dir / "starter_kit" / "dataset.yaml").read_bytes() == b"path: .\nnc: 12\n"
+    assert (v1_dir / "starter_kit" / "README.md").read_bytes() == before_readme
+    beside = json.loads((v1_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert beside["kit_version"] == "v1"  # not restamped on a refusal
+    assert downloader.download_state()["kit_version"] == "v1"
+
+
+def test_top_up_allows_a_dataset_yaml_that_only_changes_comments(
+    home, tmp_path, monkeypatch
+):
+    """The gate compares parsed values, not the hash: a comment-only rewrite is
+    a real case (the v2 kit did exactly that) and must not be refused."""
+    _hold_v1(tmp_path, monkeypatch)
+    v1_dir = _dest(tmp_path) / "v1"
+
+    def recomment(kit: Path) -> None:
+        kit.joinpath("dataset.yaml").write_bytes(
+            b"# Keep this file at the kit root.\npath: .\nnc: 12\n"
+        )
+
+    _serve_next(tmp_path, monkeypatch, "v2", recomment)
+    ctx = FakeCtx()
+    result = downloader.run_download({"mode": "top_up"}, ctx)
+
+    assert result["updated"] is True
+    assert (v1_dir / "starter_kit" / "dataset.yaml").read_bytes().startswith(b"# Keep")
+    assert any(
+        c["label"] == "dataset.yaml keeps its load-bearing keys" and c["ok"]
+        for c in ctx.checks
+    )
+
+
+def test_top_up_repairs_a_locally_damaged_file(home, tmp_path, monkeypatch):
+    """The delta is against the tree as it IS, not against the old manifest, so
+    a file corrupted locally is repaired by the same pass that updates."""
+    _hold_v1(tmp_path, monkeypatch)
+    v1_kit = _dest(tmp_path) / "v1" / "starter_kit"
+    (v1_kit / "labels" / "train" / "a.txt").write_bytes(b"corrupted\n")
+
+    _serve_next(tmp_path, monkeypatch, "v2", _bump_readme)
+    result = downloader.run_download({"mode": "top_up"}, FakeCtx())
+
+    assert result["updated"] is True
+    assert (v1_kit / "labels" / "train" / "a.txt").read_bytes() == b"0 0.5 0.5 0.1 0.1\n"
+    assert result["written_files"] == 2  # the README bump AND the repair
+
+
+def test_top_up_on_a_current_kit_does_nothing(home, tmp_path, monkeypatch):
+    _hold_v1(tmp_path, monkeypatch)
+    result = downloader.run_download({"mode": "top_up"}, FakeCtx())
+    assert result["updated"] is False
+    assert result["reason"] == "already current"
+
+
+def test_top_up_with_no_kit_on_record_says_so(home, tmp_path, monkeypatch):
+    _serve(tmp_path, monkeypatch, "v1")
+    with pytest.raises(RuntimeError, match="Download the starter kit first"):
+        downloader.run_download({"mode": "top_up"}, FakeCtx())
+
+
+def test_top_up_leaves_the_old_manifest_until_it_succeeds(home, tmp_path, monkeypatch):
+    """fetch_manifest(persist=False) is load-bearing: a manifest written before
+    the tree matches it would make Verify report mass mismatch on an intact kit."""
+    _hold_v1(tmp_path, monkeypatch)
+    v1_dir = _dest(tmp_path) / "v1"
+
+    fake = _serve_next(tmp_path, monkeypatch, "v2", _bump_readme)
+    # Corrupt the shard the delta needs, so the pass fails after the manifest
+    # has been fetched but before the tree is consistent.
+    name = next(
+        n for n in (a["name"] for a in json.loads(
+            (fake.dir / "manifest.json").read_text(encoding="utf-8"))["archives"])
+        if "root-labels" in n
+    )
+    fake.tamper[name] = b"not a zip"
+
+    with pytest.raises(RuntimeError):
+        downloader.run_download({"mode": "top_up"}, FakeCtx())
+
+    beside = json.loads((v1_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert beside["kit_version"] == "v1"
+    assert downloader.verify_now()["ok"] is True  # the v1 kit still verifies

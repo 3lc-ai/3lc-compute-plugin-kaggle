@@ -599,15 +599,51 @@ wrong. It carries `kit_dir` — resolved server-side, rendered verbatim — beca
 the fragment rebuilding a path the server already knows is the `kgUrlSeg`
 mistake in another costume.
 
-**What the copy may and may not claim.** `parse_dataset_yaml` resolves `path: .`
-against the yaml's own directory, so a new version lands in a NEW directory
-while tables the participant already imported keep resolving into the old one.
-They will not naturally re-import either: those tables still exist, so
-`verified_import_state` passes and the Import tab stays in its revisit view. So
-downloading gets the current kit *present*; it does not change what they train
-against, and it does not make the old kit deletable — deleting it would break
-exactly those tables. The line says so. The version that actually corrects an
-existing holder is an in-place top-up (docs/v1.2-ideas.md), not this.
+**What the copy may and may not claim — REWRITTEN for v1.2.13, because the
+limit it documented is the thing that release removes.** The mechanism has not
+changed: `parse_dataset_yaml` resolves `path: .` against the yaml's own
+directory, so a kit downloaded fresh lands in a NEW directory while tables the
+participant already imported keep resolving into the old one, and they never
+naturally re-import (those tables still exist, `verified_import_state` passes,
+the Import tab stays in its revisit view). What changed is that the superseded
+state no longer has to *describe* that as a limit and stop. It offers the
+**in-place top-up**, which writes the changed files into the directory the
+tables already read, so an existing holder actually gets the corrections.
+
+The copy follows the action: the callout no longer says the update "places the
+new kit alongside", because it does not, and it no longer needs the paragraph
+explaining why downloading would not help. What it must still be exact about:
+
+- **In place means in place.** The directory keeps its old version name after a
+  top-up — a v2 holder is on v3 content inside `.../v2/`. That is why
+  `kit_dir` is a recorded fact rather than `dest/<version>` derived
+  (`downloader.kit_dir_of`): after a top-up the derived path names a directory
+  that does not exist while the good kit sits next door. Same divergence class
+  as the version skew this section already documents, one release later.
+- **Only the delta moves.** The plan selects the shards that carry changed or
+  missing files; for v2 to v3 that is one shard of ten. The copy says "only the
+  files that changed" because that is what happens, not as reassurance.
+- **The participant's own files are not the kit's to delete.** Removals are
+  restricted to paths the OLD manifest also claimed. Anything else on disk is
+  theirs, and is left alone and reported as kept. With no manifest beside the
+  kit the distinction cannot be drawn, so nothing is removed and a check says
+  so rather than guessing.
+- **dataset.yaml is the one thing a top-up may refuse over.** Writing into a
+  directory live tables read is exactly what makes the top-up work and exactly
+  what makes a changed `path`/`train`/`val`/`test`/`nc`/`names` dangerous, so
+  that change is refused with the kit left untouched and the participant sent
+  to a fresh download. The comparison is of PARSED keys, not the file hash: the
+  v2 kit rewrote only dataset.yaml's comments, and refusing that would have
+  been a false alarm on a real kit. **No live upgrade exercises the refusal** —
+  v2 to v3 changes `README.md` alone — so it is covered by a synthetic kit
+  built to trip it (`test_top_up_refuses_a_dataset_yaml_that_changes_load_bearing_keys`),
+  which also asserts that "the kit on disk is unchanged" is true and not merely
+  claimed.
+- **The manifest beside the tree is restamped last.** `fetch_manifest(...,
+  persist=False)` keeps the old manifest correct for the tree beside it until
+  the new tree verifies; writing it first would leave a failed top-up claiming
+  a version the tree is not, and Verify would report mass mismatch on an intact
+  kit.
 
 **Verify** accepts `superseded` as readily as `success`: the manifest beside a
 kit is that kit's own, so the check stays honest for precisely the population
@@ -706,7 +742,7 @@ is the revisit that DOES show it, added in v1.2.13.
 | `dl-fail` | Red banner with the mid-shard network error + resume copy, Copy diagnostics, Resume CTA |
 | `dl-cancelled` | Info callout (finished parts kept), Resume CTA |
 | `dl-revisit` | Quiet downloaded-kit line ("downloaded 2h ago, 14,005 files verified then") + Verify action + filled yaml + green preflight |
-| `dl-superseded` | Info callout: v1 on disk, v2 shipped, the licence reason, the v1 path, offer beneath. Yaml field holds the **v1** path with green preflight, because that is what a v1 holder actually has |
+| `dl-superseded` | Info callout: v2 on disk, v3 shipped, the in-place update offer beneath (**Update the starter kit**). Yaml field holds the **v2** path with green preflight, because that is what a v2 holder actually has |
 
 The two file counts above read 14,005 (v2). They said 14,004 until v1.2.12 —
 v1's count, left behind by the v2 bump. Same divergence class as the bug that

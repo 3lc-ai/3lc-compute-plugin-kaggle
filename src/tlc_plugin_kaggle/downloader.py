@@ -94,6 +94,13 @@ def resolve_params(data: dict[str, Any]) -> dict[str, Any]:
     disk use for no participant benefit, and resume-after-failure does not
     need them kept — shards are only deleted AFTER the tree verifies, so
     every failure path still finds them on disk."""
+    if str(data.get("mode") or "").strip() == "top_up":
+        # A top-up has no destination to choose: it writes into the directory
+        # the recorded kit is already in. Probing/creating dest/<version> here
+        # would create an empty v3 folder beside a kit that is about to become
+        # v3 in place, which is the confusion this whole path removes.
+        return {"mode": "top_up", "keep_archives": bool(data.get("keep_archives"))}
+
     raw = str(data.get("dest_dir") or "").strip().strip('"')
     dest = Path(raw).expanduser() if raw else DEFAULT_DEST
     if not dest.is_absolute():
@@ -109,8 +116,16 @@ def resolve_params(data: dict[str, Any]) -> dict[str, Any]:
     return {"dest_dir": str(dest), "keep_archives": bool(data.get("keep_archives"))}
 
 
-def fetch_manifest(version_dir: Path, log: Callable[[str], None]) -> dict[str, Any]:
-    """Fresh manifest from the CDN, persisted next to the shards."""
+def fetch_manifest(
+    version_dir: Path, log: Callable[[str], None], *, persist: bool = True
+) -> dict[str, Any]:
+    """Fresh manifest from the CDN, persisted next to the shards.
+
+    ``persist=False`` returns it without writing. The top-up needs that: its
+    target directory already holds the OLD version's manifest, which stays
+    correct for the tree beside it until the top-up actually succeeds. Writing
+    the new one first would leave a failed top-up claiming a version the tree
+    is not, and Verify would report mass mismatch on an intact kit."""
     import json
 
     url = kit_url("manifest.json")
@@ -142,7 +157,8 @@ def fetch_manifest(version_dir: Path, log: Callable[[str], None]) -> dict[str, A
             "is misconfigured on the server. Report this to the organizers; there "
             "is nothing to fix on this machine."
         )
-    (version_dir / "manifest.json").write_bytes(raw)
+    if persist:
+        (version_dir / "manifest.json").write_bytes(raw)
     return manifest
 
 
@@ -320,12 +336,31 @@ def download_state() -> dict[str, Any]:
             "current_version": constants.STARTER_KIT_VERSION,
             "file_count": (job.get("result") or {}).get("file_count"),
         }
-        if out["state"] == "superseded":
-            # Resolved here, not in the fragment: the kit directory is a
-            # server-side fact and the copy names it verbatim.
-            out["kit_dir"] = str(Path(dest_dir) / recorded) if (dest_dir and recorded) else ""
+        # Resolved here, not in the fragment: the kit directory is a
+        # server-side fact and the copy names it verbatim. Recorded on every
+        # state, not just superseded, because verify_now needs it too.
+        out["kit_dir"] = kit_dir_of(facts)
         return out
     return {"state": "empty"}
+
+
+def kit_dir_of(facts: dict[str, Any]) -> str:
+    """The version directory a download record actually wrote.
+
+    Recorded since v1.2.13 as facts["kit_dir"]. Before that it could only be
+    derived as dest/<version>, which an IN-PLACE top-up breaks: a topped-up
+    v1 holder is on v3 content inside the v1 directory, so dest/"v3" names a
+    directory that does not exist while a good kit sits next door. Read the
+    record; derive only for records written before it was recorded; and when
+    the record names no version at all, return "" rather than guess - that
+    fallback was the v1.2.12 bug in miniature.
+    """
+    recorded_dir = str(facts.get("kit_dir") or "")
+    if recorded_dir:
+        return recorded_dir
+    dest_dir = str(facts.get("dest_dir") or "")
+    version = str(facts.get("kit_version") or "")
+    return str(Path(dest_dir) / version) if (dest_dir and version) else ""
 
 
 def verify_now() -> dict[str, Any]:
@@ -342,8 +377,8 @@ def verify_now() -> dict[str, Any]:
     # release is for. Refusing here would break Verify for precisely them.
     if state.get("state") not in ("success", "superseded"):
         return {"ok": False, "error": "No completed download on record. Download the starter kit first."}
-    recorded = str(state.get("kit_version") or "")
-    if not recorded:
+    version_dir_str = str(state.get("kit_dir") or "")
+    if not version_dir_str:
         # No falling back to the CURRENT constant: that is the bug in
         # miniature — it would look under a directory this record never wrote
         # and report the manifest missing while a good kit sat beside it.
@@ -352,7 +387,7 @@ def verify_now() -> dict[str, Any]:
             "error": "This download predates kit-version recording, so the kit "
                      "directory cannot be identified. Download the starter kit again.",
         }
-    version_dir = Path(str(state["dest_dir"])) / recorded
+    version_dir = Path(version_dir_str)
     manifest_path = version_dir / "manifest.json"
     if not manifest_path.is_file():
         return {"ok": False, "error": f"manifest.json is no longer on disk at {manifest_path}."}
@@ -368,6 +403,384 @@ def verify_now() -> dict[str, Any]:
         "missing": delta["missing"][:20],
         "mismatch": delta["mismatch"][:20],
         "extra_count": len(delta["extra"]),
+    }
+
+
+# The dataset.yaml keys that already-imported Tables resolve through. A
+# top-up writes into the directory those Tables read from, so changing any of
+# these under them would silently re-point or re-label live data. Comments and
+# formatting are not load-bearing and a change confined to them is allowed
+# through - which is why this compares PARSED values, not the file hash.
+_LOAD_BEARING_YAML_KEYS = ("path", "train", "val", "test", "nc", "names")
+
+
+def _yaml_keys(raw: bytes) -> dict[str, Any]:
+    import yaml
+
+    cfg = yaml.safe_load(raw.decode("utf-8"))
+    if not isinstance(cfg, dict):
+        raise ValueError("dataset.yaml is not a mapping")
+    return {k: cfg.get(k) for k in _LOAD_BEARING_YAML_KEYS}
+
+
+def top_up_plan(
+    new_manifest: dict[str, Any],
+    old_manifest: dict[str, Any] | None,
+    version_dir: Path,
+) -> dict[str, Any]:
+    """What a top-up would fetch, write and remove. Pure: reads the disk,
+    changes nothing.
+
+    ``write`` is the delta against the tree as it actually is, not against the
+    old manifest, so a locally damaged file is repaired by the same pass.
+
+    ``remove`` is deliberately NOT verify_tree's ``extra``. Extra means "on
+    disk, not in the new manifest", which covers both files the kit dropped and
+    files the participant added themselves; deleting the second kind would be
+    destroying their work. Only paths the OLD manifest also claimed are kit
+    files, so only those can be removals. With no old manifest on disk the
+    distinction cannot be drawn at all, and nothing is removed."""
+    new_files = {f["path"]: f for f in new_manifest["files"]}
+    delta = verify_tree(new_manifest, version_dir)
+    write = sorted(set(delta["missing"]) | set(delta["mismatch"]))
+
+    removable: list[str] = []
+    unowned_extras = list(delta["extra"])
+    if old_manifest is not None:
+        old_paths = {f["path"] for f in old_manifest["files"]}
+        removable = sorted(p for p in delta["extra"] if p in old_paths)
+        unowned_extras = sorted(set(delta["extra"]) - set(removable))
+
+    archives = sorted({str(new_files[p]["archive"]) for p in write})
+    by_name = {a["name"]: a for a in new_manifest["archives"]}
+    return {
+        "write": write,
+        "remove": removable,
+        "keep_extra": unowned_extras,
+        "archives": [by_name[n] for n in archives],
+        "matched": delta["matched"],
+        "removals_known": old_manifest is not None,
+        "write_bytes": sum(int(new_files[p]["bytes"]) for p in write),
+        "fetch_bytes": sum(int(by_name[n]["bytes"]) for n in archives),
+    }
+
+
+def run_top_up(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
+    """Update an existing kit IN PLACE to the shipped version.
+
+    The point of the whole thing: a superseded holder's Tables resolve through
+    the dataset.yaml in THIS directory (``path: .`` resolves against the yaml's
+    own dir), so a fresh download into a new directory leaves them training
+    against the old kit forever. Writing into the directory they already read
+    is the only update that reaches them - and it is why the dataset.yaml gate
+    below exists, because that same property makes a careless write dangerous.
+
+    Cancellation is honored up to the first byte written into the tree; after
+    that the pass runs to its re-verify, which is what makes the result either
+    wholly the new kit or a named failure, never a silent half-kit."""
+    import json
+
+    log = ctx.log
+    set_checks = ctx.set_checks
+    set_progress = getattr(ctx, "set_progress", lambda p: None)
+    set_field = getattr(ctx, "set_field", lambda k, v: None)
+    is_cancelled = getattr(ctx, "is_cancelled", lambda: False)
+
+    checks: list[dict[str, Any]] = []
+
+    def check(label: str, ok: bool, detail: str = "") -> bool:
+        checks.append({"label": label, "ok": bool(ok), "detail": detail})
+        set_checks(checks)
+        log(("PASS " if ok else "FAIL ") + label + (f" — {detail}" if detail else ""))
+        return ok
+
+    state = download_state()
+    if state.get("state") == "success":
+        log("The kit on disk is already the current version. Nothing to update.")
+        return {
+            "cancelled": False,
+            "updated": False,
+            "reason": "already current",
+            "kit_version": constants.STARTER_KIT_VERSION,
+        }
+    if state.get("state") != "superseded":
+        raise RuntimeError(
+            "There is no complete starter kit on this machine to update. "
+            "Download the starter kit first."
+        )
+
+    version_dir = Path(str(state.get("kit_dir") or ""))
+    from_version = str(state.get("kit_version") or "")
+    if not version_dir.is_dir():
+        raise RuntimeError(
+            f"The recorded kit directory is gone: {version_dir}. "
+            "Download the starter kit again."
+        )
+    dest_dir = Path(str(state.get("dest_dir") or version_dir.parent))
+
+    old_manifest: dict[str, Any] | None = None
+    old_path = version_dir / "manifest.json"
+    if old_path.is_file():
+        try:
+            old_manifest = json.loads(old_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            old_manifest = None
+
+    # persist=False: the manifest beside the tree still describes the tree
+    # until this pass succeeds. See fetch_manifest.
+    new_manifest = fetch_manifest(version_dir, log, persist=False)
+    kit_dir_name = str(new_manifest["kit_dir_name"])
+    plan = top_up_plan(new_manifest, old_manifest, version_dir)
+    check(
+        "update planned from the published manifest",
+        True,
+        f"{from_version} -> {new_manifest['kit_version']}: {len(plan['write'])} files "
+        f"to write, {len(plan['remove'])} to remove, {plan['matched']} already "
+        f"current; {len(plan['archives'])} of {len(new_manifest['archives'])} "
+        "shards needed",
+    )
+    if not plan["removals_known"]:
+        check(
+            "removals could not be determined",
+            True,
+            "no manifest beside the kit, so nothing is removed; files the new kit "
+            "dropped stay on disk as extras",
+        )
+    if plan["keep_extra"]:
+        check(
+            "files not from the kit are left alone",
+            True,
+            f"{len(plan['keep_extra'])} extra files kept",
+        )
+
+    if not plan["write"] and not plan["remove"]:
+        # Content already matches; only the stamp is behind.
+        _write_manifest(old_path, new_manifest)
+        _restamp(set_field, dest_dir, version_dir, new_manifest, kit_dir_name, log)
+        log("Kit content already matches the current version; record updated.")
+        return _top_up_result(
+            dest_dir, version_dir, new_manifest, kit_dir_name, plan, from_version
+        )
+
+    # Delta-scoped, not 2x the kit: only the selected shards plus the files
+    # they write land on disk, and the shards go away again at the end.
+    needed = plan["fetch_bytes"] + plan["write_bytes"] + (100 << 20)
+    free = shutil.disk_usage(version_dir).free
+    detail = f"{free / 1e9:.1f} GB free, ~{needed / 1e9:.1f} GB needed"
+    if not check("enough disk space for the update", free >= needed, detail):
+        raise RuntimeError(
+            f"Not enough disk space at {version_dir} ({detail}). Free up space, "
+            "then run the update again."
+        )
+
+    # ── Fetch only the shards the delta needs ───────────────────────────
+    total = sum(int(a["bytes"]) for a in plan["archives"]) or 1
+    done = 0
+    try:
+        for i, entry in enumerate(plan["archives"]):
+            if is_cancelled():
+                raise _Cancelled()
+
+            def report(shard_done: int, _i: int = i, _n: str = entry["name"]) -> None:
+                set_progress(
+                    {
+                        "percent": round(70.0 * (done + shard_done) / total, 1),
+                        "label": f"Downloading update {_i + 1}/{len(plan['archives'])}",
+                        "phase": "download",
+                        "archive": _n,
+                        "bytes_done": done + shard_done,
+                        "bytes_total": total,
+                    }
+                )
+
+            _download_shard(entry, version_dir, log, report, is_cancelled)
+            done += int(entry["bytes"])
+    except _Cancelled:
+        log("Cancelled before anything was changed. The kit on disk is untouched.")
+        return {
+            "cancelled": True,
+            "updated": False,
+            "resumable": True,
+            "kit_dir": str(version_dir),
+        }
+    check(
+        f"{len(plan['archives'])} update shards downloaded and sha256-verified",
+        True,
+        f"{total:,} bytes",
+    )
+
+    # ── The gate: refuse to re-point live Tables ────────────────────────
+    yaml_rel = f"{kit_dir_name}/dataset.yaml"
+    yaml_path = version_dir / kit_dir_name / "dataset.yaml"
+    if yaml_rel in plan["write"] and yaml_path.is_file():
+        new_raw = _entry_bytes(version_dir, plan["archives"], yaml_rel)
+        try:
+            before, after = _yaml_keys(yaml_path.read_bytes()), _yaml_keys(new_raw)
+        except (ValueError, OSError) as exc:
+            raise RuntimeError(
+                f"dataset.yaml could not be compared before updating in place "
+                f"({exc}). Download the starter kit fresh instead; the kit on disk "
+                "is unchanged."
+            ) from exc
+        changed = sorted(k for k in _LOAD_BEARING_YAML_KEYS if before[k] != after[k])
+        if not check(
+            "dataset.yaml keeps its load-bearing keys",
+            not changed,
+            ", ".join(changed) if changed else "unchanged",
+        ):
+            raise RuntimeError(
+                "This update changes dataset.yaml keys that tables you have already "
+                f"imported resolve through ({', '.join(changed)}), so it cannot be "
+                "applied in place without changing what those tables read. Download "
+                "the starter kit fresh into a new folder and import it. The kit on "
+                "disk is unchanged."
+            )
+
+    # ── Write, in place ─────────────────────────────────────────────────
+    set_progress({"percent": 72.0, "label": "Updating files", "phase": "extract"})
+    _extract_selected(version_dir, plan["archives"], plan["write"])
+    check(f"{len(plan['write'])} files updated in place", True, str(version_dir))
+
+    if plan["remove"]:
+        set_progress(
+            {"percent": 85.0, "label": "Removing dropped files", "phase": "extract"}
+        )
+        for rel in plan["remove"]:
+            (version_dir / rel).unlink(missing_ok=True)
+            log(f"  REMOVED {rel}")
+        check(f"{len(plan['remove'])} files the new kit dropped were removed", True)
+
+    # ── Re-verify the whole tree, not just what changed ─────────────────
+    set_progress({"percent": 90.0, "label": "Verifying files", "phase": "verify"})
+    delta = verify_tree(new_manifest, version_dir)
+    ok = not delta["mismatch"] and not delta["missing"]
+    detail = f"{delta['matched']}/{new_manifest['file_count']} files verified"
+    if not ok:
+        broken = delta["mismatch"] + delta["missing"]
+        detail += "; first problems: " + ", ".join(broken[:5])
+    if not check("updated kit matches the published manifest", ok, detail):
+        for path in (delta["mismatch"] + delta["missing"])[:50]:
+            log(f"  DELTA {path}")
+        raise RuntimeError(
+            f"{len(delta['mismatch']) + len(delta['missing'])} files do not match "
+            "the manifest after the update. Run the update again; completed shards "
+            "are kept."
+        )
+
+    # ── Restamp, then clean up ──────────────────────────────────────────
+    _write_manifest(old_path, new_manifest)
+    _restamp(set_field, dest_dir, version_dir, new_manifest, kit_dir_name, log)
+    if not bool(params.get("keep_archives")):
+        for entry in plan["archives"]:
+            (version_dir / entry["name"]).unlink(missing_ok=True)
+        log("Update shards removed after verification (manifest.json kept)")
+
+    set_progress({"percent": 100.0, "label": "Complete", "phase": "done"})
+    return _top_up_result(
+        dest_dir,
+        version_dir,
+        new_manifest,
+        kit_dir_name,
+        plan,
+        from_version,
+        verified=delta["matched"],
+    )
+
+
+def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
+    import json
+
+    path.write_text(
+        json.dumps(manifest, indent=1) + "\n", encoding="utf-8", newline="\n"
+    )
+
+
+def _entry_bytes(
+    version_dir: Path, archives: list[dict[str, Any]], rel: str
+) -> bytes:
+    """Read one entry out of the downloaded shards without extracting it."""
+    for entry in archives:
+        zp = version_dir / entry["name"]
+        if not zp.is_file():
+            continue
+        with zipfile.ZipFile(zp) as zf:
+            if rel in zf.namelist():
+                return zf.read(rel)
+    raise RuntimeError(f"{rel} is not in any downloaded shard")
+
+
+def _extract_selected(
+    version_dir: Path, archives: list[dict[str, Any]], wanted: list[str]
+) -> None:
+    """Extract exactly ``wanted`` from the given shards. Not extractall: the
+    matched majority is already correct on disk, and rewriting it would turn a
+    one-file update into a whole-kit rewrite."""
+    remaining = set(wanted)
+    for entry in archives:
+        zp = version_dir / entry["name"]
+        with zipfile.ZipFile(zp) as zf:
+            for info in zf.infolist():
+                n = info.filename.replace("\\", "/")
+                if n.startswith("/") or ".." in n.split("/"):
+                    raise RuntimeError(
+                        f"Unsafe path in {entry['name']}: {info.filename}"
+                    )
+                if n not in remaining:
+                    continue
+                target = version_dir / n
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(info) as src, target.open("wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                remaining.discard(n)
+    if remaining:
+        raise RuntimeError(
+            f"{len(remaining)} file(s) the update needs were not in the downloaded "
+            f"shards: {', '.join(sorted(remaining)[:5])}"
+        )
+
+
+def _restamp(
+    set_field: Callable[[str, Any], None],
+    dest_dir: Path,
+    version_dir: Path,
+    manifest: dict[str, Any],
+    kit_dir_name: str,
+    log: Callable[[str], None],
+) -> None:
+    """Record the kit this directory now holds. kit_dir is the fact that makes
+    the record survive the version no longer matching the directory name."""
+    yaml_path = version_dir / kit_dir_name / "dataset.yaml"
+    set_field("dest_dir", str(dest_dir))
+    set_field("kit_version", str(manifest["kit_version"]))
+    set_field("kit_dir", str(version_dir))
+    set_field("dataset_yaml", str(yaml_path))
+    _publish_session_yaml(yaml_path)
+    log(f"Kit at {version_dir} is now {manifest['kit_version']}")
+
+
+def _top_up_result(
+    dest_dir: Path,
+    version_dir: Path,
+    manifest: dict[str, Any],
+    kit_dir_name: str,
+    plan: dict[str, Any],
+    from_version: str,
+    verified: int | None = None,
+) -> dict[str, Any]:
+    return {
+        "cancelled": False,
+        "updated": True,
+        "dest_dir": str(dest_dir),
+        "kit_dir": str(version_dir),
+        "from_version": from_version,
+        "kit_version": str(manifest["kit_version"]),
+        "dataset_yaml": str(version_dir / kit_dir_name / "dataset.yaml"),
+        "file_count": int(manifest["file_count"]),
+        "total_bytes": int(manifest["total_bytes"]),
+        "written_files": len(plan["write"]),
+        "removed_files": len(plan["remove"]),
+        "fetched_archives": len(plan["archives"]),
+        "verified_files": plan["matched"] if verified is None else verified,
     }
 
 
@@ -391,12 +804,21 @@ def run_download(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
         log(("PASS " if ok else "FAIL ") + label + (f" — {detail}" if detail else ""))
         return ok
 
+    if str(params.get("mode") or "").strip() == "top_up":
+        # Same job kind on purpose: download_state keys off the newest
+        # completed download_kit record, and a top-up IS the newest thing
+        # that happened to this kit. A separate kind would need every
+        # reader to learn about it, which is the divergence shape v1.2.12
+        # closed.
+        return run_top_up(params, ctx)
+
     resolved = resolve_params(params)  # re-validates: /run skips /validate
     dest_dir = Path(resolved["dest_dir"])
     keep_archives = resolved["keep_archives"]
     version_dir = dest_dir / constants.STARTER_KIT_VERSION
     set_field("dest_dir", str(dest_dir))
     set_field("kit_version", constants.STARTER_KIT_VERSION)
+    set_field("kit_dir", str(version_dir))
 
     manifest = fetch_manifest(version_dir, log)
     archives = manifest["archives"]
@@ -519,6 +941,7 @@ def run_download(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
         "cancelled": False,
         "dest_dir": str(dest_dir),
         "kit_version": str(manifest["kit_version"]),
+        "kit_dir": str(version_dir),
         "dataset_yaml": str(yaml_path),
         "file_count": int(manifest["file_count"]),
         "total_bytes": int(manifest["total_bytes"]),

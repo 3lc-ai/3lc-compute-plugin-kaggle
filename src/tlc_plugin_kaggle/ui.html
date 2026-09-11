@@ -666,6 +666,7 @@
         <div class="kg-sec-head">Starter kit</div>
         <div id="kg-dl-banner" role="status"></div>
         <div id="kg-dl-offer" hidden>
+          <div id="kg-dl-blurb">
           <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 6px; line-height: 1.55;">
             Downloads the competition images and labels from the 3LC content
             network to the machine running the compute service, then verifies
@@ -674,6 +675,7 @@
             Saves to <code id="kg-dl-dest" style="word-break: break-all;"></code>
             on the service machine. An interrupted download keeps its finished
             parts and resumes.</p>
+          </div>
           <div style="display: flex; gap: 10px; align-items: center;">
             <button type="button" id="kg-dl-btn" class="btn btn-primary btn-sm kgi-btn"></button>
             <span id="kg-dl-state" aria-live="polite" style="font-size: 12px; color: var(--text-muted);"></span>
@@ -3094,7 +3096,14 @@
       var dlLastChecks = null;
       var KG_BTN_DL = kgIcon('download', 'kgi-16') + '<span>Download starter kit</span>';
       var KG_BTN_DL_RESUME = kgIcon('download', 'kgi-16') + '<span>Resume download</span>';
+      var KG_BTN_TOPUP = kgIcon('refresh-cw', 'kgi-16') + '<span>Update the starter kit</span>';
       el('kg-dl-btn').innerHTML = KG_BTN_DL;
+
+      // Which job the offer button starts: '' = a fresh download, 'top_up' =
+      // update the kit already on disk, in place. One button and one poll
+      // path, because the two share every rendering state they pass through.
+      var dlMode = '';
+      var KG_BLURB_DL = el('kg-dl-blurb').innerHTML;
 
       function dlMB(bytes) { return fmtCount(Math.round((bytes || 0) / 1e6)); }
 
@@ -3117,12 +3126,23 @@
 
       function dlShowSection(show) { el('kg-dl-section').hidden = !show; }
 
-      function dlShowOffer(resume, animate) {
+      function dlShowOffer(resume, animate, mode) {
+        dlMode = mode === 'top_up' ? 'top_up' : '';
         el('kg-dl-offer').hidden = false;
         el('kg-dl-progress').innerHTML = '';
-        el('kg-dl-btn').innerHTML = resume ? KG_BTN_DL_RESUME : KG_BTN_DL;
+        el('kg-dl-btn').innerHTML = dlMode === 'top_up'
+          ? KG_BTN_TOPUP
+          : (resume ? KG_BTN_DL_RESUME : KG_BTN_DL);
         el('kg-dl-btn').disabled = !!kgDevMode;
         el('kg-dl-state').textContent = '';
+        el('kg-dl-blurb').innerHTML = dlMode === 'top_up'
+          ? '<p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; ' +
+            'line-height: 1.55;">Downloads only the files that changed and writes them ' +
+            'into the kit you already have, then re-checks every file against the ' +
+            'published manifest. Tables you have imported keep working: they read from ' +
+            'this same folder, which is why the update goes here rather than alongside.' +
+            '</p>'
+          : KG_BLURB_DL;
         if (animate) { kglEnter(el('kg-dl-offer')); }
       }
 
@@ -3208,25 +3228,37 @@
           '<div class="kg-callout info">' + kgIcon('info') +
           '<span>An updated starter kit is available. This machine has ' +
           esc(have) + when + '; the current kit is ' + esc(current) + '. ' +
-          'The update adds the ExDark license notice and corrects the README’s ' +
-          'licensing text, which previously described the data as non-commercial ' +
-          'research use only. The images and labels are identical. Downloading is ' +
-          'optional and places ' + esc(current) + ' alongside the current kit' +
-          (path ? ' at <code style="word-break:break-all">' + esc(path) + '</code>' : '') +
-          '; tables you have already imported keep reading from the kit they were ' +
-          'imported from, so training is unaffected either way.</span></div>';
-        dlShowOffer(false, false);
+          'Updating rewrites only the files that changed' +
+          (path ? ', in place at <code style="word-break:break-all">' + esc(path) +
+                  '</code>' : '') +
+          ', so tables you have already imported pick up the corrections instead of ' +
+          'being left behind on the older kit. Your own edits and any files you added ' +
+          'are left alone.</span></div>';
+        dlShowOffer(false, false, 'top_up');
       }
 
       function dlRenderSuccess(job, animate) {
         el('kg-dl-offer').hidden = true;
         el('kg-dl-progress').innerHTML = '';
-        var files = (job.result || {}).file_count;
+        var res = job.result || {};
+        var files = res.file_count;
+        var head, tail;
+        if (res.updated) {
+          head = '<strong>Starter kit updated to ' + esc(String(res.kit_version || '')) +
+                 '.</strong> ';
+          tail = fmtCount(res.written_files || 0) + ' file' +
+                 ((res.written_files === 1) ? '' : 's') + ' rewritten in place' +
+                 (res.removed_files ? ', ' + fmtCount(res.removed_files) + ' removed' : '') +
+                 (files ? '; all ' + fmtCount(files) + ' now match the published manifest' : '') +
+                 '. Tables you have already imported read the updated files.';
+        } else {
+          head = '<strong>Starter kit downloaded and verified.</strong> ';
+          tail = (files ? fmtCount(files) + ' files match the published manifest. ' : '') +
+                 'The dataset YAML path below is filled in and ready to import.';
+        }
         el('kg-dl-banner').innerHTML =
-          '<div class="kg-callout ok' + (animate ? ' kgl-enter' : '') + '">' + kgIcon('check-circle') +
-          '<span><strong>Starter kit downloaded and verified.</strong> ' +
-          (files ? fmtCount(files) + ' files match the published manifest. ' : '') +
-          'The dataset YAML path below is filled in and ready to import.</span></div>';
+          '<div class="kg-callout ok' + (animate ? ' kgl-enter' : '') + '">' +
+          kgIcon('check-circle') + '<span>' + head + tail + '</span></div>';
       }
 
       function dlRenderFail(job, animate) {
@@ -3382,7 +3414,7 @@
         el('kg-dl-btn').disabled = true;
         el('kg-dl-state').textContent = 'Starting…';
         dlLogReset();
-        kgStartJob('download_kit', {})
+        kgStartJob('download_kit', dlMode === 'top_up' ? { mode: 'top_up' } : {})
           .then(function (res) {
             if (!res.ok || res.body.error) { throw new Error(res.body.error || 'request failed'); }
             dlJobId = res.body.job_id;
@@ -3599,7 +3631,7 @@
               // points where it was imported from, and preflight is green
               // against it. That is the whole point of the state.
               el('kg-yaml').value = mode === 'dl-superseded'
-                ? devDest + '\\v1\\starter_kit\\dataset.yaml'
+                ? devDest + '\\v2\\starter_kit\\dataset.yaml'
                 : devDlYaml;
               kgPreflight = pfGreen;
               kgRenderPreflight(pfGreen);
@@ -3649,13 +3681,15 @@
             } else if (mode === 'dl-revisit') {
               dlRenderQuiet(14005, dlNow - 7200);
             } else if (mode === 'dl-superseded') {
-              // A v1 holder on a v2 plugin. Real values: v1 shipped 14,004
-              // files, v2 ships 14,005 (the ExDark notice), and kit_dir is the
-              // path the server resolves, not one the fragment builds.
+              // A v2 holder on a v3 plugin: the pair this release ships.
+              // Real values: v2 and v3 both hold 14,005 files (v3 changes
+              // README.md only), and kit_dir is the path the server resolves,
+              // not one the fragment builds. The directory stays v2 after the
+              // top-up, which is the whole reason kit_dir is a recorded fact.
               dlRenderSuperseded({
-                kit_version: 'v1', current_version: 'v2',
-                created_at: dlNow - 259200, file_count: 14004,
-                kit_dir: devDest + '\\v1'
+                kit_version: 'v2', current_version: 'v3',
+                created_at: dlNow - 259200, file_count: 14005,
+                kit_dir: devDest + '\\v2'
               });
             } else {
               kgInitImportTab();   // unknown dl-* value → normal resolution
