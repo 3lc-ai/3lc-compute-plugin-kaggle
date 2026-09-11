@@ -29,46 +29,26 @@ def _resolve_predict_params(data: Any) -> tuple[dict[str, Any] | None, Response 
     """Shared request validation for the predict-shaped routes: resolve
     train_job_id | weights_path to an on-disk weights file and require a
     test table URL. Returns (params, None) or (None, error response)."""
-    from pathlib import Path
-
-    from tlc_plugin_kaggle import jobs
+    from tlc_plugin_kaggle import predictor
 
     def bad(msg: str) -> tuple[None, Response]:
         return None, Response(content={"error": msg}, status_code=HTTP_400_BAD_REQUEST)
 
     if not isinstance(data, dict):
         return bad("Body must be a JSON object")
-    weights = str(data.get("weights_path", "")).strip().strip('"')
-    train_job_id = str(data.get("train_job_id", "")).strip()
-    # Direct weights files are host-only (same gate as local scoring):
-    # participants predict from plugin runs so every submission carries
-    # verified provenance. Enforced here, not just hidden in the UI.
-    if weights:
-        from tlc_plugin_kaggle import predictor
-
-        if not predictor.is_host():
-            return bad(
-                "Direct weights files are host-only. Select a run trained in "
-                "this plugin — predictions must carry verified provenance."
-            )
-    run_name = ""
-    if not weights and train_job_id:
-        job = jobs.get_job(train_job_id)
-        facts = (job or {}).get("facts") or {}
-        weights = str(facts.get("weights", ""))
-        run_name = ((job or {}).get("result") or {}).get("run_name", "")
-    if not weights:
-        return bad("Select a run or provide a weights path.")
-    if not Path(weights).is_file():
-        return bad(f"Weights file not found: {weights}")
+    # Weights resolution AND the plugin-run-only gate both live in
+    # predictor.resolve_weights — the single definition site, called again by
+    # the job itself because the host /run path never reaches this route.
+    try:
+        weights, run_name = predictor.resolve_weights(data)
+    except ValueError as exc:
+        return bad(str(exc))
     if not str(data.get("test_table_url", "")).strip():
         return bad("Missing required field 'test_table_url'")
     # Split identity (DP-11): predictions must run on the held-out test
     # split; _predict_core re-asserts (the host /run path skips /validate).
-    from tlc_plugin_kaggle import predictor as _p
-
     try:
-        _p.validate_test_table_url(str(data.get("test_table_url", "")).strip().strip('"'))
+        predictor.validate_test_table_url(str(data.get("test_table_url", "")).strip().strip('"'))
     except ValueError as exc:
         return bad(str(exc))
 

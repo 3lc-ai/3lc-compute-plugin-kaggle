@@ -97,6 +97,76 @@ def is_host() -> bool:
     plugin-run-only for participants) and the local score display."""
     return Path(LOCAL_METRIC_PY).is_file() and Path(LOCAL_SOLUTION_CSV).is_file()
 
+
+HOST_ONLY_WEIGHTS = (
+    "Direct weights files are host-only. Select a run trained in "
+    "this plugin — predictions must carry verified provenance."
+)
+
+
+def resolve_weights(params: dict[str, Any]) -> tuple[str, str]:
+    """Resolve a predict request to an on-disk weights file. THE single
+    definition of the plugin-run-only policy — routes and the job both call it.
+
+    The policy, as a rule:
+
+      1. ``train_job_id`` WINS. When it is present the weights come from that
+         job record and a supplied ``weights_path`` is IGNORED, never merely
+         preferred against.
+      2. A bare ``weights_path`` (no ``train_job_id``) is HOST-ONLY.
+
+    Rule 1 is the part that looks over-strict and is not. The obvious
+    shortcut — "accept ``weights_path`` whenever ``train_job_id`` is present,
+    since /validate resolved it" — is bypassable in one line: a participant
+    POSTs {train_job_id: <any real id>, weights_path: <anything>} straight to
+    the host's /run, the id satisfies the check, and the arbitrary path is what
+    actually gets loaded. Ignoring the supplied path is what makes the gate
+    hold, so do not "simplify" this back to a presence test.
+
+    Why the job must call this at all: /validate/predict RESOLVES
+    ``train_job_id`` into ``weights_path`` and the fragment POSTs the resolved
+    params to the host's /run (ui.html kgStartJob), so by the time the job runs
+    EVERY request carries a ``weights_path`` and the job cannot tell a plugin
+    run from a typed path by inspecting it. Before v1.2.13 the host gate lived
+    only in routes and the host /run path walked past it entirely — the same
+    layer-3 gap DP-11 closed for split identity (trainer.validate_table_urls,
+    predictor.validate_test_table_url) and this one did not have.
+
+    Returns:
+        (weights_path, run_name) — run_name is "" when the caller must derive it.
+
+    Raises:
+        ValueError: participant-facing cause. Callers shape it: routes turns it
+            into a 400, the job into a JobFailed so it renders without an
+            exception-type prefix.
+    """
+    from tlc_plugin_kaggle import jobs
+
+    train_job_id = str(params.get("train_job_id", "")).strip()
+    supplied = str(params.get("weights_path", "")).strip().strip('"')
+
+    if train_job_id:
+        job = jobs.get_job(train_job_id)
+        facts = (job or {}).get("facts") or {}
+        weights = str(facts.get("weights", ""))
+        run_name = str(((job or {}).get("result") or {}).get("run_name", ""))
+        if not weights:
+            raise ValueError(
+                "That training run has no weights on record. Pick a run that "
+                "finished training."
+            )
+    else:
+        if not supplied:
+            raise ValueError("Select a run or provide a weights path.")
+        if not is_host():
+            raise ValueError(HOST_ONLY_WEIGHTS)
+        weights, run_name = supplied, ""
+
+    if not Path(weights).is_file():
+        raise ValueError(f"Weights file not found: {weights}")
+    return weights, run_name
+
+
 def _token_setup_commands() -> str:
     """Dual-platform token-save commands, compute-host platform first.
 
@@ -713,10 +783,20 @@ def _predict_core(params: dict[str, Any], ctx: Any) -> dict[str, Any]:
     """Inference through local scoring; shared by both job shapes."""
     import tlc
 
-    weights = str(params.get("weights_path", "")).strip().strip('"')
-    if not weights or not Path(weights).is_file():
-        raise ValueError(f"Weights file not found: {weights or '(empty)'}")
-    run_name = str(params.get("run_name") or Path(weights).parent.parent.name)
+    # Layer 3: resolve AND gate here, not only in /validate/predict — the host
+    # /run dispatch never traverses that route, so this is the only layer a
+    # hand-rolled request cannot skip (the DP-11 pattern, one line below).
+    # JobFailed, not ValueError: a refusal is a message for the participant and
+    # renders without the exception-type prefix an ordinary fault carries.
+    try:
+        weights, resolved_run_name = resolve_weights(params)
+    except ValueError as exc:
+        from tlc_plugin_sdk import JobFailed
+
+        raise JobFailed(str(exc)) from exc
+    run_name = str(
+        params.get("run_name") or resolved_run_name or Path(weights).parent.parent.name
+    )
     ctx.set_field("run_name", run_name)
     ctx.set_field("weights", weights)
 

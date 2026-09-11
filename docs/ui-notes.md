@@ -399,6 +399,23 @@ non-host machines, so the gate is real, not visual. Legacy
 from-scratch runs render truthfully everywhere ("from-scratch ·
 legacy") and remain predictable/submittable — no data migration.
 
+**Correction (v1.2.13, 2026-09-11): "the gate is real, not visual" was
+FALSE for the job path from this section's writing until v1.2.13.** The
+rejection lived only in `/validate/predict`, and the host's `/run` dispatch
+never traverses that route, so a request that skipped the fragment was never
+gated at all: a hand-rolled POST carrying a `weights_path` ran and produced an
+ordinary, submittable prediction. The UI half was always true — the toggle
+really is host-only — which is why the claim read as verified for nine
+releases. The rule now lives in `predictor.resolve_weights`, called by BOTH
+the route and `_predict_core`, with two further consequences worth keeping
+here: a `train_job_id` makes the supplied `weights_path` **ignored** rather
+than deprioritised (accepting it whenever an id is present is bypassable by
+sending both), and the refusal raises `JobFailed` so the banner shows the
+sentence without an exception-type prefix. Same layer-3 shape DP-11 already
+had (§14, `validate_table_urls` / `validate_test_table_url`) and this gate did
+not. Pinned by `tests/test_host_weights_gate.py`, which fails against the
+naive presence test.
+
 ## 14. Session projections (v1.2.6)
 
 One canonical **session object** (`kgSession`, persisted as the `session`
