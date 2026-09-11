@@ -147,15 +147,22 @@ pins the structure rather than the instance.
 ## Post-tag verification
 
 - [ ] Footer reads **1.2.13** after a catalog install (RELEASING.md §4).
-- [ ] **Gist mirror — OWED, NOT DONE.** RELEASING.md: the repo `catalog.json`
-      is the source of truth and the gist only mirrors it; Rishikesh mirrors
-      it, never Claude. Do it with
-      `gh gist edit <id> -f catalog.json <path-to-repo-catalog.json>` so the
-      repo file is pasted **verbatim** — a hand-paste once introduced a
-      duplicate-key error. Then, after the CDN lag (a few minutes), fetch the
-      raw URL in an incognito window and confirm the served bytes are
-      **identical** to the repo file, not merely that the 1.2.13 entry is
-      present.
+- [x] **Gist mirror — DONE 2026-09-11.** Mirrored by Rishikesh with
+      `gh gist edit`, so the repo file went over **verbatim** rather than by
+      hand (a hand-paste once introduced a duplicate-key error). Repo and
+      served bytes both sha256
+      `d9d56e62a876aa4df99bf452248b2d5faf73149c903baac5404e8bcfe6b25451`,
+      21,149 bytes, LF.
+
+      **Independently re-fetched** after the CDN lag, `Cache-Control:
+      no-cache`, HTTP 200, 21,149 bytes — served content is **byte-identical**
+      to the repo file, not merely carrying the 1.2.13 entry. Newest entry
+      `1.2.13` with `source` pointing at `@v1.2.13`; 13 entries, **no
+      duplicate version keys** (the specific historical failure this check
+      exists for); catalog `id` equals the manifest `id`.
+
+      The repo copy remains the source of truth; the gist is a mirror and
+      nothing else reads from it.
 - [ ] A real catalog install on a host that had 1.2.12, confirming the
       superseded callout offers the top-up and that it lands v3 in the
       existing directory.
