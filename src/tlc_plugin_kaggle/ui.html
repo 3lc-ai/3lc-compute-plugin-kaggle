@@ -593,7 +593,7 @@
     <div class="kg-constraints">
       <div class="kg-micro-label">Competition constraints</div>
       <div class="kg-chips">
-        <span class="kg-chip" title="Identical architecture, starting weights, and resolution for every participant. Everyone trains from the same official checkpoint; the Run’s provenance records its sha256 as proof."><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg> YOLOv11n · COCO-pretrained · 640px</span>
+        <span class="kg-chip" title="Identical architecture, starting weights, and resolution for every participant. Everyone trains from the same official checkpoint; the Run’s provenance records its sha256 as proof."><svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg> YOLOv11n · COCO-pretrained · <span class="kg-contract-imgsz"></span>px</span>
         <span class="kg-chip" title="The canonical ExDark class list, fixed so every submission scores against the same label map.">12 classes</span>
         <span class="kg-chip" title="The leaderboard metric. The local preview uses the identical implementation.">Scored by mAP@0.5</span>
       </div>
@@ -767,7 +767,7 @@
       <div class="format-selected-banner" title="Identical architecture, starting weights, and resolution for every participant. The leaderboard measures your data work, not your compute. Extra args naming a locked key are rejected server-side.">
         <span class="fmt-icon"><svg class="kgi kgi-16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></span>
         <div style="flex: 1;">
-          <div class="fmt-name">YOLOv11n from the official COCO-pretrained checkpoint · 640px</div>
+          <div class="fmt-name">YOLOv11n from the official COCO-pretrained checkpoint · <span class="kg-contract-imgsz"></span>px</div>
           <div class="fmt-desc">Enforced server-side; identical starting weights for every participant.</div>
         </div>
       </div>
@@ -780,10 +780,10 @@
           <span class="val">YOLOv11n</span>
           <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></div>
         <div class="kg-locked-row" title="The official COCO-pretrained checkpoint, downloaded and cached by the plugin and verified by sha256. Everyone starts from byte-identical weights; the hash is recorded on the Run as proof."><span class="lbl">Init</span>
-          <span class="val">yolo11n.pt · sha256 0ebbc80d4a76&hellip;</span>
+          <span class="val" id="tr-lock-init"></span>
           <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></div>
-        <div class="kg-locked-row" title="Locked at 640px so results are comparable across participants."><span class="lbl">Image size</span>
-          <span class="val">640</span>
+        <div class="kg-locked-row" title="Locked so results are comparable across participants."><span class="lbl">Image size</span>
+          <span class="val kg-contract-imgsz"></span>
           <svg class="kgi kgi-12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.25" y="7.25" width="9.5" height="6.25" rx="1.5"/><path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25"/></svg></div>
       </div>
 
@@ -1048,7 +1048,7 @@
   <div class="card" style="margin-bottom: 16px;">
     <div class="card-header"><div>
       <div class="card-title"><span class="plugin-section-number">3</span> Predict + Submit</div>
-      <div class="card-subtitle">Inference on the test table (640px, locked) becomes a validated
+      <div class="card-subtitle">Inference on the test table (<span class="kg-contract-imgsz"></span>px, locked) becomes a validated
         <code>submission.csv</code>; submitting it to Kaggle spends one of your daily attempts.</div>
     </div></div>
     <div class="card-body">
@@ -2145,6 +2145,41 @@
       // network failure retries through the connection guard and resolves
       // on reconnect; a non-network failure renders an explicit callout
       // and resolves into shipped defaults. Never silently blank.
+      // ── The locked contract, rendered from the server's values ──────
+      // Every value here used to be a hand-written twin of trainer.py: the
+      // sha prefix and 640 in four places, with nothing comparing them. That
+      // card is the competition's fairness claim to participants, so a stale
+      // literal asserts something no run records. Now GET /config serves
+      // _meta.contract and this is the only place that paints it.
+      //
+      // No fallback literals, deliberately (ui-notes §14): if the config load
+      // fails, the slots stay empty and the existing "saved settings could
+      // not be loaded" callout owns the moment. A fallback would re-create
+      // exactly the divergence this removes, and would do it invisibly.
+      var kgContract = null;
+
+      function kgRenderContract(contract) {
+        if (!contract) { return; }
+        kgContract = contract;
+        var imgsz = contract.imgsz;
+        if (imgsz !== undefined && imgsz !== null) {
+          var slots = document.querySelectorAll('.kg-contract-imgsz');
+          for (var i = 0; i < slots.length; i++) { slots[i].textContent = String(imgsz); }
+        }
+        var init = el('tr-lock-init');
+        var sha = String(contract.checkpoint_sha256 || '');
+        if (init && contract.model) {
+          init.textContent = sha
+            ? contract.model + ' · sha256 ' + sha.slice(0, 12) + '…'
+            : String(contract.model);
+          // Full hash on hover: the row shows the prefix the backend logs
+          // (trainer truncates to 12 the same way), the title carries all 64
+          // so a participant can check it against their Run without the
+          // diagnostics block.
+          if (sha) { init.title = 'sha256 ' + sha; }
+        }
+      }
+
       function kgFetchConfig(resolve) {
         API.authFetch(computeUrl + '/api/plugins/kaggle-exdark/config')
         .then(function (r) { return r.json(); })
@@ -2169,6 +2204,11 @@
             // Download destination fact (server-resolved default). Guarded
             // like every page-load live value: fixtures keep their own path.
             if (!kgDevMode) { el('kg-dl-dest').textContent = String(cfg._meta.kit_dest || ''); }
+            // The locked contract, SERVED. Not guarded on kgDevMode: the
+            // contract is the same in every fixture (no fixture has a reason
+            // to claim a different sha), and rendering it here is what lets
+            // the ?kgdev states drop their own copies of the hash.
+            kgRenderContract(cfg._meta.contract);
           }
           resolve();
         })
@@ -3711,7 +3751,13 @@
           }
           return h;
         }
-        var devSha = '0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1';
+        // The fixtures' sha is the SERVED one, not a third copy of the
+        // literal. Two independent hand-written copies of this hash used to
+        // live in this file; a fixture asserting a hash the backend no longer
+        // pins would make the demo states quietly wrong about the one thing
+        // the provenance panel exists to prove. Empty until /config lands,
+        // which is live under ?kgdev (ui-notes fixtures note).
+        var devSha = (kgContract && kgContract.checkpoint_sha256) || '';
         var devCkpt = 'C:\\Users\\participant\\.3lc-kaggle-plugin\\checkpoints\\yolo11n.pt';
         var PROV = [
           { label: 'run records model == yolo11n.pt (official checkpoint)', ok: true,
@@ -3868,7 +3914,7 @@
                       devRun + '\\submissions\\submission_20260721_141530.csv';
         var now = Date.now() / 1000;
 
-        var devSha = '0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1';
+        var devSha = (kgContract && kgContract.checkpoint_sha256) || '';
         var RUNS = [
           { job_id: 'devtrain1', run_name: devRun, usable: true, provenance_ok: true,
             contract: 'pretrained', checkpoint_sha256: devSha,

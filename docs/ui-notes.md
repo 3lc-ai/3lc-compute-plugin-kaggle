@@ -604,6 +604,33 @@ kit sat beside it.
 
 ---
 
+## 18. The contract is served (v1.2.13)
+
+Two rules that were previously restated in the fragment now arrive from
+`GET /config` as `_meta.contract`: the locked training contract (model, imgsz,
+pretrained, checkpoint sha256) and the row ceilings (`max_rows`). One block,
+because they are one claim - these are the fixed rules of the competition and
+the fragment does not get an opinion about them.
+
+- **No fallback literals, and that is the point.** The slots ship EMPTY and
+  fill on config load (the `kg-dl-dest` precedent). A fallback would be the
+  divergence again, invisibly: the card would render a plausible hash while
+  the backend pinned another. If `/config` fails, the slots stay blank and the
+  existing "saved settings could not be loaded" callout owns the moment.
+- **Five surfaces share one class** (`.kg-contract-imgsz`): the header chip,
+  the contract banner, the locked Image size row, and the Predict subtitle.
+  The Init row is `#tr-lock-init` and renders `model · sha256 <prefix>…` with
+  the full 64 characters in its `title`, so a participant can check a Run
+  without opening diagnostics.
+- **Fixtures derive it too.** The two `devSha` literals are gone; `?kgdev`
+  reads the served value, which is live under `?kgdev` like the rest of
+  `/config`. Fixtures that reproduce BACKEND strings (provenance check labels,
+  the trainer log line, the Import check text) keep their numbers: those are
+  demo data imitating the server, not the contract being claimed.
+  `tests/test_contract_parity.py` holds the allowlist and its reasons.
+
+---
+
 ## Appendix — Import-tab reference
 
 ### ?kgdev fixture map

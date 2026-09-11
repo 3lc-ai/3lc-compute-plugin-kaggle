@@ -412,7 +412,14 @@ class KaggleController(Controller):
         _meta block (version, repository) the fragment renders in the
         footer and stamps into diagnostics."""
         import tlc_plugin_kaggle
-        from tlc_plugin_kaggle import config_store, constants, downloader, predictor
+        from tlc_plugin_kaggle import (
+            config_store,
+            constants,
+            downloader,
+            importer,
+            predictor,
+            trainer,
+        )
 
         out = config_store.load()
         # The session always arrives populated: missing fields (fresh
@@ -442,6 +449,28 @@ class KaggleController(Controller):
             # defines them.
             "kit_dest": str(downloader.DEFAULT_DEST),
             "kit_version": constants.STARTER_KIT_VERSION,
+            # The competition contract, SERVED rather than restated. Every
+            # value here had a hand-written twin in ui.html: the checkpoint
+            # sha prefix and 640 on the locked-contract card, and (from
+            # v1.2.13) the row ceilings the Train gate names. That card is the
+            # competition's fairness claim to participants, so a literal that
+            # drifts from trainer.py asserts something no run records. Same
+            # rule as every other _meta key: the fragment renders these, never
+            # defines them, and carries no fallback literal for when the
+            # config load fails (a fallback would be the divergence again).
+            # Cheap to serve: trainer and importer are stdlib-only at import
+            # time (the heavy tlc_ultralytics imports are function-local), so
+            # this does not put torch on the /config path.
+            "contract": {
+                "model": trainer.LOCKED_TRAIN_ARGS["model"],
+                "imgsz": trainer.LOCKED_TRAIN_ARGS["imgsz"],
+                "pretrained": trainer.LOCKED_TRAIN_ARGS["pretrained"],
+                "checkpoint_sha256": trainer.OFFICIAL_CHECKPOINT_SHA256,
+                # Upper bounds, not equalities: pruning rows and setting
+                # weights to 0 are both legal competition work, and weight and
+                # row count are orthogonal. Only ADDING rows is refused.
+                "max_rows": dict(importer.EXPECTED_ROWS),
+            },
         }
         return out
 
