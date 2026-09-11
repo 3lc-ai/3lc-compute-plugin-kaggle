@@ -107,6 +107,10 @@ Findings arrive as `3lc-kaggle-diagnostics` blocks and Teams messages.
 
 1. **Reproduce first** — from the diagnostics block (version header, inputs,
    checks, log tail) or the matching `?kgdev` fixture — before theorizing.
+   When disk state and the UI disagree about JOBS, check for a live worker
+   before reading code: `list_jobs` layers in-process `_jobs` over the disk
+   glob and memory wins by id, so a moved or deleted job file has no effect
+   while its author worker is alive (ui-notes "Curating job records").
 2. **Classify**:
    plugin bug → fix per A1–A4 ·
    platform/shop bug → the ledger + Gudbrand, not our code ·

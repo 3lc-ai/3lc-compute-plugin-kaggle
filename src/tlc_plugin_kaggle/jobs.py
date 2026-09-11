@@ -424,7 +424,19 @@ def get_job(job_id: str) -> dict[str, Any] | None:
 
 
 def list_jobs(kind: str | None = None) -> list[dict[str, Any]]:
-    """All known jobs (memory + disk), newest first, without logs."""
+    """All known jobs (memory + disk), newest first, without logs.
+
+    **Memory wins by id.** The disk glob runs first and the in-process
+    ``_jobs`` dict is layered over it, so a record this worker created is
+    served from memory even if its file is gone from ``JOBS_DIR``. That is
+    correct for a live job (disk is a mirror, memory is the writer) and it is
+    a trap when curating state by hand: MOVING OR DELETING A JOB FILE HAS NO
+    EFFECT WHILE THE WORKER THAT WROTE IT IS STILL ALIVE. Reload the plugin
+    (which kills the worker) first, or curate before anything spawns one.
+    Consumers that pick "the newest completed record" - ``download_state``
+    above all - therefore answer from a set the filesystem does not fully
+    describe.
+    """
     seen: dict[str, dict[str, Any]] = {}
     try:
         for f in JOBS_DIR.glob("*.json"):

@@ -907,6 +907,40 @@ Notes:
   plugin venv: Plugins page -> the plugin's venv panel -> Rebuild (or
   POST /api/plugins/kaggle-exdark/provision?force=true), then reload.
 
+## Curating job records: memory wins by id (0.2.x)
+
+`jobs.list_jobs` globs `JOBS_DIR` and then layers the in-process `_jobs` dict
+over it, keyed by id (`jobs.py:438-440`). Right for a live job - disk is the
+mirror, memory is the writer - and a trap the moment anyone curates job state by
+hand, because **moving or deleting a job file does nothing while the worker that
+wrote it is still running.**
+
+It reads as a bug every time. The state on disk says one thing, the UI says
+another, and the obvious conclusion is that the reader is broken. It bit twice on
+2026-09-11:
+
+1. Parking five completed `download_kit` records to make the newest completed one
+   a v1 record. Worked - but only because no service was running at the time. The
+   caveat was noted and then not carried forward.
+2. Parking the v3 record written by a successful in-place top-up, to get back to
+   a superseded view. The worker that ran that job was still alive and still held
+   it, so the Import tab kept rendering `success` with the v3 record's numbers
+   while the disk's newest completed record was a v2 one. Ten minutes went into
+   "the compatibility fallback is broken" before the cause was the cache. The
+   fallback was fine: a fresh process read `superseded`, `kit_dir = dest/v2`,
+   from the same files.
+
+**The rule.** Curate job records only when no worker holds them: reload the
+plugin first (the Plugins page button - on 0.2.x a reload kills the worker and
+`_jobs` dies with it), or curate before anything spawns one. Then verify from a
+FRESH process, never from the running worker - a fresh interpreter has an empty
+`_jobs`, so what it reports is what the disk actually says.
+
+Corollary for debugging: when disk and UI disagree about job state, check for a
+live worker before reading the code. `download_state` picking "the newest
+completed record" is answering from a set the filesystem does not fully
+describe.
+
 ## Job start contract change (0.2.x)
 
 Starts go through TWO calls now (see kgStartJob in ui.html): our
