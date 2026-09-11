@@ -57,13 +57,13 @@ def starter_kit_prefix() -> str:
 # plus every slug this plugin has since retired. A v1.2.5-era persisted slug
 # (or an install that skipped v1.2.6) must collapse to tracking the shipped
 # constant instead of submitting to a retired competition
-# (config_store.py:255, tests/test_slug_swap.py).
+# (config_store.py:284, tests/test_slug_swap.py).
 #
 # LAUNCH-VERIFY — the pairing is now PRE-SATISFIED, not pending. The typo'd
 # test slug is listed below already, so the launch commit only has to swap
 # COMPETITION_SLUG above; there is no second edit to forget here. Listing it
 # early is provably inert while COMPETITION_SLUG still holds it: the guard at
-# config_store.py:255 rejects an override on `raw_slug != COMPETITION_SLUG`
+# config_store.py:284 rejects an override on `raw_slug != COMPETITION_SLUG`
 # first, so the membership test is unreachable for that value today
 # (tests/test_slug_swap.py::test_slug_equal_to_current_shipped_collapses
 # covers exactly this pre-launch case). It becomes load-bearing the instant
@@ -74,3 +74,27 @@ RETIRED_SLUGS = frozenset({
     "[SLUG]",
     "the-3-lc-low-light-object-detection-comepetition-test",
 })
+
+
+def resolve_slug(raw: str) -> str:
+    """The slug a request must actually submit to — THE single runtime
+    decision, so no caller re-implements the policy.
+
+    `RETIRED_SLUGS` is the one definition of "must never win"; before this
+    existed, `predictor` checked only the `"[SLUG]"` placeholder by hand at
+    two sites and `kaggle_connection` checked nothing, so the typo'd test
+    slug would have survived the launch swap and submitted to a retired
+    competition. Note the store's collapse (config_store.py:284) governs
+    PERSISTENCE only: the submit job reads its slug from the request body
+    (`params["competition_slug"]`), so a slug typed by hand reaches here
+    whether or not the store kept it. This is the layer that decides.
+
+    Idempotent, and provably inert until launch: COMPETITION_SLUG is itself
+    a member of RETIRED_SLUGS today, so every input already resolves to the
+    same value it resolves to now. It becomes load-bearing the instant
+    COMPETITION_SLUG changes.
+    """
+    candidate = str(raw or "").strip()
+    if not candidate or candidate in RETIRED_SLUGS:
+        return COMPETITION_SLUG
+    return candidate

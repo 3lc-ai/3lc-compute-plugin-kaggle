@@ -32,7 +32,7 @@ from typing import Any
 # The slug (and its swap-at-launch / RETIRED_SLUGS story) lives in
 # constants.py — the leaf module the config store can also read without
 # importing this module (predictor is never on the /config read path).
-from tlc_plugin_kaggle.constants import COMPETITION_SLUG, split_dataset
+from tlc_plugin_kaggle.constants import COMPETITION_SLUG, resolve_slug, split_dataset
 
 
 def validate_test_table_url(url: str) -> None:
@@ -287,7 +287,7 @@ def _submissions_used_today(api: Any, slug: str) -> int | None:
 def kaggle_connection(slug: str = "") -> dict[str, Any]:
     """Three-state connection panel for the Submit tab, checked in order:
     no_credentials -> not_joined -> ready."""
-    slug = (slug or COMPETITION_SLUG).strip()
+    slug = resolve_slug(slug)
     out: dict[str, Any] = {
         "default_slug": COMPETITION_SLUG,
         "slug": slug,
@@ -651,9 +651,7 @@ def submit_to_kaggle(csv_path: str, message: str, slug: str, ctx: Any) -> dict[s
     and the daily submission limit both leave the validated CSV on disk for a
     later or manual upload.
     """
-    slug = (slug or COMPETITION_SLUG).strip()
-    if slug == "[SLUG]":
-        slug = COMPETITION_SLUG
+    slug = resolve_slug(slug)
     api, reason = _authenticated_api()
     if api is None:
         return {"status": "skipped", "reason": reason}
@@ -715,9 +713,7 @@ def kaggle_live_status(slug: str) -> dict[str, Any]:
             "connected": False,
             "reason": "Connect your Kaggle account. " + _token_setup_commands(),
         }
-    slug = (slug or COMPETITION_SLUG).strip()
-    if slug == "[SLUG]":
-        slug = COMPETITION_SLUG
+    slug = resolve_slug(slug)
     out: dict[str, Any] = {"connected": True, "configured": True, "slug": slug}
     api, reason = _authenticated_api()
     if api is None:
