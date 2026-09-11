@@ -215,6 +215,42 @@ name that prefix explicitly in the request.
   GET returns 206/1024 (the downloader's resume depends on ranges), and the
   manifest round-trips byte-identically through the CDN.
 
+## Install shapes: a dev Hub and a tester are not the same machine
+
+Written down 2026-09-11 after it caused wrong advice. A fragment or code edit
+makes "the running install stale" on both, but what un-stales it is different,
+and the word **reload** only applies to one of them.
+
+| | Dev Hub on a **folder source** | Tester on a **tag install** |
+|---|---|---|
+| Where the code lives | the checkout (`plugin_dirs` names `<repo>\src`; the provisioned venv imports from there) | a copy in a managed venv under `<home>\.3lc-compute\managed-plugins\<id>\<version>\` |
+| Registered by | `POST /api/admin/plugins/dirs` (JWT), or `plugin_dirs` in `settings.json` + restart, or `--plugin-dir` / `TLC_COMPUTE_EXTERNAL_PLUGIN_DIRS` at startup | the install API, recorded in `settings.json` under `installed_plugins` with its pip/git spec |
+| Picks up a working-tree edit | **yes** — worker reload, next request respawns against the source | **no.** A reload re-imports the same copied files. Nothing in the checkout reaches it |
+| To get a change in front of it | reload | tag → catalog → reinstall |
+
+Load order settles the collision, and it is deliberate: `discover_plugins`
+(`registry.py:545-577` on 0.2.1) runs built-ins, then configured external dirs,
+then persistent external dirs, and **installed plugins last** — the comment says
+"Runs last so a folder Source / in-tree plugin of the same id wins". So a folder
+source shadows an installed plugin of the same id; **nothing has to be
+uninstalled first.**
+
+Two consequences worth keeping:
+
+- **A dev Hub drifts silently.** An install pins a commit, and nothing ages it.
+  On 2026-09-11 this repo's dev Hub was still serving the v1.2.8 install from
+  2026-08-31 (`git+...@4bf22ae4`) while v1.2.9 through v1.2.12 had shipped —
+  four tags, three of which changed the Import tab. Click-throughs done in that
+  window tested 1.2.8, whatever the working tree said. **PRETAG step: state
+  which install shape the verification ran against, and for a tag install state
+  the version, from `settings.json` `installed_plugins` rather than from
+  memory.**
+- **"Stale" is not one fact.** Before telling anyone to reload, check which
+  shape they are on: `plugin_dirs` non-empty and naming the checkout means
+  folder source; an `installed_plugins` entry for the id means a tag install.
+  A reload on the second is not a no-op with no effect - it kills the worker and
+  wipes in-memory job state, and then changes nothing.
+
 ## Why the gist exists at all
 
 The Hub fetches catalog sources **unauthenticated**. While this repo was
