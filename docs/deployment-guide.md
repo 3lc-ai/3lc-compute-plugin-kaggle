@@ -20,6 +20,17 @@ the running service.
 All `min_service_version` gates compare against **0.2.0**, parsed as a dotted int tuple
 (`tlc_compute/plugins/discover.py:62-84`). Keep `min_service_version = "0.1.0"`.
 
+> **That parse is 0.1.1.47-only — it changed on the 1.x line.** Read from the shipped
+> `3lc-compute` 1.1.0 wheel, 2026-09-12: the gate left `discover.py` for
+> `tlc_compute/plugins/versioning.py::service_compat_reason`, which is the single
+> implementation shared by the registration-time compatibility stamp and the catalog's
+> per-version check, so the two can never disagree about whether a plugin runs here.
+> It compares **PEP 440** versions via `packaging.version.Version` (`parse_version`;
+> a non-PEP-440 input, `""` included, yields `UNPARSEABLE_VERSION`) — not a dotted int
+> tuple. An empty floor is still no floor. The sentence above stays accurate for **this
+> guide's host and only that host**; kaggle-exdark's shipped `min_service_version =
+> "0.2.0"` passes on 1.1.0 under either parse.
+
 ---
 
 ## 1. Discovery mechanics — what makes a folder "a plugin" to 0.1.1.47
