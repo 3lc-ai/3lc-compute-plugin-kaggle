@@ -13,6 +13,10 @@ docs/ui-notes.md for the worker-model dev loop). Long jobs run through
 Queue panel, honour host-side cancel, and keep the worker touched for the
 supervisor's (future) idle reaper; the disk-backed job store in jobs.py stays
 the source of truth the tabs poll.
+
+The package name is ``tlc_plugin_kaggle`` and must stay distinct from every
+distribution the host imports. A plugin root is prepended to ``sys.path``, so a
+package named ``kaggle`` shadows the ``kaggle`` client for the whole process.
 """
 
 from pathlib import Path

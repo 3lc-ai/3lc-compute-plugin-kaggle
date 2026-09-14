@@ -21,53 +21,45 @@ first): bump `version`, point `source` at the new tag, and paste in a fresh
 copy of the manifest (it must match `src/tlc_plugin_kaggle/plugin.toml` —
 `version` included). Bump `generated_at`. Commit and push.
 
-(v1.2.1 renamed the plugin id `kaggle` → `kaggle-exdark`; the old id's catalog
-entry was removed on purpose — keeping it would advertise a stale installable
-card next to the renamed plugin. The catalog `id` must always equal the
-`plugin.toml` id or the shop shows a phantom "available" card.)
+The catalog `id` must equal the `plugin.toml` id, and the catalog carries one
+entry per plugin id: a stale id advertises an installable card for a plugin
+that no longer exists, and a mismatched id shows a phantom "available" card
+beside the installed one.
 
 **Version pins that must ride this same commit** — the catalog bump makes
-every one of them stale the moment it lands (the version-pin class
-finding, v1.1-ideas.md LAUNCH-VERIFY: the setup script shipped pinned at
-1.2.2 across two releases because no list existed). Pins, not history —
-audit docs, PRETAG checklists, and ideas files stay as written:
+every one of them stale the moment it lands. This list IS the sweep, so a
+list shorter than reality reads as complete: entries get added, never pruned,
+and each one says why it is easy to walk past. Pins only — PRETAG checklists
+and ideas files record what was true at their tag and stay as written:
 
-- `docs/TESTER_SETUP_0.2.md` — title line, round-1 migration note
-  ("installs under `managed-plugins\kaggle-exdark\<version>\`"), §2 W1
-  comment + env-var path, troubleshooting table W1 row.
-- `scripts/setup-0.2-tester.ps1` — header "tested against" comment and
-  the `$PLUGIN_VER` variable (single site since v1.2.7; the W1 path and
-  the preflight both derive from it).
-- `README.md` — the setup env-var line and the troubleshooting
-  torch-check path.
+- `docs/TESTER_SETUP_0.2.md` — the title line, the §2 W1 comment and its
+  env-var path, the §3b tag references, and the W1 row in the troubleshooting
+  table. The version appears in prose, in a code block and inside a table cell,
+  so grep this file rather than counting on a remembered list of sites.
+- `scripts/setup-0.2-tester.ps1` — the header "tested against" comment and
+  the `$PLUGIN_VER` variable. The W1 path and the preflight both derive from
+  that variable, so it is the only site in the script to edit.
+- `README.md` — the setup env-var line AND the troubleshooting torch-check
+  path. Two sites, far apart, both spelling a full managed-venv path.
 - `CONTEXT.md` — the "Current release" sentence under **tags**.
 - `SMOKE_TEST.md` — the footer expectation in §0 and the "Plugin version
-  shown in the page footer" field in the header block. **Added 2026-09-11**,
-  after this file read v1.2.9 through three releases: it was missing from this
-  list since the list was written, so the sweep could be performed faithfully
-  and still leave it stale. That is the case for automating the list
-  (v1.2.14 candidate, docs/v1.2-ideas.md).
+  shown in the page footer" field in the header block. A sweep is only as
+  complete as this list, so the tester-facing version claim has to be named
+  here: nothing else in the repo asserts what a tester should see in the
+  footer, and the checklist reads as current whatever version it spells.
 - `pyproject.toml` — **both** `[project] version` and
-  `[tool.tlc-compute] version`. **Added 2026-09-14**, after the v1.2.14 sweep
-  bumped the first and missed the second. A `sed` on `^version = ` matches
-  both; a hand-edit of "the version line" matches one.
+  `[tool.tlc-compute] version`. A `sed` on `^version = ` matches both; a
+  hand-edit of "the version line" matches one.
 - `uv.lock` — the `[[package]] name = "3lc-compute-plugin-kaggle"` entry's own
-  `version`. **Added 2026-09-11, on its SECOND miss** (v1.2.10 was the first;
-  v1.2.13 shipped a lock reading 1.2.12). It is not a hand-edit: bump
+  `version`, and the `3lc-ultralytics` / `ultralytics` entries, which must
+  agree with the pins in `pyproject.toml`. This is the one census entry that
+  regenerates rather than being typed, so it is not a hand-edit: bump
   pyproject/plugin.toml first, then run `uv lock` (or any `uv sync`/`uv pip
-  install -e .` against the repo) and commit the result. It is the one census
-  entry that regenerates rather than being typed, which is exactly why a
-  by-hand sweep keeps walking past it.
-  **Third finding, 2026-09-14** — and the first not about the plugin's own
-  version: the lock recorded `3lc-ultralytics` **0.3.4** while every
-  provisioned venv had **0.4.0**, so it did not describe what shipped to
-  participants. Same class as the other two, different field. `uv lock` after
-  the v1.2.14 pins closed it. Three misses on one file is the argument for the
-  Phase C drift check, not for a fourth careful manual sweep.
+  install -e .` against the repo) and commit the result. A lock that disagrees
+  with the pins does not describe what ships to participants.
 
-Until the Phase C version-drift CI check exists the sweep is manual:
-grep the tree for the OLD version string (`*.md`, `*.ps1`) and update
-every hit that is a pin.
+The sweep is manual: grep the tree for the OLD version string (`*.md`,
+`*.ps1`) and update every hit that is a pin.
 
 **The repo copy is the source of truth.** The gist (step 3) is only a mirror.
 
@@ -79,9 +71,6 @@ Everything above the file's **Post-tag verification** section is FROZEN once
 the tag exists. The one legitimate post-tag write is ticking that section
 itself — its checks ("footer reads vX.Y.Z after a catalog install") cannot
 exist before the tag. Tick-only appends there; never edit above the line.
-(Codified 2026-08-27 after review flagged the v1.2.6 file's post-tag tick —
-that edit was exactly this legitimate case, but the boundary was implicit.
-PRETAG_1.2.7 onward makes it structural.)
 
 ## 3. Mirror the change to the gist
 
@@ -104,19 +93,16 @@ installed card grows an **Update** button.
 
 After installing/updating from the catalog, open any plugin tab: **the
 footer must show the new version.** It renders `_meta.version`, which is
-the installed dist's own metadata (derived `__version__`; never a
-hand-synced constant — a hardcoded copy shipped v1.2.3 with a v1.2.2
-footer). A stale footer means a stale install or worker, not a cosmetic
-glitch — and diagnostics blocks stamp this same version, so triage
-trusts it. The version string is hand-synced in **four** places, because
-`pyproject.toml` carries TWO: `[project] version` AND
-`[tool.tlc-compute] version`, plus `plugin.toml` and the catalog manifest.
-**Corrected 2026-09-14** — this read "exactly three" and named only one
-pyproject site, and a v1.2.14 sweep that followed it faithfully left
-`[tool.tlc-compute]` at 1.2.13. `test_packaging.py` is literally named
-`test_the_four_version_strings_agree` and caught it; the prose here did not.
-Same shape as the `uv.lock` misses above: a census shorter than reality reads
-as complete.
+the installed dist's own metadata (derived `__version__`), never a
+hand-synced constant. A stale footer means a stale install or worker, not a
+cosmetic glitch — and diagnostics blocks stamp this same version, so triage
+trusts it.
+
+The version string is hand-synced in **four** places: `[project] version` AND
+`[tool.tlc-compute] version` in `pyproject.toml`, plus `plugin.toml` and the
+catalog manifest. The count is enforced by
+`tests/test_packaging.py::test_the_four_version_strings_agree`, not by this
+sentence — prose is not a check. If the two disagree, the test is right.
 
 ## Starter-kit data releases (separate from code releases)
 
@@ -129,7 +115,7 @@ staged to `competitions.3lc.ai/kaggle/<competition_id>/starter-kit/<version>/`
 (the prefix `constants.starter_kit_prefix()` resolves). The downloader
 verifies per-file sha256 from the manifest — never the HTTP ETag, because the
 shards are multipart uploads whose ETags are `"<hash>-<parts>"` markers, not
-content MD5s (verified at staging, 2026-08-27).
+content MD5s.
 
 - **A version prefix is IMMUTABLE once staged.** Updating the kit means
   regenerating with a NEW version (`v2`, ...), staging that, and bumping
@@ -146,8 +132,7 @@ content MD5s (verified at staging, 2026-08-27).
   timestamps, sorted entries), so anyone with the kit tree can REBUILD the
   shards and arrive at the same hashes — the committed manifest is
   verifiable, not trusted. That determinism is what makes "CDN + committed
-  manifest" a sufficient canonical record. Two limits on that rebuild claim,
-  both established at the v2 build (2026-09-03):
+  manifest" a sufficient canonical record. Two limits on that rebuild claim:
   - **The kit tree tracks the newest staged version only.** There is one
     mutable kit tree and N immutable prefixes, so after a kit update
     `check_kit_parity.py --dir` against an OLDER version's manifest is
@@ -160,74 +145,43 @@ content MD5s (verified at staging, 2026-08-27).
     `_plan_shards` sorts `Path` objects, and `PurePath.__lt__` case-folds on
     Windows but compares bytewise on POSIX, so the two uppercase basenames
     (`LICENSE-ExDark.txt`, `README.md`) order differently and the zip's
-    central directory differs. This was already true of v1 (whose `files[]`
-    records normcase order). Rebuild on Windows to reproduce the archive
+    central directory differs. Rebuild on Windows to reproduce the archive
     hash, or verify with `check_kit_parity.py`, which compares `files[]`
     per path and is order-independent. The image shards are unaffected —
     every other basename is digits plus a lowercase extension.
 - **Disaster recovery is the kit tree plus the committed manifest**, not a
-  release asset. The `kit-exdark-v1` GitHub Release once carried
-  `exdark_starter_kit_canonical.zip` (587 MB, sha256 `e84105db…`); it was
-  **deleted 2026-09-02, before this repo went public**, with 0 recorded
-  downloads. Recovery is unaffected: the kit tree survives in the workspace
-  and parity is checked per-file with `scripts/check_kit_parity.py` against
-  the committed manifest, which is the actual anchor.
-  Note the zip was never byte-identical to the CDN shards: the zip archived
-  the tree, the shards are the deterministic build generated FROM it. Never
-  try to reconcile those hashes.
-- **The `kit-exdark-v1` TAG is not a reliable provenance anchor — it names two
-  different commits** (found 2026-09-03 while cross-checking the week's tags):
+  release asset. The kit tree lives in the workspace and parity is checked
+  per-file with `scripts/check_kit_parity.py` against the committed manifest,
+  which is the anchor. Do not publish a canonical zip of the tree as a
+  recovery artifact: a zip of the tree is not byte-identical to the CDN
+  shards — the shards are the deterministic build generated FROM the tree —
+  so the two hash sets cannot be reconciled, and a zip sitting beside them
+  invites the attempt.
+- **The `kit-exdark-v1` tag is not a provenance anchor.** It resolves to a
+  different commit locally than on `origin` (both lightweight, both on
+  `port/0.2.x`), so it cannot answer "which kit-tree state was `v1` built
+  from" — reconstruct that from the committed `v1` manifest against the kit
+  tree in git, and never cite the tag. **Do not retag it:** CLAUDE.md §B
+  forbids retagging outright, and here anyone who has fetched either side
+  already has that commit cached under this name, so moving the ref turns a
+  visible disagreement into a silent one. Nothing downstream depends on it —
+  the verification anchor is the committed
+  `kit/<competition_id>/<version>/manifest.json`, checked per-file by
+  `scripts/check_kit_parity.py`, and the `v1` CDN prefix is immutable and
+  still verifies against its own manifest.
+- **This repo has no GitHub Release entries.** Do NOT create them for code
+  tags: code versions are git tags only, and release entries would add a
+  maintenance surface this repo deliberately does not have.
 
-  | | commit | subject | date |
-  |---|---|---|---|
-  | local | `9aded53` | v1.2.7 phase 2: starter-kit downloader + job wiring | 2026-08-27 |
-  | `origin` | `b1f6ca4` | docs: v1.2.6 shipped — release-walk findings D1-D4 | 2026-08-14 |
-
-  Thirteen days apart, both commits on `port/0.2.x`. This is **not** an
-  annotated-vs-lightweight artifact: `git cat-file -t kit-exdark-v1` returns
-  `commit` locally, and `git ls-remote --tags origin` returns no peeled `^{}`
-  line for it, so both sides are lightweight tags pointing straight at
-  different commits. Whichever side you read, the other disagrees — so the tag
-  cannot be used to establish which kit-tree state `v1` was built from. An
-  earlier version of this bullet claimed the tag "marks the kit-tree state";
-  that claim is withdrawn.
-
-  **Do not retag it.** CLAUDE.md §B forbids retagging outright, and here it
-  would also destroy evidence: anyone who has fetched either side already has
-  that commit cached under this name, so moving the ref makes the two histories
-  silently disagree instead of visibly disagreeing. Leave both as they are.
-
-  **Nothing downstream depends on it.** The verification anchor is the
-  committed `kit/<competition_id>/<version>/manifest.json`, checked per-file by
-  `scripts/check_kit_parity.py` — that is what the two limits above are about,
-  and it is unaffected by this. The kit `v1` prefix on the CDN is likewise
-  unaffected: it is immutable and still verifies against its own manifest. The
-  cost of this divergence is exactly one thing — the tag answers "which commit
-  was the v1 kit tree at?" with two answers, so **do not cite it as provenance**.
-  If that question ever needs a real answer, reconstruct it from the committed
-  v1 manifest against the kit tree in git, not from the tag.
-
-  **`kit-exdark-v2` is clean** — verified the same day: local and `origin` both
-  resolve to `db7b3a8`. So is every code tag `v1.2.9`–`v1.2.12`.
-- **This repo now has no GitHub Release entries at all.** Do NOT create them
-  for code tags; code versions are git tags only, and release entries would
-  add a maintenance surface this repo deliberately does not have.
-
-> **The un-attributed-images blocker is CLOSED as of 2026-09-03** — v2 is
-> built and `STARTER_KIT_VERSION` is `"v2"`. `v1` still serves 7,358 ExDark
-> images with no `starter_kit/LICENSE-ExDark.txt` and is immutable by the rule
-> above, so it is not fixed but superseded: `v2` carries the notice (1,502 B,
-> sha256 `51340966…`) plus a README that attributes ExDark under BSD-3, cites
-> Loh & Chan, licenses the organizers' own contributions CC BY 4.0, and drops
-> the wrong "non-commercial" claim. **v1 must not be advertised once v2 is
-> live**; leave the prefix in place for installs already pinned to it.
->
-> **Ordering that must not be inverted:** the `v2` prefix has to be LIVE
-> before the tag that ships `STARTER_KIT_VERSION = "v2"` is pushed.
+> **Ordering that must not be inverted:** a new version's CDN prefix has to be
+> LIVE before the tag that ships `STARTER_KIT_VERSION = "<new>"` is pushed.
 > `starter_kit_prefix()` resolves at download time with no fallback and
 > `fetch_manifest` fails the job on a 404, so a tester who installs the new
 > tag while the dev → prod sync is pending gets a hard failure on the Import
 > tab — in the exact surface the change exists to improve.
+>
+> A superseded prefix stays in place for installs already pinned to it, and is
+> never advertised once its successor is live.
 
 ### Staging to the CDN
 
@@ -241,9 +195,8 @@ name that prefix explicitly in the request.
 
 ## Install shapes: a dev Hub and a tester are not the same machine
 
-Written down 2026-09-11 after it caused wrong advice. A fragment or code edit
-makes "the running install stale" on both, but what un-stales it is different,
-and the word **reload** only applies to one of them.
+A fragment or code edit makes "the running install stale" on both, but what
+un-stales it is different, and the word **reload** only applies to one of them.
 
 | | Dev Hub on a **folder source** | Tester on a **tag install** |
 |---|---|---|
@@ -261,85 +214,58 @@ uninstalled first.**
 
 ### Read the home the PROCESS has, not the home the docs name
 
-This is where the first version of this section went wrong, so it leads. The
-workspace map says `3lc-hub-next` runs under a **redirected** home
-(`3lc-hub-next\home\`). On 2026-09-11 the service on `:5020` was started from
-that environment's venv but with **no redirect**, so its actual home was
-`C:\Users\Owner\`. Both homes exist, both have a `.3lc-compute` with its own
-`settings.json`, `managed-plugins` and `installed_plugins` list, and they
-disagree:
+A Hub environment's venv says which code runs the service. It never says which
+home the service reads. A redirected home and `C:\Users\<user>` can both hold a
+`.3lc-compute` with its own `settings.json`, `managed-plugins` tree and
+`installed_plugins` list, and the two disagree freely: different plugin versions
+installed, different `plugin_dirs`, different last-used dates. A version read
+from an environment's name, or from the home its setup doc specifies, can
+therefore be several tags off from what is actually running.
 
-| | `3lc-hub-next\home\.3lc-compute` | `C:\Users\Owner\.3lc-compute` |
-|---|---|---|
-| `installed_plugins` | kaggle-exdark **1.2.8** (2026-08-31) | kaggle-exdark **1.2.12** (2026-09-03) |
-| `managed-plugins` | `1.2.8` | `1.2.11`, `1.2.12` |
-| `plugin_dirs` | empty | hello-world + `<repo>\src` |
-| Last used | to 2026-09-02 (service logs) | 2026-09-03 onward |
-
-Reading the first one produced a confident, wrong answer — "this Hub is four
-tags behind" — about a Hub that was current. **Resolve the home from the
-running process**, not from the environment's name or its venv path: the venv
-says which code runs the service, never which home it reads. On Windows, read
-the process's own environment block (`USERPROFILE` / `LOCALAPPDATA`, plus any
+**Resolve the home from the running process.** On Windows, read the process's
+own environment block (`USERPROFILE` / `LOCALAPPDATA`, plus any
 `TLC_COMPUTE_PLUGIN_VENV_*` override, which names the exact venv the worker
 spawns from). Then confirm by content: hash the `tlc_plugin_kaggle` in that
-venv against the checkout, or grep it for a marker only the version in question
-has.
+venv against the checkout, or grep it for a marker only the version in
+question has.
 
-### Two consequences worth keeping
+### Consequences
 
-- **A tag install pins a commit and nothing ages it**, so a dev Hub CAN drift
-  silently — that half of the original note stands even though its example did
-  not. **PRETAG step: state which install shape the verification ran against,
-  and for a tag install the version, read from the running process's home
-  rather than from memory.**
+- **A tag install pins a commit and nothing ages it**, so a dev Hub can drift
+  silently. **PRETAG step: state which install shape the verification ran
+  against, and for a tag install the version, read from the running process's
+  home rather than from memory.**
 - **"Stale" is not one fact.** Before telling anyone to reload, check which
   shape they are on: `plugin_dirs` naming the checkout means a folder source is
   registered; an `installed_plugins` entry for the id means a tag install. A
   reload on the second is not a harmless no-op - it kills the worker and wipes
   in-memory job state, and then changes nothing.
-- **Registered as a folder source is not the same as imported from it.** The
-  real home has `<repo>\src` in `plugin_dirs` AND a 1.2.12 tag install, and the
-  worker was running 1.2.12. Our `plugin.toml` sets `provision_extra = "kaggle"`,
+- **The worker imports from the managed venv, not from `plugin_dirs`.** A home
+  can carry `<repo>\src` in `plugin_dirs` AND a tag install of the same id, and
+  still run the tag install. Our `plugin.toml` sets `provision_extra = "kaggle"`,
   which takes the umbrella branch of `worker_spec.py`: the worker spawns with
   `cwd = <managed-plugins>\<id>` and a python resolved through
   `resolve_managed_python` (honouring `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK`),
   so `import tlc_plugin_kaggle` resolves from that venv's `site-packages` and
-  the source tree is never on the worker's path. **Confirmed live 2026-09-11**:
-  the running worker's command line is
-  `<managed-plugins>\kaggle-exdark.2.12\.venv\Scripts\python.exe -m
-  tlc_plugin_sdk.worker --entry tlc_plugin_kaggle:KagglePlugin` - the managed
-  venv's interpreter, with the checkout nowhere in the command.
+  the source tree is never on the worker's path. The running worker's command
+  line names the managed venv's interpreter, with the checkout nowhere in it -
+  read it there rather than inferring from what is registered.
 
-## Why the gist exists at all
+## The catalog URLs
 
-The Hub fetches catalog sources **unauthenticated**. While this repo was
-private its `raw.githubusercontent.com` URLs returned 404 (verified
-2026-07-31), so the catalog was mirrored to a public gist. That reason is now
-spent: the repo is public and its own raw `catalog.json` URL serves
-anonymously.
-
-**The gist is therefore superseded**, and is kept only until the cutover lands
-so that hubs already pointed at it keep resolving. Retiring it means
-publishing the repo's raw `catalog.json` URL in README and TESTER_SETUP and
-here, then deleting the gist once no hub is pointed at it.
-
-**The cutover's precondition is now met.** It required the raw URL to serve
-the CURRENT catalog. That was blocked while `develop` was the default branch,
-because its `catalog.json` is stale (plugin id `kaggle`, newest 1.2.0) and a
-raw URL serving an id that does not match the plugin id would fail every
-install. The default branch is now `port/0.2.x`, which carries the live
-catalog (id `kaggle-exdark`, through 1.2.9), so
+The Hub fetches catalog sources **unauthenticated**. Two URLs serve this repo's
+catalog:
 
 ```
+https://gist.githubusercontent.com/Rishikesh-Jadhav/926ead27a6a1ed6429cf86d1924a24ce/raw/catalog.json
 https://raw.githubusercontent.com/3lc-ai/3lc-compute-plugin-kaggle/HEAD/catalog.json
 ```
 
-resolves to it. `HEAD` is deliberate: it follows the default branch, so the
-URL survives a future rename the way the gist URL does.
+The gist is the one README and TESTER_SETUP tell testers to paste, and the one
+hubs in the field are already configured with, so step 3 above is not optional.
+The raw URL is the repo's own file with no mirroring step; `HEAD` in it is
+deliberate, following the default branch so the URL survives a branch rename.
 
-**The cutover itself is not done** — README and TESTER_SETUP still tell
-testers to paste the gist URL, and hubs already configured with it must keep
-resolving. Doing it means publishing the raw URL in those two docs and here,
-mirroring the catalog one last time, then deleting the gist once no hub
-points at it. Until then the gist stays authoritative for testers.
+Retiring the gist means publishing the raw URL in README, TESTER_SETUP and
+here, mirroring the catalog one last time, and deleting the gist once no hub
+points at it.

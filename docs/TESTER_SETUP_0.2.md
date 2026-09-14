@@ -1,32 +1,5 @@
 # Tester setup — 0.2.x Hub + Kaggle plugin v1.2.14 (catalog install)
 
-> **MIGRATION — round-1 testers only (installed v1.2.0 under the old id `kaggle`).**
-> v1.2.1 renamed the plugin id to **`kaggle-exdark`** (collision safety). The old
-> install won't update in place — do this once, in this order:
->
-> 1. **Kill the orphan worker first** (known 0.2.1 bug W3: uninstall does NOT stop
->    the worker process, and the leftover lock breaks reinstall): **close the
->    compute-service window and start it again** — that's the whole step
->    (verified clean 2026-08-14: no orphaned directory, uninstall succeeded).
->    Optional alternative for the restart-averse: the reload endpoint
->    `Invoke-RestMethod -Method Post http://localhost:5020/api/admin/plugins/kaggle/reload`
->    — but on 0.2.x admin routes answer `403 unauthenticated` without the Hub's
->    Bearer token (copy one from a logged-in Hub tab's DevTools → Network →
->    any request's Authorization header), so the restart is the primary path.
-> 2. **Uninstall** the old *Kaggle Competition* card (Plugins → Installed → Uninstall).
->    Then verify `%USERPROFILE%\.3lc-compute\managed-plugins\kaggle\` is actually gone —
->    if not, close the service window and delete the folder by hand.
-> 3. **Update the env var** in the compute-service window: the old
->    `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` is dead; set
->    `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` as shown in step 2 below, then restart
->    the compute service.
-> 4. **Re-add the catalog** only if you had the local-clone fallback (pull first);
->    the gist URL is unchanged. **Install** the new card — it installs under
->    `managed-plugins\kaggle-exdark\1.2.14\`.
->
-> Job history, saved form values, and run artifacts live in `~/.3lc-kaggle-plugin/`
-> and survive the rename untouched. *(This note comes out once round-2 starts clean.)*
-
 Fresh-machine path. Every version below is **the exact pairing this build was
 tested against** — don't float them. Time budget: ~15 min + one big download
 (the plugin's worker venv pulls CUDA torch on first install).
@@ -136,10 +109,8 @@ C:\3lc-hub-next\.venv\Scripts\3lc-compute.exe          # Compute Service :5020 (
 
    (That's the latest-revision raw form — the URL never changes; it always
    serves the newest published catalog. The gist mirrors the repo's own
-   `catalog.json` and dates from when this repo was private and its raw URLs
-   404'd; it is superseded by a raw URL on the repo, but remains the URL to
-   paste until that cutover lands. The *install source* inside the catalog is
-   a public `git+https` reference and needs no credentials.)
+   `catalog.json`. The *install source* inside the catalog is a public
+   `git+https` reference and needs no credentials.)
 
    *Fallback (gist unreachable / offline):* local paths are also a
    supported catalog form — clone the repo and add the absolute path to its
@@ -156,7 +127,7 @@ C:\3lc-hub-next\.venv\Scripts\3lc-compute.exe          # Compute Service :5020 (
 
 ### 3b. On a 1.0.x host — the catalog URL is a service env var, not a paste
 
-Verified on compute 1.0.1 (2026-09-02, `3lc-hub-ga/`). 1.0.1 boots with
+Compute 1.0.1 boots with
 `plugin_install_policy: "catalog-only"`, and under that policy **the Hub's
 "Catalog sources" field is refused with a 403**: adding a catalog *grants
 trust* (the policy allows any source a configured catalog lists), so it sits
@@ -178,10 +149,10 @@ source is policy-allowed because a configured catalog lists it. Confirm with
 
 Two more 1.0.x deltas worth knowing at setup time:
 
-- **Drop `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK`.** Bug W1 is fixed in 1.0.x
-  (the host now derives `Scripts\python.exe` on Windows itself), so the var —
-  and the version-segment repointing it demanded on every update — is no longer
-  needed. Keep `UV_TORCH_BACKEND=auto`; it still does the GPU-torch work.
+- **`TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` is not set on 1.0.x.** The host
+  derives `Scripts\python.exe` on Windows itself, so there is no per-update
+  version segment to repoint either. Keep `UV_TORCH_BACKEND=auto`; it still
+  does the GPU-torch work.
 - **`uv` need not be on PATH.** 1.0.x ships uv as a dependency and calls its own
   copy out of the host venv. The step-0 prerequisite stays true for 0.2.x.
 
@@ -217,14 +188,13 @@ manual install you may notice:
 | Install fails: `Repository not found` | git has a **stale** GitHub credential (vs. row below = none at all). Credential Manager → Windows Credentials → delete `git:https://github.com`, re-run the `git ls-remote` prerequisite, sign in fresh. |
 | uv behaves unlike this doc / version mismatch | An older uv shadows the winget one until the shell restarts. `(Get-Command uv).Source` + `uv --version` to see which runs; restart the shell after installing. |
 | `ERROR ... API key` printed before your first login | Normal ordering artifact — clears on the next start after `3lc login`. Only a persistent key error *after* a successful login is a finding. |
-| Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle-exdark\1.2.14\.venv\Scripts\python.exe`. Round-1 machines: the OLD name `TLC_COMPUTE_PLUGIN_VENV_KAGGLE` no longer does anything. |
+| Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle-exdark\1.2.14\.venv\Scripts\python.exe`. |
 | `Failed to load plugin: Internal Server Error` on the Kaggle page | The W1 env var's **version segment** points at a plugin venv that doesn't exist — typical after a plugin update (the shop installs the new version under a new `...\kaggle-exdark\<version>\.venv` and the old pin was never repointed). List what's actually on disk with `Get-ChildItem $env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark`, repoint the env var's version segment in the compute-service window, restart the service. **The silent twin:** if the OLD version's venv is still on disk (uninstall never removes venvs, bug W3), the stale pin *passes* the path check and the worker quietly runs the old plugin — no error, wrong footer version. The setup script's preflight now detects both shapes. |
 | Install fails: `could not read Username for 'https://github.com'` | git has no GitHub token — prerequisite row 3 |
 | Install fails: `uv executable not found` | uv not on the PATH of the compute-service process |
-| Training says CUDA unavailable | `UV_TORCH_BACKEND=auto` was not set when the plugin venv was built → uninstall the plugin in the shop, set the env var, reinstall. (Round-1/2 machines: the old `TLC_COMPUTE_PLUGIN_INDEX_URLS` cu128 pin still works, but `UV_TORCH_BACKEND=auto` supersedes it.) |
+| Training says CUDA unavailable | `UV_TORCH_BACKEND=auto` was not set when the plugin venv was built → uninstall the plugin in the shop, set the env var, reinstall. |
 | Settings don't persist / revert on reload (after an update) | Stale cached fragment: the old page saves settings in a format the new version rejects, and nothing visible fails at save time. **Hard-refresh the plugin page** (Ctrl+Shift+R) once — see step 3 of the update note in §2. |
 | `API key not found` at service start | run `3lc login` **from this venv** (3.x key store is new) |
-| Train / Predict autofill a table path that "isn't on disk yet", but Import succeeded | Fixed in **1.2.10**. Before that, a non-default `project-root-url` in `config.yaml` was ignored when the plugin built table URLs: it used the default project root, so the autofilled paths pointed nowhere, the revision picker listed nothing, and a hand-corrected path went green but reverted on reload. Any project root works from 1.2.10 on, wherever it lives and however it is spelled. On an older version, update first. |
 | `The filename, directory name, or volume label syntax is incorrect` on the setup commands | You're in **cmd**, not PowerShell — the setup commands are PowerShell. Type `powershell` first, then re-run the block. |
 
 ## Appendix — macOS (Apple silicon)
@@ -297,8 +267,7 @@ Two supported fixes — both verified live (local mAP renders, e.g. 0.4308):
 
 Don't share state: the two stacks fight over `~/.3lc-compute/settings.json`
 (the old service's writer silently drops the new one's keys). Run the 0.2.x
-service with a redirected home (see `3lc-hub-next/PORT_PLAN.md` § switch
-procedure in the research workspace) or on a different machine.
+service with a redirected home, or on a different machine.
 
 **Working-copy branch rule:** the 0.1.x service loads the plugin **live from
 the repo working copy** (`plugin_dirs` points at `<repo>\src`), so that

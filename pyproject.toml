@@ -145,7 +145,7 @@ include = [
 # Windows is CPU-only. macOS falls through to PyPI (no CUDA there).
 # FORCED CHANGE vs the yolo-0.1.3 pattern it copies: cu128, not cu126 —
 # Blackwell GPUs (sm_120, e.g. RTX 5070 Ti) are not supported by cu126 wheels;
-# cu128 wheels run older architectures too. See docs/forced-changes-0.2.md.
+# cu128 wheels run older architectures too.
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"

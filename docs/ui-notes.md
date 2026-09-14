@@ -1,6 +1,6 @@
 # UI playbook — Kaggle Competition plugin
 
-The Import tab (frozen 2026-07-21) is the v1 gold standard. This document is
+The Import tab is the v1 gold standard. This document is
 the **replication playbook**: a Train/Submit/Status tab session starts with
 "apply the playbook" — the decisions below are settled, not re-litigated.
 The stock **Import plugin** remains the interaction reference; it is a Hub
@@ -31,7 +31,7 @@ source of truth so they can never disagree.
 — no fetches, no job side effects; fixtures re-apply after the async config
 load. Import values: `state1`, `state2`, `state2-mismatch`, `state2-error`,
 `state3`, `state4`, `state5`, `state6`. New tabs add their own values.
-Since v1.1.1 fixture pages cannot start real work: the four job-firing
+Fixture pages cannot start real work: the four job-firing
 buttons (Import / Start Training / Run inference / Submit) render disabled
 with a "demo state — actions disabled" note, the ready-recalc functions OR
 in `kgDevMode` so no refetch re-enables them, and their click handlers (plus
@@ -188,7 +188,7 @@ their log formatting.
   `--chart-1` … `--chart-12` (the set stock run_insights colors from), class
   index → slot, rendered as a quiet tint (`rgba(hue, .10)` background,
   `.35` border, text unchanged). Fallback hexes are the stock plugin's own.
-  Chosen over a local palette (decided 2026-07-21): it's the only
+  Chosen over a local palette: it's the only
   deterministic Hub-shared assignment reachable from a fragment — tlc value
   maps support `display_color` but the imported tables carry none, and the
   Dashboard's bounding-box palette lives in its own bundle, so exact
@@ -197,7 +197,7 @@ their log formatting.
   `word-break: break-all` on paths/`pre`; full paths only in the log/Copy.
 - Nothing within 4px of a container edge that isn't deliberately flush.
 
-## 9. Train-tab additions to the vocabulary (2026-07-21)
+## 9. Train-tab additions to the vocabulary
 
 Patterns the Train session added; Submit/Status sessions inherit them.
 
@@ -246,11 +246,10 @@ Patterns the Train session added; Submit/Status sessions inherit them.
 - **Provenance panel**: the run-record assertions render as verdict +
   checks ("Verified provenance recorded" / group head "Provenance
   verified") the moment the record carries them; cascade on live
-  arrival only. Four assertions since the 2026-07-22 contract change
-  (model / imgsz / pretrained / checkpoint sha256). Screenshot target
-  for the README — the hash line is the new centerpiece.
+  arrival only. Four assertions: model, imgsz, pretrained, and the
+  checkpoint sha256.
 
-## 10. Predict + Submit additions to the vocabulary (2026-07-21)
+## 10. Predict + Submit additions to the vocabulary
 
 - **Two-step gated flow**: when one card mixes a free, repeatable action
   with a costly one, split it into stages gated left to right. Step 1's
@@ -264,10 +263,9 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   1 of your 3 daily submissions."). Budgets render in the connection
   card ("2 of 3 submissions left today"); an exhausted budget disables
   the action with the friendly reset note while the free artifacts
-  (Download CSV) stay reachable. This structure superseded the
-  "Generate CSV only" checkbox: the CSV exists after step 1 by
-  construction, so an option to *not* do step 2 is no longer a mode —
-  it's just not clicking step 2.
+  (Download CSV) stay reachable. The CSV exists after step 1 by
+  construction, so there is no "generate CSV only" mode to offer —
+  not doing step 2 is just not clicking step 2.
 - **Segmented either/or**: two mutually exclusive input sources render
   as a `.kg-seg` toggle showing exactly one input; switching sides
   clears the other. No more two-fields-side-by-side ambiguity.
@@ -289,7 +287,7 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   throttled batch counter; indeterminate only for the brief moment
   before the first batch progress lands.
 
-## 11. Status-tab + v1-final additions to the vocabulary (2026-07-21)
+## 11. Status-tab + v1-final additions to the vocabulary
 
 - **Hero strip**: a status surface answers three questions at a glance
   (how good is my best · what happened last · what can I do now) as
@@ -343,15 +341,6 @@ Patterns the Train session added; Submit/Status sessions inherit them.
   run in the end-of-script dispatch, after every section's state
   exists — tab-enter hooks must never run mid-eval.
 
-### Deferred-ledger disposition (v1 close-out)
-
-- Stepper glyph pass — DONE (icon-set SVGs; the filled active dot is
-  the one sanctioned `fill`, like the sparkline point).
-- Train/Submit/Status emoji + type/motion/copy retrofit — DONE.
-- `.kg-tab` transition tokenization — DONE (inside the motion gate).
-- File-browse endpoint, recent-paths dropdown — deferred to
-  `docs/v1.1-ideas.md` with reasoning.
-
 ## 12. v1 definition of done
 
 Every tab guarantees: a full six-state machine (empty → gated →
@@ -371,52 +360,47 @@ and data that refreshes on tab activation so the UI never needs a
 manual reload to tell the truth. That is the bar for anything that
 ships after v1.
 
-## 13. Contract repositioning (2026-07-22)
+## 13. The locked contract
 
-The from-scratch rule is retired. The locked contract is now **YOLOv11n
-from the official COCO-pretrained checkpoint (plugin-managed,
-sha256-pinned) at 640px** — identical starting weights for every
-participant; the recorded hash is the proof. Rationale: a ~0.005
-epoch-10 start demoralizes; a ~0.70 start with room to climb keeps the
-competition approachable, and fairness is preserved by pinning the
-init. Provenance now proves "trained through the verified pipeline
-under the locked contract", not "random init". All playbook rules
-stand unchanged.
+The locked contract is **YOLOv11n from the official COCO-pretrained
+checkpoint (plugin-managed, sha256-pinned) at 640px** — identical
+starting weights for every participant, and the recorded hash is the
+proof. Provenance proves "trained through the verified pipeline under
+the locked contract".
 
-UI consequences: header chip "YOLOv11n · COCO-pretrained · 640px";
-Train stepper subtitle "YOLOv11n, pinned init"; contract panel gains an
-Init row (yolo11n.pt · sha256 prefix); Epochs default 20 with
+How it renders: header chip "YOLOv11n · COCO-pretrained · 640px";
+Train stepper subtitle "YOLOv11n, pinned init"; contract panel carries
+an Init row (yolo11n.pt · sha256 prefix); Epochs default 20 with
 pretrained-calibrated help (~0.70 by epoch 10; productive range 10 to
-50); the in-run `tr-run-note` slot now renders the backend's
-checkpoint-fetch stage note at epoch 0 instead of the retired near-zero
-expectation line; provenance panel has four assertions.
+50); the in-run `tr-run-note` slot renders the backend's
+checkpoint-fetch stage note at epoch 0; provenance panel has four
+assertions.
 
 The **host-only pattern** (render only when the local-scoring file
-check passes, absence is the participant behavior) now also covers the
+check passes, absence is the participant behavior) also covers the
 Weights-file source: participants get a single Plugin-run source with
-no toggle, and the server rejects direct weights paths from
-non-host machines, so the gate is real, not visual. Legacy
-from-scratch runs render truthfully everywhere ("from-scratch ·
-legacy") and remain predictable/submittable — no data migration.
+no toggle. Runs predating the pinned-init contract render truthfully
+everywhere ("from-scratch · legacy") and stay predictable and
+submittable — no data migration.
 
-**Correction (v1.2.13, 2026-09-11): "the gate is real, not visual" was
-FALSE for the job path from this section's writing until v1.2.13.** The
-rejection lived only in `/validate/predict`, and the host's `/run` dispatch
-never traverses that route, so a request that skipped the fragment was never
-gated at all: a hand-rolled POST carrying a `weights_path` ran and produced an
-ordinary, submittable prediction. The UI half was always true — the toggle
-really is host-only — which is why the claim read as verified for nine
-releases. The rule now lives in `predictor.resolve_weights`, called by BOTH
-the route and `_predict_core`, with two further consequences worth keeping
-here: a `train_job_id` makes the supplied `weights_path` **ignored** rather
-than deprioritised (accepting it whenever an id is present is bypassable by
-sending both), and the refusal raises `JobFailed` so the banner shows the
-sentence without an exception-type prefix. Same layer-3 shape DP-11 already
-had (§14, `validate_table_urls` / `validate_test_table_url`) and this gate did
-not. Pinned by `tests/test_host_weights_gate.py`, which fails against the
-naive presence test.
+**The host-weights gate is server-side, and belongs there.** The UI half
+is not the gate: the host's `/run` dispatch never traverses
+`/validate/predict`, so a request that skips the fragment is gated only
+by what the job path itself enforces. The rule therefore lives in
+`predictor.resolve_weights`, called by BOTH the route and
+`_predict_core`. Two properties of it are load-bearing:
 
-## 14. Session projections (v1.2.6)
+- A `train_job_id` makes any supplied `weights_path` **ignored**, not
+  deprioritised. A gate that accepts `weights_path` whenever no id is
+  present is bypassable by sending both.
+- The refusal raises `JobFailed`, so the banner shows the sentence
+  without an exception-type prefix.
+
+Same layer-3 shape as `validate_table_urls` / `validate_test_table_url`
+(§14). Pinned by `tests/test_host_weights_gate.py`, which fails against
+the naive presence test.
+
+## 14. Session projections
 
 One canonical **session object** (`kgSession`, persisted as the `session`
 key in `ui_config.json`) owns every fact tabs share: project name, table
@@ -489,7 +473,7 @@ table-URL overrides. The rules, settled like everything else here:
   fields would give a session value a second render moment, the exact bug
   class the derive-don't-store rule above exists to prevent.
 
-## 15. Starter-kit download section (v1.2.7)
+## 15. Starter-kit download section
 
 The Import tab gained a **section-scale state machine**: the Download
 section sits above the form (kg-sec-head "Starter kit"), an *offer*, not a
@@ -515,24 +499,18 @@ below it. The pattern for any future in-tab section:
   re-gates through the session funnel, cancel and failure leave the gate
   idle rather than red.
 - **Section visibility follows the tab's resolution**: form states show it
-  (`kgEnterFormState` → `dlInit()`), Import revisit and the running-import
-  reconnect hide it. The section resolves its own state inside that
-  (running download_kit job → reconnect, `/download/state` success → quiet
-  line, else the offer).
-  **Amended v1.2.13.** "Revisit hides it" was too absolute, and the cost was
-  not cosmetic. `dlInit` ran ONLY from `kgEnterFormState`, so a participant who
-  had already imported could start a download, navigate away, come back, and
-  find no section, no progress and a dead poll while 625 MB carried on in the
-  worker. The job was always fine (it runs on the worker's dispatch thread and
-  the pid stamp marks restart orphans `stale`, never `running`); what was
-  missing was any way back to it. The same gap hid v1.2.12's `superseded`
-  notice from precisely the population it was written for: already-imported v1
-  holders reach revisit and never the form, so the notice existed and nobody in
-  it could see it. Revisit now calls `dlInit(true)`, which reveals the section
-  for exactly two states, a running download and a superseded kit, and leaves
-  it hidden otherwise. A CURRENT kit still earns no line on revisit: the tab's
-  own success view already says the import worked, and a quiet "downloaded 2h
-  ago" underneath would be a second answer to a solved question.
+  (`kgEnterFormState` → `dlInit()`); the running-import reconnect hides it.
+  The section resolves its own state inside that (running download_kit job →
+  reconnect, `/download/state` success → quiet line, else the offer).
+  **Revisit is not a blanket hide.** It calls `dlInit(true)`, which reveals the
+  section for exactly two states — a running download and a superseded kit —
+  and leaves it hidden otherwise. Both need a way back in: a participant who has
+  already imported reaches revisit and never the form, so hiding the section
+  there strands a 625 MB download that is still running fine in the worker, and
+  hides the superseded notice from precisely the population it is written for. A
+  CURRENT kit still earns no line on revisit: the tab's own success view already
+  says the import worked, and a quiet "downloaded 2h ago" underneath would be a
+  second answer to a solved question.
 - **Cancel without confirm**: cancelling a download is cheap (finished
   shards resume), so the one destructive control skips the confirm and the
   cancelled callout states the resume fact instead. Failure banners carry
@@ -551,7 +529,7 @@ below it. The pattern for any future in-tab section:
 
 ---
 
-## 16. License notice (v1.2.9)
+## 16. License notice
 
 A permanent, non-dismissible band above the hero — first child of
 `.plugin-page-narrow`, so it is the first thing on every tab. Parity with the
@@ -574,17 +552,17 @@ and the copy come from; we render its text verbatim.
 
 ---
 
-## 17. Kit versions (v1.2.12)
+## 17. Kit versions
 
 The starter kit is versioned by directory (`.../data/<competition>/<version>/`)
 and the version is a shipped constant, `constants.STARTER_KIT_VERSION`. Three
 things could answer "which version is this": the constant, the download job
-record's `facts.kit_version`, and the CDN manifest's own `kit_version`. Until
-v1.2.12 nothing compared any of them, so the v1 to v2 bump left every existing
-holder being told "downloaded 2 days ago" forever, with no surface anywhere
-naming a newer kit.
+record's `facts.kit_version`, and the CDN manifest's own `kit_version`. They
+must be compared rather than assumed equal: an uncompared set leaves the holder
+of an older kit being told "downloaded 2 days ago" forever, with no surface
+anywhere naming a newer kit.
 
-`download_state` now returns **three distinct states**, and they stay distinct:
+`download_state` returns **three distinct states**, and they stay distinct:
 
 | State | Means | Renders |
 |---|---|---|
@@ -599,27 +577,20 @@ wrong. It carries `kit_dir` — resolved server-side, rendered verbatim — beca
 the fragment rebuilding a path the server already knows is the `kgUrlSeg`
 mistake in another costume.
 
-**What the copy may and may not claim — REWRITTEN for v1.2.13, because the
-limit it documented is the thing that release removes.** The mechanism has not
-changed: `parse_dataset_yaml` resolves `path: .` against the yaml's own
-directory, so a kit downloaded fresh lands in a NEW directory while tables the
-participant already imported keep resolving into the old one, and they never
-naturally re-import (those tables still exist, `verified_import_state` passes,
-the Import tab stays in its revisit view). What changed is that the superseded
-state no longer has to *describe* that as a limit and stop. It offers the
-**in-place top-up**, which writes the changed files into the directory the
-tables already read, so an existing holder actually gets the corrections.
-
-The copy follows the action: the callout no longer says the update "places the
-new kit alongside", because it does not, and it no longer needs the paragraph
-explaining why downloading would not help. What it must still be exact about:
+**What the copy may and may not claim.** `parse_dataset_yaml` resolves
+`path: .` against the yaml's own directory, so a kit downloaded fresh lands in a
+NEW directory while tables the participant already imported keep resolving into
+the old one — and they never naturally re-import, because those tables still
+exist, `verified_import_state` passes, and the Import tab stays in its revisit
+view. A plain download therefore cannot reach an existing holder. That is what
+the **in-place top-up** is for: it writes the changed files into the directory
+the tables already read. The copy follows the action, and must be exact about:
 
 - **In place means in place.** The directory keeps its old version name after a
   top-up — a v2 holder is on v3 content inside `.../v2/`. That is why
   `kit_dir` is a recorded fact rather than `dest/<version>` derived
   (`downloader.kit_dir_of`): after a top-up the derived path names a directory
-  that does not exist while the good kit sits next door. Same divergence class
-  as the version skew this section already documents, one release later.
+  that does not exist while the good kit sits next door.
 - **Only the delta moves.** The plan selects the shards that carry changed or
   missing files; for v2 to v3 that is one shard of ten. The copy says "only the
   files that changed" because that is what happens, not as reassurance.
@@ -646,15 +617,14 @@ explaining why downloading would not help. What it must still be exact about:
   kit.
 
 **Verify** accepts `superseded` as readily as `success`: the manifest beside a
-kit is that kit's own, so the check stays honest for precisely the population
-this release is for. What it no longer does is fall back to the current
-constant when a record names no version — that fallback looked under a
-directory the record never wrote and reported the manifest missing while a good
-kit sat beside it.
+kit is that kit's own, so the check stays honest for the holder of an older
+kit. It must never fall back to the current constant when a record names no
+version — that looks under a directory the record never wrote, and reports the
+manifest missing while a good kit sits beside it.
 
 ---
 
-## 18. The contract is served, and the row budget (v1.2.13)
+## 18. The contract is served, and the row budget
 
 Two rules that were previously restated in the fragment now arrive from
 `GET /config` as `_meta.contract`: the locked training contract (model, imgsz,
@@ -723,13 +693,13 @@ neither is penalised. Only growing a split past its shipped size is refused.
 | `state4` | Success: val CREATED + train/test REUSED, GT-guard note, grouped checks, log |
 | `state5` | Failure: val count + GT-leak failed, remediation, Re-run CTA, Copy diagnostics |
 | `state6` | Revisit (form hidden, Start over) |
-| `state6-superseded` | Revisit WITH the Download section revealed: superseded callout over the revisit view, the v1 yaml in the snapshot. The v1.2.13 resolution, and the state a v1 holder actually lands in |
+| `state6-superseded` | Revisit WITH the Download section revealed: superseded callout over the revisit view, the older kit's yaml in the snapshot. The state a holder of an older kit actually lands in |
 
 The classic states also decorate the Download section: `state1` shows the
 offer (a true first visit), `state3`/`state6` hide the section (like the
 live running-import resolution, and like a revisit whose kit is current), and
 the yaml-bearing states show the quiet kit-on-disk line. `state6-superseded`
-is the revisit that DOES show it, added in v1.2.13.
+is the revisit that DOES show it.
 
 ### ?kgdev fixture map — Download section (Import tab)
 
@@ -744,19 +714,16 @@ is the revisit that DOES show it, added in v1.2.13.
 | `dl-revisit` | Quiet downloaded-kit line ("downloaded 2h ago, 14,005 files verified then") + Verify action + filled yaml + green preflight |
 | `dl-superseded` | Info callout: v2 on disk, v3 shipped, the in-place update offer beneath (**Update the starter kit**). Yaml field holds the **v2** path with green preflight, because that is what a v2 holder actually has |
 
-The two file counts above read 14,005 (v2). They said 14,004 until v1.2.12 —
-v1's count, left behind by the v2 bump. Same divergence class as the bug that
-release fixed, one layer out: the fixture derived nothing and the doc copied a
-number.
+The two file counts above are the current kit's (14,005). The fixture derives
+nothing and this table copies a number, so both have to be re-pinned by hand on
+every kit version bump — a stale count here is the same divergence the
+kit-version states exist to close, one layer out.
 
 **`dl-superseded` is deliberately not red.** The kit on disk is complete and
 intact; only its version is behind. It renders in the info vocabulary, and the
 offer beneath is the **top-up**, not the ordinary download: the copy is explicit
 that only the changed files move and that they are written IN PLACE, into the
-directory already-imported tables resolve against. (Through v1.2.12 this
-paragraph said the opposite - that a download placed the new version
-*alongside* the old one and could not reach those tables. That was true of the
-download and is the limit v1.2.13 exists to remove.) See §"Kit versions" below.
+directory already-imported tables resolve against. See §"Kit versions" below.
 
 ### ?kgdev fixture map — Train tab
 
@@ -773,7 +740,7 @@ download and is the limit v1.2.13 exists to remove.) See §"Kit versions" below.
 | `train-state5` | Failure: CUDA-OOM banner + Copy diagnostics, epoch 7/50 static, Re-run CTA, form visible |
 | `train-state6` | Revisit summary: form hidden, static strip + provenance, Start new run |
 
-**Composition trap (V1, v1.2.7):** `JOB()`'s `extra` parameter REPLACES
+**Composition trap:** `JOB()`'s `extra` parameter REPLACES
 top-level keys — `extra.facts` replaces the whole base facts object, it does
 not merge. A fact added to `JOB()`'s defaults therefore never reaches the
 terminal fixtures, which pass their own facts through `doneJob()`; add run
@@ -814,7 +781,7 @@ apply after every tab's vars and handlers exist; fixtures re-apply after
 the async config load, and the metric curve is deterministic (no
 randomness — identical screenshots every load).
 
-**Fixtures always render the participant experience** (2026-07-24). While
+**Fixtures always render the participant experience.** While
 `?kgdev` is active, host-only affordances stay hidden regardless of the
 live `_meta.host` flag — no fixture opts into host rendering today. Four
 enforcement points in the fragment: the config-load reveal of
@@ -825,7 +792,7 @@ callout can never render in a fixture; the eager `psLoadRuns()` is
 skipped under `?kgdev`, so the live host's real runs never race a
 fixture's dev runs into the selector; and the page-load live fetches —
 the Kaggle connection probe and the two table-URL derivation chains —
-are `kgDevMode`-guarded (v1.2.6, the H1 fix), because their responses
+are `kgDevMode`-guarded, because their responses
 land AFTER the fixture's post-config re-apply and would overwrite fixture
 state with live state (the connection one rendered the real account
 handle over the fixture's `participant`). Fixtures never write config
@@ -836,9 +803,8 @@ these paths — the host view and saved config come back untouched.
 Two page-load fetches stay deliberately live under `?kgdev`: `GET
 /config` (fixtures re-apply after it; it carries the `_meta` version the
 footer and diagnostics stamp) and the stepper's `/pipeline` render riding
-`showTab` (long-standing; read-only; means a fixture page's stepper shows
-the machine's real progress — flagged to the Phase C runtime check to
-decide). Interaction-driven read-only fetches (typing into a gate field,
+`showTab` (read-only; a fixture page's stepper therefore shows the machine's
+real progress). Interaction-driven read-only fetches (typing into a gate field,
 opening the revision picker) are outside the render-purity rule; the
 job-firing backstops still hold.
 
@@ -863,7 +829,7 @@ job-firing backstops still hold.
 - **No Insights deep-links**: neither insights plugin reads URL params
   (verified) — skipped rather than faked.
 
-### Design-fidelity notes (token audit, 2026-07-21)
+### Design-fidelity notes
 
 The Hub's shared CSS lives in the hosted frontend; the fragment-visible
 contract is CSS custom properties + shared class names. No `font-family`
@@ -878,22 +844,20 @@ fragment): `.format-selected-banner` geometry, `guide-pulse` keyframes.
 
 ---
 
-## 0.2.x worker model — what replaces the reload loop (port/0.2.x)
+## 0.2.x worker model (port/0.2.x)
 
-The v1.1.x dev loop was: edit -> POST /api/admin/plugins/kaggle/reload (JWT'd,
-so via the Hub page) -> hard-refresh; NEW ROUTES needed a full service
-restart. On the 0.2.x host the plugin runs OUT-OF-PROCESS: the host spawns
+On the 0.2.x host the plugin runs OUT-OF-PROCESS: the host spawns
 `<plugin venv>\python -m tlc_plugin_sdk.worker --entry tlc_plugin_kaggle:KagglePlugin`
 and reverse-proxies /api/plugins/kaggle-exdark/* to it (reserved paths /ui /compute
 /run /jobs/{id}/run /jobs/{id}/cancel are host-owned and match first).
 
-The new loop:
+The loop:
 
 1. Edit code under src/tlc_plugin_kaggle/ (folder-source registration points
    at the source tree; the provisioned venv imports it from there).
 2. POST /api/admin/plugins/kaggle/reload (Hub Plugins page reload button) —
    on 0.2.x this KILLS THE WORKER; the next request respawns it against the
-   current source. Routes live in OUR worker app now, so **new/renamed routes
+   current source. Routes live in OUR worker app, so **new/renamed routes
    need only this worker restart — never a service restart** (the host
    catch-all proxies any subpath).
 3. Hard-refresh the Hub page for ui.html changes (fragment still cached by
@@ -902,8 +866,7 @@ The new loop:
 Notes:
 - A worker restart wipes in-memory job state; the disk store
   (~/.3lc-kaggle-plugin/jobs) + the pid stamp mark interrupted jobs stale on
-  next read — same semantics as a service restart used to have. Don't reload
-  mid-train.
+  next read. Don't reload mid-train.
 - ui.html is read once per worker process (get_ui_fragment caches); a worker
   restart also picks up fragment edits.
 - Dependency changes (pyproject [kaggle] extra) need a re-provision of the
@@ -918,20 +881,8 @@ mirror, memory is the writer - and a trap the moment anyone curates job state by
 hand, because **moving or deleting a job file does nothing while the worker that
 wrote it is still running.**
 
-It reads as a bug every time. The state on disk says one thing, the UI says
-another, and the obvious conclusion is that the reader is broken. It bit twice on
-2026-09-11:
-
-1. Parking five completed `download_kit` records to make the newest completed one
-   a v1 record. Worked - but only because no service was running at the time. The
-   caveat was noted and then not carried forward.
-2. Parking the v3 record written by a successful in-place top-up, to get back to
-   a superseded view. The worker that ran that job was still alive and still held
-   it, so the Import tab kept rendering `success` with the v3 record's numbers
-   while the disk's newest completed record was a v2 one. Ten minutes went into
-   "the compatibility fallback is broken" before the cause was the cache. The
-   fallback was fine: a fresh process read `superseded`, `kit_dir = dest/v2`,
-   from the same files.
+It reads as a bug every time: the state on disk says one thing, the UI says
+another, and the obvious conclusion is that the reader is broken.
 
 **The rule.** Curate job records only when no worker holds them: reload the
 plugin first (the Plugins page button - on 0.2.x a reload kills the worker and

@@ -45,11 +45,19 @@ Rules marked **[codified]** existed only as working practice until written here.
   (inform, don't instruct), NO em dashes in rendered copy, reduced-motion
   parity, `?kgdev` fixtures updated alongside state changes, fixtures always
   render the participant view.
+- **Published docs describe current behaviour, not the history that produced
+  it.** Dated corrections, "this was wrong until vX" notes, changelog entries
+  inside reference docs, and rationale for settled decisions belong in the
+  PRETAG record or the ideas ledger — not in README.md, docs/ or RELEASING.md.
+  The exception is a constraint someone could undo without knowing why (a
+  version pin, a gate, a census, an ordering rule): state it as a rule about
+  the code, naming the test or mechanism that enforces it, never as the story
+  of the bug that produced it. [codified 2026-09-14]
 - **The locked contract is untouchable**: pinned yolo11n.pt init
   (sha256-verified) + imgsz 640 enforcement, provenance recording (4
   assertions), host gating, plugin-run-only predictions for participants.
   Changes here are competition-design decisions, not code tasks. (ui-notes
-  §13; training-sanity addendum.)
+  §13; docs/training-sanity.md.)
 - **Releasing** (RELEASING.md, in order): push tag `vX.Y.Z` → update repo
   `catalog.json` (the source of truth; manifest must match `plugin.toml`,
   catalog id must equal plugin id) → tell Rishikesh to mirror the gist.
@@ -118,14 +126,13 @@ Findings arrive as `3lc-kaggle-diagnostics` blocks and Teams messages.
    by-design → draft the tester-facing explanation (training-sanity.md is the
    model answer sheet; slow-hardware ≠ finding, only failure is).
 3. **Fix**: update every fixture and doc the fix touches; log honest
-   deviations (forced-changes-0.2.md pattern). State fragment impact (§B).
+   deviations in the fix's own commit. State fragment impact (§B).
 4. **Batch fixes toward the next tag**; tag per-fix only when a finding
    blocks all testers. [codified]
 
 Where things live: platform-bug ledger = `../3lc-hub-next/PORT_PLAN.md` (§6
 "Ledger items" + addendum; W-series defined in CONTEXT.md) · parked ideas =
-docs/v1.2-ideas.md · LAUNCH-VERIFY sweep list = docs/v1.1-ideas.md · forced
-changes = docs/forced-changes-0.2.md.
+docs/v1.2-ideas.md · LAUNCH-VERIFY sweep list = docs/v1.1-ideas.md.
 
 ## D. Self-maintenance of these files
 
@@ -147,12 +154,12 @@ the same session, or the map silently goes stale. [codified 2026-09-02]
 |---|---|
 | docs/ui-notes.md | The UI playbook: state machines, motion, icons, copy, fixtures, v1 definition of done, 0.2.x worker/reload model |
 | ../3lc-hub-next/PORT_PLAN.md (workspace) | 0.2.x compatibility matrix, coexistence/isolated home, W-series ledger, port history |
-| RELEASING.md | Tag → catalog → gist release flow and why the gist exists |
+| RELEASING.md | Tag → catalog → gist release flow; the version-pin census; starter-kit data releases; dev-Hub vs tag-install shapes |
 | docs/TESTER_SETUP_0.2.md | Fresh-machine tester setup (Windows path + macOS appendix + 1.1.x-coexistence appendix) |
 | docs/TESTER_SETUP_REMOTE.md | Remote Linux GPU host + browse-from-laptop setup |
 | SMOKE_TEST.md | The 15-minute pass/fail checklist testers report against |
-| docs/training-sanity.md | Why from-scratch ≈ 0.004 was normal; pretrained reference trajectory (~0.71 @ 10 ep val, 0.571 test); the answer sheet for "is training broken?" |
-| docs/REMOTE_COMPUTE.md | Browser≠host surface audit, platform matrix, round-1 stumbles, round-2 submit policy |
+| docs/training-sanity.md | The reference trajectory (≈0.53 val mAP50 @ 2 epochs, ~0.71 @ 10, 0.571 test) and the three pipeline-health checks; the answer sheet for "is training broken?" |
+| docs/REMOTE_COMPUTE.md | Browser≠host: per-surface verdicts, the host-path surfaces the UI must keep labelling, remote-host env vars |
 | ../competition_exdark/reference/CONCLUSION_MATERIALS.md (workspace) | What gets published when the competition ends |
 
 ## F. The restraint ladder

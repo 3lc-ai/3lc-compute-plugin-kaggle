@@ -240,8 +240,7 @@ def check_row_budget(tables: dict[str, Any], use_latest: bool = False) -> None:
     growing a split past its shipped size is refused, because that is the one
     edit that buys an advantage the leaderboard cannot see: `check_provenance`
     records model, imgsz, pretrained and the checkpoint sha, and NOT row
-    counts, so an over-size run is indistinguishable after the fact
-    (docs/divergence-paths.md).
+    counts, so an over-size run is indistinguishable after the fact.
 
     Takes resolved `tlc.Table` objects, not URLs, and that is the whole point:
     it must run AFTER `_resolve_table`, because `use_latest` follows

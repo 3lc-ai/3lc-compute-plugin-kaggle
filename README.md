@@ -13,8 +13,7 @@ table revision, submit, repeat.
 **Version pairing (v1.2.14):** 3LC Hub with `3lc-compute==0.2.1` + `3lc==3.1.0`
 (the 0.2.x plugin platform), or `3lc-compute==1.0.1` + `3lc==3.3.0` (the 1.0.x
 line). v1.2.14 installs on both — see [1.0.x deltas](#10x-deltas) for the three
-steps that differ. For the legacy 0.1.x-host install (plugin v1.1.x), see
-[Appendix A](#appendix-a--legacy-01x-host-install-plugin-v11x).
+steps that differ.
 
 **Platform support — no promises beyond what's tested:**
 
@@ -22,7 +21,7 @@ steps that differ. For the legacy 0.1.x-host install (plugin v1.1.x), see
 |---|---|
 | Windows + NVIDIA GPU, everything local | **Validated** — this README + [docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md) |
 | Remote compute host (Linux GPU box), browse from any machine incl. Mac | **Supported** — guide: [docs/TESTER_SETUP_REMOTE.md](docs/TESTER_SETUP_REMOTE.md); surface audit: [docs/REMOTE_COMPUTE.md](docs/REMOTE_COMPUTE.md) |
-| Mac-local training (Apple Silicon / MPS) | **Validated** (2026-08-10, round-2 pairing test on v1.2.2) — blank Device auto-selects `mps`; measured ~4 min/epoch training and ~9 s for the full 715-image predict, pinned-checkpoint sha verified. Setup: [TESTER_SETUP_0.2.md macOS appendix](docs/TESTER_SETUP_0.2.md) — no service env vars needed |
+| Mac-local training (Apple Silicon / MPS) | **Validated** — blank Device auto-selects `mps`; ~4 min/epoch training and ~9 s for the full 715-image predict, pinned-checkpoint sha verified. Setup: [TESTER_SETUP_0.2.md macOS appendix](docs/TESTER_SETUP_0.2.md) — no service env vars needed |
 
 ## Licensing
 
@@ -85,12 +84,10 @@ same four-tab page either way.
    ```
 
    (the Hub fetches catalogs unauthenticated. The gist mirrors this repo's
-   own [`catalog.json`](catalog.json), which stays the source of truth; it
-   dates from when the repo was private and its raw URLs 404'd. It is
-   superseded by a raw `catalog.json` URL on the repo itself — until that
-   cutover lands, paste the gist URL above. Fallback: the absolute path to
-   `catalog.json` in a local clone also works as a catalog source), and
-   click **Install** on the *Kaggle Competition* card. First install builds the
+   own [`catalog.json`](catalog.json), which stays the source of truth.
+   Fallback: the absolute path to `catalog.json` in a local clone also works
+   as a catalog source), and click **Install** on the *Kaggle Competition*
+   card. First install builds the
    worker venv (CUDA torch, several GB, one-time). It registers live — **no
    settings.json editing, no dependency pip installs, no service restart.**
 
@@ -102,15 +99,15 @@ Updating later: publishing v1.2.x means a new catalog entry — the card grows a
 
 ### 1.0.x deltas
 
-Verified on compute 1.0.1 + 3lc 3.3.0 (2026-09-02). Steps 1, 2 and 3 above are
-0.2.x-specific; the rest of the flow is identical.
+On compute 1.0.1 + 3lc 3.3.0, steps 1, 2 and 3 above are 0.2.x-specific; the
+rest of the flow is identical.
 
 - **Step 1 — no 3LC indexes.** 1.0.1 and 3lc 3.3.0 are both on public PyPI:
   `uv pip install --index-url https://pypi.org/simple "3lc-compute==1.0.1" "3lc==3.3.0"`.
   `uv` also ships as a dependency now, so it need not be on PATH.
-- **Step 2 — drop the first env var.** Bug W1 is fixed (the host derives
-  `Scripts\python.exe` itself), so `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` and
-  its per-update version repointing are gone. Keep `UV_TORCH_BACKEND=auto`.
+- **Step 2 — one env var, not two.** 1.0.x derives `Scripts\python.exe`
+  itself, so `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` is not set on this
+  generation. Keep `UV_TORCH_BACKEND=auto`.
 - **Step 3 — the catalog URL is an env var, not a paste.** 1.0.1 defaults to
   `plugin_install_policy: "catalog-only"`, and that policy **also gates adding a
   catalog through the API**, so the Hub's *Catalog sources* field returns 403:
@@ -124,9 +121,6 @@ Verified on compute 1.0.1 + 3lc 3.3.0 (2026-09-02). Steps 1, 2 and 3 above are
   ```
 
   Then start the service and click **Install** on the card as before.
-
-W1, W5 and W7 — the three platform issues this README notes against 0.2.x —
-are all closed on 1.0.1.
 
 ---
 
@@ -208,12 +202,11 @@ The strict checklist version of this section, with pass/fail boxes, is
    checkpoint sha256 `0ebbc80d4a76…`. Running jobs also appear in the Hub's generic
    **Queue & Progress** panel now.
    Timing: ~5–8 min for 2 epochs on a 12 GB-class desktop GPU. Smaller cards run
-   at a smaller effective batch to fit VRAM — the round-1 fresh laptop
-   (RTX 3070 Ti, 8 GB) trained at batch 8 and took roughly twice the desktop
-   per-epoch time; slower is normal, only a *failure* is a finding.
-   After training the plugin frees GPU memory before Predict; Predict itself
-   streams inference in VRAM-sized chunks (v1.2.1) — the 12 GB OOM from round 1
-   is fixed.
+   at a smaller effective batch to fit VRAM — an 8 GB card trains at batch 8
+   and takes roughly twice the desktop per-epoch time; slower is normal, only a
+   *failure* is a finding.
+   After training the plugin frees GPU memory before Predict, and Predict
+   streams inference in VRAM-sized chunks.
 3. **Predict** — Predict + Submit tab, Step 1: source = your plugin run (participants
    have no other option), test table prefilled, **Run inference**. Expected in ~1–2
    min: results panel, all format checks green, `submission.csv` written (path
@@ -227,12 +220,10 @@ The strict checklist version of this section, with pass/fail boxes, is
    Status tab (3/day budget — one submission is plenty; remember no local mAP on
    your machine is by design, the Kaggle score is the real one). If you have
    **not** joined the competition you'll see a friendly "not joined" state before
-   an attempt is burned — also expected. (The competition slug contains a real
-   typo, `...comepetition-test` — it's in the actual Kaggle URL.)
+   an attempt is burned — also expected.
 5. **Status** — the hero strip shows your latest run/CSV; the history table lists the
    prediction with a Download CSV action. With Kaggle connected, the connection card
-   shows your username; the used-today counter may be absent (a known API 403 on the
-   private competition — it self-heals on the public one).
+   shows your username and your remaining daily submissions.
 
 ---
 
@@ -268,15 +259,13 @@ Open an issue on this repository with that block attached.
 > On the 0.2.1 + 3.1.0 pairing the Object Service prints a traceback at startup
 > (`ConfigIndexingTable` rejecting `object_type 'configfile'` — public-examples
 > indexing is broken in this pairing). It is caught and logged, affects nothing
-> in the competition workflow, and is not a finding. Every round-1 tester asked
-> about it, hence this banner.
+> in the competition workflow, and is not a finding.
 
 1. **Kaggle page 500s on first open / every job start fails.** *(0.2.x only —
-   W1 is fixed on 1.0.x, where this env var should NOT be set.)*
+   this env var is not set on 1.0.x.)*
    Cause: the Windows worker-interpreter bug (0.2.1 spawns `<venv>/bin/python`,
    a POSIX path) — the `TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK` env var from §1
-   step 2 is missing or wrong in the compute-service window. (Round-1 machines:
-   the old `..._VENV_KAGGLE` name stopped working with the v1.2.1 id rename.)
+   step 2 is missing or wrong in the compute-service window.
    Fix: set it (exact path in [docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md))
    and restart the compute service window.
 
@@ -289,11 +278,10 @@ Open an issue on this repository with that block attached.
 
 3. **Training says CUDA unavailable / crawls on CPU.**
    Cause: the worker venv was built without `UV_TORCH_BACKEND=auto`
-   (shop installs resolve plain `torch` from PyPI = CPU-only on Windows;
-   the old `TLC_COMPUTE_PLUGIN_INDEX_URLS` cu128 pin also still works).
+   (shop installs resolve plain `torch` from PyPI = CPU-only on Windows).
    Fix: set the env var (§1 step 2), **Uninstall** the plugin in the shop,
    reinstall. Verify inside the worker venv:
-   `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.8\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.
+   `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.14\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.
 
 4. **Kaggle shows "not connected" / auth fails though the token file exists.**
    Cause: the token file isn't byte-exact — a BOM, a trailing newline, or UTF-16
@@ -362,21 +350,15 @@ progress, host cancel) after a fail-fast `/validate/<kind>` round-trip. Depth, i
 reading order:
 
 - [docs/ui-notes.md](docs/ui-notes.md) — the UI playbook: states, fixtures, motion,
-  a11y; plus the 0.2.x worker-model dev loop and the job-start contract change.
-- [docs/forced-changes-0.2.md](docs/forced-changes-0.2.md) — everything the 0.2.x
-  port changed, and why; nothing else moved.
+  a11y; plus the 0.2.x worker model and the job-start contract.
 - [docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md) — fresh-machine setup with
   the pinned stack + setup script.
 - [docs/TESTER_SETUP_REMOTE.md](docs/TESTER_SETUP_REMOTE.md) — remote Linux GPU
   host setup (browse from a Mac or any laptop).
-- [docs/REMOTE_COMPUTE.md](docs/REMOTE_COMPUTE.md) — the browser≠host audit
-  behind the remote guide (per-surface verdicts).
-- [docs/deployment-guide.md](docs/deployment-guide.md) — the LEGACY 0.1.x-host
-  operator guide (kept for v1.1.x installs).
-- [docs/training-sanity.md](docs/training-sanity.md) — why the contract is a pinned
-  pretrained init, with the from-scratch control evidence.
-- [docs/design-notes.md](docs/design-notes.md) — research-phase notes (host source
-  analysis; §7 is a *proposed* skeleton, kept as history).
+- [docs/REMOTE_COMPUTE.md](docs/REMOTE_COMPUTE.md) — the browser≠host surface
+  matrix behind the remote guide.
+- [docs/training-sanity.md](docs/training-sanity.md) — the reference training
+  trajectory, and the evidence that the data pipeline is healthy.
 
 ```
 src/tlc_plugin_kaggle/   the plugin (manifest = plugin.toml, read import-free)
@@ -394,18 +376,3 @@ docs/                    see §7 links above
 scripts/                 setup-0.2-tester.ps1 + one-off maintenance
 pyproject.toml           dist metadata; [kaggle] extra = the worker venv's stack
 ```
-
----
-
-## Appendix A — legacy 0.1.x-host install (plugin v1.1.x)
-
-Plugin **v1.1.1** targets the previous Hub generation (`3lc-compute 0.1.1.47` +
-`3lc 2.22.3`, in-process plugins, manual registration). That path — venv build
-order, BOM-free `settings.json` registration, service restart, and its
-troubleshooting — is preserved verbatim in the v1.1.1 tag's
-[README](https://github.com/3lc-ai/3lc-compute-plugin-kaggle/blob/v1.1.1/README.md)
-and [docs/deployment-guide.md](docs/deployment-guide.md). Do not mix the two stacks
-in one environment: both hosts read `~/.3lc-compute/settings.json`, and the 0.1.x
-writer silently drops the 0.2.x keys. Also note the 0.1.x host loads the plugin
-live from the repo working copy — keep that checkout on `develop` whenever the
-old service runs; the 0.2.x host installs from the git tag and doesn't care.
