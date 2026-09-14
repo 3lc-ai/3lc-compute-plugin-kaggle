@@ -1,10 +1,43 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-14T06:34:49Z",
+  "generated_at": "2026-09-14T13:45:11Z",
   "plugins": [
     {
       "id": "kaggle-exdark",
       "versions": [
+        {
+          "version": "1.2.15",
+          "source": "3lc-compute-plugin-kaggle[kaggle] @ git+https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git@v1.2.15",
+          "wheel_url": "",
+          "manifest": {
+            "id": "kaggle-exdark",
+            "name": "Kaggle Competition",
+            "description": "Run the 3LC low-light detection competition end to end: import the dataset, train the fixed baseline, predict and submit. Uses Ultralytics YOLO (AGPL-3.0); commercial use may require an Ultralytics Enterprise License.",
+            "version": "1.2.15",
+            "min_service_version": "0.2.0",
+            "icon": "🏁",
+            "icon_svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3.5 14V2.5\"/><path d=\"M3.5 3h8.5l-1.8 2.5L12 8H3.5\"/></svg>",
+            "repository_url": "https://github.com/3lc-ai/3lc-compute-plugin-kaggle",
+            "ui": {
+              "display_mode": "sidebar",
+              "section": "AI Tools",
+              "priority": 40,
+              "compatible_with": [
+                "table"
+              ],
+              "output_types": [
+                "run"
+              ]
+            },
+            "runtime": {
+              "isolation": "venv",
+              "entrypoint": "tlc_plugin_kaggle:KagglePlugin",
+              "provision_extra": "kaggle",
+              "requires_gpu": true,
+              "training": true
+            }
+          }
+        },
         {
           "version": "1.2.14",
           "source": "3lc-compute-plugin-kaggle[kaggle] @ git+https://github.com/3lc-ai/3lc-compute-plugin-kaggle.git@v1.2.14",

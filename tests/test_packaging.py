@@ -1,6 +1,7 @@
 # Copyright 2026 3LC Inc.
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Packaging invariants: the version strings agree, and the wheel is complete.
+"""Packaging invariants: the version and description strings agree, and the
+wheel is complete.
 
 Both bugs that prompted this file hid behind an editable install, where the
 distribution's own metadata is never built and never read back. Every other
@@ -96,6 +97,43 @@ def test_the_four_version_strings_agree(wheel):
     versions["wheel METADATA"] = match.group(1).strip()
 
     assert len(set(versions.values())) == 1, f"version strings disagree: {versions}"
+
+
+def test_the_description_is_the_same_on_every_surface():
+    """plugin.toml, the legacy-host mirror, and the newest catalog manifest.
+
+    The Hub renders this string from two different files: the **Available**
+    card reads the CATALOG manifest, the **installed** card reads plugin.toml
+    out of the wheel. Three hand-synced copies of one sentence, with nothing
+    comparing them - the divergence shape CLAUDE.md names, and unlike a version
+    skew nothing else in the release flow would surface it.
+
+    ``[project] description`` is deliberately NOT in this set. It is the
+    wheel's PyPI ``Summary``, never rendered on a Hub surface, and is its own
+    shorter string on purpose; adding it here would force two unrelated
+    audiences to share one sentence.
+
+    Why the newest catalog entry IS a fair comparison here, when
+    ``test_the_four_version_strings_agree`` deliberately does not assert the
+    catalog's newest VERSION: the description does not change per release, so
+    the newest entry carries the currently-advertised text whether or not its
+    version has caught up to pyproject's. This fails only during a
+    description-changing release before the catalog entry lands - the ordering
+    step it exists to enforce, not a false positive.
+
+    Older entries are NOT checked. Each records what shipped at that version;
+    rewriting them to satisfy a parity check would falsify the catalog's
+    history.
+    """
+    newest = _catalog()["plugins"][0]["versions"][0]
+    descriptions = {
+        "plugin.toml": _plugin_toml()["description"],
+        "pyproject [tool.tlc-compute]": _pyproject()["tool"]["tlc-compute"]["description"],
+        f"catalog {newest['version']} manifest": newest["manifest"]["description"],
+    }
+    assert len(set(descriptions.values())) == 1, (
+        f"descriptions disagree: {descriptions}"
+    )
 
 
 def test_wheel_carries_the_fragment_and_the_manifest(wheel):

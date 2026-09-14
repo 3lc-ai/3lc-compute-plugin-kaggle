@@ -21,6 +21,13 @@ first): bump `version`, point `source` at the new tag, and paste in a fresh
 copy of the manifest (it must match `src/tlc_plugin_kaggle/plugin.toml` —
 `version` included). Bump `generated_at`. Commit and push.
 
+`description` is part of that match and is checked:
+`test_packaging::test_the_description_is_the_same_on_every_surface` compares
+`plugin.toml`, the `[tool.tlc-compute]` mirror, and **this newest entry only**.
+Older entries record what shipped at their version and are never rewritten to
+satisfy it. `[project] description` is not in that set — it is the wheel's PyPI
+`Summary`, not a Hub surface, and is deliberately its own shorter string.
+
 The catalog `id` must equal the `plugin.toml` id, and the catalog carries one
 entry per plugin id: a stale id advertises an installable card for a plugin
 that no longer exists, and a mismatched id shows a phantom "available" card

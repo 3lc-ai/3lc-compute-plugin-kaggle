@@ -10,9 +10,9 @@ loop on one Hub sidebar page, four tabs: **1 Import → 2 Train → 3 Predict + 
 4 Status** — edit labels in the 3LC Dashboard between rounds, retrain on the newest
 table revision, submit, repeat.
 
-**Version pairing (v1.2.14):** 3LC Hub with `3lc-compute==0.2.1` + `3lc==3.1.0`
+**Version pairing (v1.2.15):** 3LC Hub with `3lc-compute==0.2.1` + `3lc==3.1.0`
 (the 0.2.x plugin platform), or `3lc-compute==1.0.1` + `3lc==3.3.0` (the 1.0.x
-line). v1.2.14 installs on both — see [1.0.x deltas](#10x-deltas) for the three
+line). v1.2.15 installs on both — see [1.0.x deltas](#10x-deltas) for the three
 steps that differ.
 
 **Platform support — no promises beyond what's tested:**
@@ -47,7 +47,7 @@ ExDark images carry their own upstream licenses.
 **Full walkthrough with the exact pinned commands and a one-shot setup script:
 [docs/TESTER_SETUP_0.2.md](docs/TESTER_SETUP_0.2.md).** The short version below
 is the **0.2.x** route; on a **1.0.x** host three of its steps change — see
-[1.0.x deltas](#10x-deltas) right after it. Same plugin, same `@v1.2.14` tag,
+[1.0.x deltas](#10x-deltas) right after it. Same plugin, same `@v1.2.15` tag,
 same four-tab page either way.
 
 1. **Hub venv** (Python 3.12 via uv; `uv` itself is required at runtime — the
@@ -72,7 +72,7 @@ same four-tab page either way.
    neither is needed on macOS/Linux, though the second is a harmless no-op there):
 
    ```powershell
-   $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.14\.venv\Scripts\python.exe"
+   $env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.15\.venv\Scripts\python.exe"
    $env:UV_TORCH_BACKEND = "auto"
    ```
 
@@ -281,7 +281,7 @@ Open an issue on this repository with that block attached.
    (shop installs resolve plain `torch` from PyPI = CPU-only on Windows).
    Fix: set the env var (§1 step 2), **Uninstall** the plugin in the shop,
    reinstall. Verify inside the worker venv:
-   `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.14\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.
+   `& "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.15\.venv\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())"`.
 
 4. **Kaggle shows "not connected" / auth fails though the token file exists.**
    Cause: the token file isn't byte-exact — a BOM, a trailing newline, or UTF-16

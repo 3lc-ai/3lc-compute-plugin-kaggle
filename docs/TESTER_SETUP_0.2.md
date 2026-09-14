@@ -1,4 +1,4 @@
-# Tester setup — 0.2.x Hub + Kaggle plugin v1.2.14 (catalog install)
+# Tester setup — 0.2.x Hub + Kaggle plugin v1.2.15 (catalog install)
 
 Fresh-machine path. Every version below is **the exact pairing this build was
 tested against** — don't float them. Time budget: ~15 min + one big download
@@ -50,11 +50,11 @@ Windows-required**:
 # OS. On Windows that file doesn't exist and every plugin worker fails with a
 # 500 on first use. This per-plugin override pins the correct interpreter path
 # (pre-stating where the shop materializes the venv: id kaggle-exdark,
-# version 1.2.14 — the env-var name is TLC_COMPUTE_PLUGIN_VENV_ +
+# version 1.2.15 — the env-var name is TLC_COMPUTE_PLUGIN_VENV_ +
 # id.upper() with hyphens as underscores. The version segment tracks the
 # INSTALLED plugin version — repoint on every update, see the note after
 # the service-start block):
-$env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.14\.venv\Scripts\python.exe"
+$env:TLC_COMPUTE_PLUGIN_VENV_KAGGLE_EXDARK = "$env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark\1.2.15\.venv\Scripts\python.exe"
 
 # CUDA torch: shop installs (uv pip install) don't read the plugin's own uv
 # index config, so plain `torch` resolves CPU-only on Windows without this.
@@ -143,7 +143,7 @@ $env:TLC_COMPUTE_PLUGIN_CATALOG_URLS = "https://gist.githubusercontent.com/Rishi
 ```
 
 Then start the service in that window and continue from **3a step 3** — the
-card appears under Available and installs normally, and the v1.2.14 entry's git
+card appears under Available and installs normally, and the v1.2.15 entry's git
 source is policy-allowed because a configured catalog lists it. Confirm with
 `3lc-compute`'s startup line `Plugin catalog cache warmed from 2 source(s)`.
 
@@ -157,7 +157,7 @@ Two more 1.0.x deltas worth knowing at setup time:
   copy out of the host venv. The step-0 prerequisite stays true for 0.2.x.
 
 Neither the plugin nor its install source changes between the two generations:
-the same `@v1.2.14` tag, the same card, the same four-tab page.
+the same `@v1.2.15` tag, the same card, the same four-tab page.
 
 ## 4. Smoke test
 
@@ -188,7 +188,7 @@ manual install you may notice:
 | Install fails: `Repository not found` | git has a **stale** GitHub credential (vs. row below = none at all). Credential Manager → Windows Credentials → delete `git:https://github.com`, re-run the `git ls-remote` prerequisite, sign in fresh. |
 | uv behaves unlike this doc / version mismatch | An older uv shadows the winget one until the shell restarts. `(Get-Command uv).Source` + `uv --version` to see which runs; restart the shell after installing. |
 | `ERROR ... API key` printed before your first login | Normal ordering artifact — clears on the next start after `3lc login`. Only a persistent key error *after* a successful login is a finding. |
-| Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle-exdark\1.2.14\.venv\Scripts\python.exe`. |
+| Kaggle page 500s on first open | W1 env var not set in the compute-service window (see step 2), or set to a wrong path — it must point at `...\managed-plugins\kaggle-exdark\1.2.15\.venv\Scripts\python.exe`. |
 | `Failed to load plugin: Internal Server Error` on the Kaggle page | The W1 env var's **version segment** points at a plugin venv that doesn't exist — typical after a plugin update (the shop installs the new version under a new `...\kaggle-exdark\<version>\.venv` and the old pin was never repointed). List what's actually on disk with `Get-ChildItem $env:USERPROFILE\.3lc-compute\managed-plugins\kaggle-exdark`, repoint the env var's version segment in the compute-service window, restart the service. **The silent twin:** if the OLD version's venv is still on disk (uninstall never removes venvs, bug W3), the stale pin *passes* the path check and the worker quietly runs the old plugin — no error, wrong footer version. The setup script's preflight now detects both shapes. |
 | Install fails: `could not read Username for 'https://github.com'` | git has no GitHub token — prerequisite row 3 |
 | Install fails: `uv executable not found` | uv not on the PATH of the compute-service process |

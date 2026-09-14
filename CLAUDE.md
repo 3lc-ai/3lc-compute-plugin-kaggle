@@ -83,12 +83,13 @@ Rules marked **[codified]** existed only as working practice until written here.
   comparing them, and both survived nine-plus releases because every test
   exercised ONE side with the other stubbed. The three standing guards:
   `test_url_regex_parity` (the ui.html/config_store regex pair),
-  `test_packaging` (the version strings + wheel contents), and
-  `test_downloader`'s two-version block. That last one pins two kit versions
-  DELIBERATELY — the rest of that file derives the version from the constant,
-  which is right for them and is exactly why a version-agnostic suite cannot
-  catch a version skew. Don't "simplify" it to derive. The open register is
-  docs/v1.2-ideas.md "v1.2.12 divergent-source audit". [codified 2026-09-03]
+  `test_packaging` (the version strings, the card description, + wheel
+  contents), and `test_downloader`'s two-version block. That last one pins
+  two kit versions DELIBERATELY — the rest of that file derives the version
+  from the constant, which is right for them and is exactly why a
+  version-agnostic suite cannot catch a version skew. Don't "simplify" it to
+  derive. The open register is docs/v1.2-ideas.md "v1.2.12 divergent-source
+  audit". [codified 2026-09-03]
 - **Identity.** Commit as Rishikesh-Jadhav only; no co-author trailers.
   Settings already enforce this — verify `git config user.name` if in doubt.
   [codified]
