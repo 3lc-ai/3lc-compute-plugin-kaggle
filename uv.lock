@@ -89,7 +89,7 @@ umap = [
 
 [[package]]
 name = "3lc-compute-plugin-kaggle"
-version = "1.2.13"
+version = "1.2.14"
 source = { editable = "." }
 dependencies = [
     { name = "3lc-compute-plugin-sdk" },
@@ -104,6 +104,7 @@ kaggle = [
     { name = "torch", version = "2.13.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "torchvision", version = "0.26.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "torchvision", version = "0.28.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "ultralytics" },
 ]
 
 [package.dev-dependencies]
@@ -116,12 +117,13 @@ dev = [
 requires-dist = [
     { name = "3lc", extras = ["pacmap", "umap"], marker = "extra == 'kaggle'", specifier = ">=3.0.0,<4.0.0", index = "https://pypi.3lc.ai/public/repositories/releases-public" },
     { name = "3lc-compute-plugin-sdk", specifier = ">=0.3.1,<0.4.0" },
-    { name = "3lc-ultralytics", marker = "extra == 'kaggle'", specifier = ">=0.3.3" },
+    { name = "3lc-ultralytics", marker = "extra == 'kaggle'", specifier = "==0.4.0" },
     { name = "kaggle", marker = "extra == 'kaggle'", specifier = ">=2.2.3,<3" },
     { name = "torch", marker = "(sys_platform == 'linux' and extra == 'kaggle') or (sys_platform == 'win32' and extra == 'kaggle')", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'kaggle'" },
     { name = "torchvision", marker = "(sys_platform == 'linux' and extra == 'kaggle') or (sys_platform == 'win32' and extra == 'kaggle')", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torchvision", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'kaggle'" },
+    { name = "ultralytics", marker = "extra == 'kaggle'", specifier = "==8.4.66" },
 ]
 provides-extras = ["kaggle"]
 
@@ -147,16 +149,16 @@ wheels = [
 
 [[package]]
 name = "3lc-ultralytics"
-version = "0.3.4"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "3lc" },
     { name = "pacmap" },
     { name = "ultralytics" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a5/83/39def585884b5b3a8904570d02a9e2436fbd91c7279c1e1d273245b3199d/3lc_ultralytics-0.3.4.tar.gz", hash = "sha256:33802ffc6ca3b30db3886fe0eb1f3c2fd2aeb36eb1c604b6eef34cc98aa33e77", size = 1493373, upload-time = "2026-07-01T11:33:33.05Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/94/d6fec57688ac84d374f1617acd6e63f85dbcd37422792c4f825e9ccbd750/3lc_ultralytics-0.4.0.tar.gz", hash = "sha256:dd1fd4f9bac6643a32af0bbc773caa1dd47b58173543eefc1f942b97854e93ec", size = 1498501, upload-time = "2026-08-07T13:30:27.089Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7f/4e/0c84b7262ab204b9a58a3a6188064ea3baaee2544c2065e55bd4c20f0aca/3lc_ultralytics-0.3.4-py3-none-any.whl", hash = "sha256:62c7e70b1d99e3165132383b16c576e0d10a96896d424345586c8e927ec87336", size = 1512869, upload-time = "2026-07-01T11:33:31.545Z" },
+    { url = "https://files.pythonhosted.org/packages/47/ba/76938b7db96a2474b7c237872ea43cda8ff1259c69c77672b79f5cf1daa3/3lc_ultralytics-0.4.0-py3-none-any.whl", hash = "sha256:616a445d90edaad20a8eddb5cbaa047ce76da3a2ae49142d355bf2866166400a", size = 1518720, upload-time = "2026-08-07T13:30:25.548Z" },
 ]
 
 [[package]]

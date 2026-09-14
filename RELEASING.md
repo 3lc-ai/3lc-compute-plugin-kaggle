@@ -47,6 +47,10 @@ audit docs, PRETAG checklists, and ideas files stay as written:
   list since the list was written, so the sweep could be performed faithfully
   and still leave it stale. That is the case for automating the list
   (v1.2.14 candidate, docs/v1.2-ideas.md).
+- `pyproject.toml` — **both** `[project] version` and
+  `[tool.tlc-compute] version`. **Added 2026-09-14**, after the v1.2.14 sweep
+  bumped the first and missed the second. A `sed` on `^version = ` matches
+  both; a hand-edit of "the version line" matches one.
 - `uv.lock` — the `[[package]] name = "3lc-compute-plugin-kaggle"` entry's own
   `version`. **Added 2026-09-11, on its SECOND miss** (v1.2.10 was the first;
   v1.2.13 shipped a lock reading 1.2.12). It is not a hand-edit: bump
@@ -54,6 +58,12 @@ audit docs, PRETAG checklists, and ideas files stay as written:
   install -e .` against the repo) and commit the result. It is the one census
   entry that regenerates rather than being typed, which is exactly why a
   by-hand sweep keeps walking past it.
+  **Third finding, 2026-09-14** — and the first not about the plugin's own
+  version: the lock recorded `3lc-ultralytics` **0.3.4** while every
+  provisioned venv had **0.4.0**, so it did not describe what shipped to
+  participants. Same class as the other two, different field. `uv lock` after
+  the v1.2.14 pins closed it. Three misses on one file is the argument for the
+  Phase C drift check, not for a fourth careful manual sweep.
 
 Until the Phase C version-drift CI check exists the sweep is manual:
 grep the tree for the OLD version string (`*.md`, `*.ps1`) and update
@@ -98,8 +108,15 @@ the installed dist's own metadata (derived `__version__`; never a
 hand-synced constant — a hardcoded copy shipped v1.2.3 with a v1.2.2
 footer). A stale footer means a stale install or worker, not a cosmetic
 glitch — and diagnostics blocks stamp this same version, so triage
-trusts it. The version string is hand-synced in exactly three places:
-pyproject.toml, plugin.toml, and the catalog manifest.
+trusts it. The version string is hand-synced in **four** places, because
+`pyproject.toml` carries TWO: `[project] version` AND
+`[tool.tlc-compute] version`, plus `plugin.toml` and the catalog manifest.
+**Corrected 2026-09-14** — this read "exactly three" and named only one
+pyproject site, and a v1.2.14 sweep that followed it faithfully left
+`[tool.tlc-compute]` at 1.2.13. `test_packaging.py` is literally named
+`test_the_four_version_strings_agree` and caught it; the prose here did not.
+Same shape as the `uv.lock` misses above: a census shorter than reality reads
+as complete.
 
 ## Starter-kit data releases (separate from code releases)
 

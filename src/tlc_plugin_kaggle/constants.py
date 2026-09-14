@@ -29,11 +29,12 @@ def split_dataset(split: str) -> str:
     only tested one property)."""
     return f"{DATASET_PREFIX}_{split}"
 
-# ── SWAP AT PUBLIC LAUNCH ────────────────────────────────────────────────
+# ── SWAPPED AT PUBLIC LAUNCH, 2026-09-14 ─────────────────────────────────
 # Single source for the Submit tab's slug default and the join link. This is
-# the private test competition — the "comepetition" typo is real, it's in the
-# Kaggle URL. Replace the value with the public competition slug at launch.
-COMPETITION_SLUG = "the-3-lc-low-light-object-detection-comepetition-test"
+# the PUBLIC competition. The private test competition it replaced — whose
+# "comepetition" typo was real and in the Kaggle URL — is retired in
+# RETIRED_SLUGS below and must stay there.
+COMPETITION_SLUG = "the-3lc-low-light-detection-challenge"
 
 # ── Starter-kit CDN ──────────────────────────────────────────────────────
 # The bucket prefix is deliberately DECOUPLED from the Kaggle slug: the slug
@@ -59,17 +60,14 @@ def starter_kit_prefix() -> str:
 # constant instead of submitting to a retired competition
 # (config_store.py:284, tests/test_slug_swap.py).
 #
-# LAUNCH-VERIFY — the pairing is now PRE-SATISFIED, not pending. The typo'd
-# test slug is listed below already, so the launch commit only has to swap
-# COMPETITION_SLUG above; there is no second edit to forget here. Listing it
-# early is provably inert while COMPETITION_SLUG still holds it: the guard at
-# config_store.py:284 rejects an override on `raw_slug != COMPETITION_SLUG`
-# first, so the membership test is unreachable for that value today
-# (tests/test_slug_swap.py::test_slug_equal_to_current_shipped_collapses
-# covers exactly this pre-launch case). It becomes load-bearing the instant
-# COMPETITION_SLUG changes. Keep the literal in sync if the typo'd slug is
-# ever re-spelled: this set is matched by value, not by reference to the
-# constant, precisely so the retired value survives the swap.
+# This set is now LOAD-BEARING. It was pre-staged in v1.2.10 (E8,
+# 2026-09-02) and FIRED on 2026-09-14, when COMPETITION_SLUG moved to the
+# public competition: from that commit on, every install still carrying the
+# typo'd test slug — persisted or typed by hand — is redirected to the live
+# competition instead of submitting to a dead one. Pre-staging is why the
+# launch commit had no second edit to forget. Keep the literal in sync if
+# the typo'd slug is ever re-spelled: this set is matched by value, not by
+# reference to the constant, precisely so a retired value survives a swap.
 RETIRED_SLUGS = frozenset({
     "[SLUG]",
     "the-3-lc-low-light-object-detection-comepetition-test",
@@ -89,10 +87,9 @@ def resolve_slug(raw: str) -> str:
     (`params["competition_slug"]`), so a slug typed by hand reaches here
     whether or not the store kept it. This is the layer that decides.
 
-    Idempotent, and provably inert until launch: COMPETITION_SLUG is itself
-    a member of RETIRED_SLUGS today, so every input already resolves to the
-    same value it resolves to now. It becomes load-bearing the instant
-    COMPETITION_SLUG changes.
+    Idempotent, and live since the 2026-09-14 launch swap: a request naming
+    the retired test competition now resolves to the public one rather than
+    submitting to a dead slug.
     """
     candidate = str(raw or "").strip()
     if not candidate or candidate in RETIRED_SLUGS:

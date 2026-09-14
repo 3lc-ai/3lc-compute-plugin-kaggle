@@ -2,12 +2,12 @@
 plus a version bump that changes COMPETITION_SLUG must resolve to the NEW
 slug — while a deliberate user override survives.
 
-At the real launch the same mechanics apply, and the retirement half is
-already done: the typo'd test slug was added to constants.RETIRED_SLUGS on
-2026-09-02 (E8), so the launch commit only swaps COMPETITION_SLUG. The
-`launch` fixture below still monkeypatches both, because it has to simulate
-a build where the constant has ALREADY moved — that is the state these
-tests exist to cover, and it is not the shipped state.
+The real launch happened on 2026-09-14: COMPETITION_SLUG moved to the public
+competition and the typo'd test slug, retired on 2026-09-02 (E8), became
+load-bearing. The `launch` fixture below still monkeypatches both, because it
+covers the GENERIC swap mechanic against synthetic values — it must keep
+working for the next swap too. The two tests under "the shipped build" read
+the real constants instead, which is what participants actually install.
 """
 
 from __future__ import annotations
@@ -79,14 +79,63 @@ def test_slug_equal_to_current_shipped_collapses(store, tmp_path):
 # the retired competition. constants.resolve_slug is now the one decision.
 
 
-def test_resolve_slug_is_inert_before_launch():
-    """The pre-launch guarantee: COMPETITION_SLUG is itself a member of
-    RETIRED_SLUGS today, so every input resolves to exactly what it resolves
-    to now. The policy only becomes load-bearing when the constant changes."""
-    assert constants.COMPETITION_SLUG in constants.RETIRED_SLUGS
-    assert constants.resolve_slug(constants.COMPETITION_SLUG) == constants.COMPETITION_SLUG
+# ── The shipped build (v1.2.14, launch) ─────────────────────────────────
+#
+# Everything above runs against monkeypatched constants, which is right for a
+# mechanic that must survive the NEXT swap as well. These two do not: they
+# assert what RETIRED_SLUGS exists for, on the values participants install.
+# That could not be tested before 2026-09-14 — the policy was inert while
+# COMPETITION_SLUG was itself a member of the set, so this behaviour has
+# never once been exercised against a shipped build.
+
+TYPO_SLUG = "the-3-lc-low-light-object-detection-comepetition-test"
+
+
+def test_retired_test_slug_resolves_to_the_live_competition():
+    """The retired test slug reaches the public competition, not a dead one."""
+    assert constants.COMPETITION_SLUG not in constants.RETIRED_SLUGS
+    assert TYPO_SLUG in constants.RETIRED_SLUGS
+    assert constants.resolve_slug(TYPO_SLUG) == constants.COMPETITION_SLUG
+    assert constants.resolve_slug(f"  {TYPO_SLUG} ") == constants.COMPETITION_SLUG
     assert constants.resolve_slug("") == constants.COMPETITION_SLUG
     assert constants.resolve_slug("[SLUG]") == constants.COMPETITION_SLUG
+
+
+@pytest.mark.parametrize(
+    "surface", ["submit_to_kaggle", "kaggle_live_status", "kaggle_connection"]
+)
+def test_submission_aimed_at_retired_slug_lands_on_live_competition(surface, monkeypatch):
+    """A submission aimed at the OLD competition lands on the new one.
+
+    Deliberately no `launch` fixture: monkeypatching the constants would test
+    the simulation rather than the build. Spy on resolve_slug rather than
+    downstream — two of these three bail out early without credentials, so a
+    deeper probe tests the bail-out instead of the policy.
+    """
+    from tlc_plugin_kaggle import predictor
+
+    calls: list[tuple[str, str]] = []
+
+    def spy(raw):
+        out = constants.resolve_slug(raw)
+        calls.append((raw, out))
+        return out
+
+    monkeypatch.setattr(predictor, "resolve_slug", spy)
+    monkeypatch.setattr(predictor, "kaggle_credentials_present", lambda: True)
+    monkeypatch.setattr(
+        predictor, "_authenticated_api", lambda: (None, "no credentials in this test")
+    )
+
+    fn = getattr(predictor, surface)
+    if surface == "submit_to_kaggle":
+        fn("some.csv", "msg", TYPO_SLUG, None)
+    else:
+        fn(TYPO_SLUG)
+
+    assert calls == [(TYPO_SLUG, constants.COMPETITION_SLUG)], (
+        f"{surface} resolved {calls!r}; the retired slug must reach the live competition"
+    )
 
 
 def test_resolve_slug_collapses_every_retired_slug_after_the_swap(launch):
